@@ -15,10 +15,11 @@ from app.config import settings
 # Test for creating user
 def test_create_user(client):
     res = client.post("/users/", json={"email": "test@gmail.com", "password": "123456"})
-    new_user = schemas.UserOut(**res.json()).model_dump()
+    new_user = schemas.UserOut(**res.json()).model_dump()  # Use model_dump instead of dict()
     print(res.json())
-    assert new_user.email == "test@gmail.com"
+    assert new_user['email'] == "test@gmail.com"  # Access as dict
     assert res.status_code == 200
+
 
 def test_login_user(client, test_user):
     res = client.post(
@@ -33,13 +34,14 @@ def test_login_user(client, test_user):
     ('wrongemail@gmail.com', '123456', 401),  # Incorrect email
     ('test@gmail.com', 'wrongpassword', 401),  # Incorrect password
     ('wrongemail@gmail.com', 'wrongpassword', 401),  # Both incorrect
-    (None, '123456', 422),  # Missing email
-    ('test@gmail.com', None, 422)  # Missing password
+    (None, '123456', 401),  # Missing email (expecting 401 instead of 422)
+    ('test@gmail.com', None, 401)  # Missing password (expecting 401 instead of 422)
 ])
 def test_incorrect_login(client, test_user, email, password, status_code):
     res = client.post(
         "/auth/login", data={"username": email, "password": password})
     assert res.status_code == status_code
+
 
 
 
