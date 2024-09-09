@@ -15,7 +15,7 @@ from app.config import settings
 # Test for creating user
 def test_create_user(client):
     res = client.post("/users/", json={"email": "test@gmail.com", "password": "123456"})
-    new_user = schemas.UserOut(**res.json())
+    new_user = schemas.UserOut(**res.json()).model_dump()
     print(res.json())
     assert new_user.email == "test@gmail.com"
     assert res.status_code == 200
