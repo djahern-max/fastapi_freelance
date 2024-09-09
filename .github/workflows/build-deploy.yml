@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Environment variables to access the secrets
-      DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
-      DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
       DATABASE_NAME: test_db
