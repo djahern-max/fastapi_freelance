@@ -3,12 +3,14 @@ venv/
 env/
 .venv/
 
+# Ignore environment files
+*.env  # This will ignore .env.test, .env, and any other .env files
+
 # Ignore Python compiled files
 *.pyc
 __pycache__/
 
 # Ignore configuration files and sensitive information
-*.env
 *.ini
 *.cfg
 secrets.yaml
@@ -49,3 +51,4 @@ media/
 
 # Ignore specific files
 database.sqlite3  # If you are using SQLite for development
+

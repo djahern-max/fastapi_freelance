@@ -5,9 +5,14 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app import models  
 from app.database import get_db
+from dotenv import load_dotenv
+import os
 
-# Database URL
-SQLALCHEMY_DATABASE_URL = 'postgresql://postgres:Guitar0123!@localhost:5432/fastapi_test'
+# Load the .env.test file
+load_dotenv(dotenv_path=".env.test")
+
+# Read the database URL from the environment
+SQLALCHEMY_DATABASE_URL = os.getenv('SQLALCHEMY_DATABASE_URL')
 
 # Create engine and session
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
