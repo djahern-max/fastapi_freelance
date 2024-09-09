@@ -31,12 +31,11 @@ def read_posts(
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.PostResponse)
 def create_post(post: schemas.PostCreate, db: Session = Depends(database.get_db), current_user: schemas.User = Depends(oauth2.get_current_user)):   
  
-    # This line ensures that a user must be logged in to create a post
-    new_post = models.Post(**post.dict(), user_id=current_user.id)
+    # Use model_dump() instead of dict() as per Pydantic v2.0
+    new_post = models.Post(**post.model_dump(), user_id=current_user.id)
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
-    # print(current_user.id)
     return new_post
 
 @router.get("/{id}", response_model=schemas.PostResponse)
@@ -79,8 +78,8 @@ def update_post(
     if post.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to update this post")
     
-    # Update the post
-    post_query.update(updated_post.dict(), synchronize_session=False)
+    # Use model_dump() instead of dict() as per Pydantic v2.0
+    post_query.update(updated_post.model_dump(), synchronize_session=False)
     db.commit()
     return post
 
@@ -91,4 +90,5 @@ def get_posts_with_votes(db: Session = Depends(database.get_db)):
     ).group_by(models.Post.id).all()
     
     return [{"post": post, "votes": votes} for post, votes in results]
+
 

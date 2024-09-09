@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from typing import Optional
+from pydantic import ConfigDict
 
 
 class UserOut(BaseModel):
@@ -8,8 +9,7 @@ class UserOut(BaseModel):
     email: EmailStr
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
 class PostBase(BaseModel):
     title: str
@@ -25,8 +25,7 @@ class PostResponse(PostBase):
     user_id: int
     owner: UserOut
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -48,15 +47,13 @@ class User(BaseModel):
     email: str
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
 class Vote(BaseModel):
     post_id: int
     dir: int = Field(..., le=1)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
 class Post(BaseModel):
     id: int
@@ -64,8 +61,7 @@ class Post(BaseModel):
     owner_id: int
     owner: UserOut
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)  # Replacing orm_mode with from_attributes
 
 class PostOut(BaseModel):
     id: int
@@ -73,8 +69,8 @@ class PostOut(BaseModel):
     content: str
     votes: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
+
 
 
 

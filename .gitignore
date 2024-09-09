@@ -8,6 +8,7 @@ env/
 
 # Ignore Python compiled files
 *.pyc
+*.pyo
 __pycache__/
 
 # Ignore configuration files and sensitive information
@@ -33,6 +34,7 @@ Thumbs.db
 
 # Ignore database files (if any are stored locally)
 *.sqlite3
+database.sqlite3  # If you are using SQLite for development
 
 # Ignore pytest cache and other test files
 .pytest_cache/
@@ -48,7 +50,3 @@ junit-xml/
 # Ignore static files generated during builds
 staticfiles/
 media/
-
-# Ignore specific files
-database.sqlite3  # If you are using SQLite for development
-
