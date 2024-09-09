@@ -30,15 +30,17 @@ def test_login_user(client, test_user):
 
 
 @pytest.mark.parametrize("email, password, status_code", [
-    ('wrongemail@gmail.com', '123456', 401),  # Expecting 401 for incorrect credentials
-    ('test@gmail.com', 'wrongpassword', 401),  # Expecting 401 for wrong password
-    ('wrongemail@gmail.com', 'wrongpassword', 401),
-    (None, '123456', 422),  # Missing email should return 422
-    ('test@gmail.com', None, 422)  # Missing password should return 422
+    ('wrongemail@gmail.com', '123456', 401),  # Incorrect email
+    ('test@gmail.com', 'wrongpassword', 401),  # Incorrect password
+    ('wrongemail@gmail.com', 'wrongpassword', 401),  # Both incorrect
+    (None, '123456', 422),  # Missing email
+    ('test@gmail.com', None, 422)  # Missing password
 ])
-def test_incorrect_login(client, email, password, status_code):
-    res = client.post("/auth/login", data={"username": email, "password": password})
+def test_incorrect_login(client, test_user, email, password, status_code):
+    res = client.post(
+        "/auth/login", data={"username": email, "password": password})
     assert res.status_code == status_code
+
 
 
 
