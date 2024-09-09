@@ -8,7 +8,6 @@ jobs:
       name: Testing
     runs-on: ubuntu-latest
     env:
-      # Environment variables to access the secrets
       DATABASE_USERNAME: postgres
       DATABASE_PASSWORD: postgres
       DATABASE_HOST: localhost
@@ -50,9 +49,6 @@ jobs:
 
       - name: Wait for PostgreSQL to be ready
         run: sleep 15
-
-      # No need to apply database migrations, SQLAlchemy will handle table creation in tests
-      # Remove the alembic migration step
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
