@@ -4,9 +4,11 @@ on: [push, pull_request]
 
 jobs:
   job1:
+    environment:
+      name: Testing
     runs-on: ubuntu-latest
     env:
-      SQLALCHEMY_DATABASE_URL: "postgresql://postgres:Guitar0123!@localhost:5432/fastapi_test"
+      SQLALCHEMY_DATABASE_URL: "postgresql://${{ secrets.DATABASE_USERNAME }}:${{ secrets.DATABASE_PASSWORD }}@${{ secrets.DATABASE_HOST }}:${{ secrets.DATABASE_PORT }}/${{ secrets.DATABASE_NAME }}"
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       ALGORITHM: ${{ secrets.ALGORITHM }}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
