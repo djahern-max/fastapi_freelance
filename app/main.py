@@ -40,7 +40,7 @@ app.include_router(vote.router, tags=["Votes"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to ryze!"}
+    return {"message": "Welcome to ryze (test deploy)!"}
 
 @app.get("/test")
 def test():
