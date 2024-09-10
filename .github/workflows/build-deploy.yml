@@ -82,6 +82,6 @@ jobs:
           password: ${{ secrets.PROD_PASSWORD }} # Use password for SSH login
           port: 22 # Default SSH port. Change if you're using a different port.
           script: |
-            cd /path/to/your/app  # Adjust to your app's directory on the server
+            cd /home/dane/app/src  # Use the correct path where your app is located
             git pull
             echo ${{ secrets.PROD_PASSWORD }} | sudo -S systemctl restart ryzeapi
