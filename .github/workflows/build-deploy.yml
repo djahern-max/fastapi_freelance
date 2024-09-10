@@ -68,16 +68,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment::
+    environment:
       name: Production
     steps:
-      - name: deploy to ubuntu server
-        run: appleboy/ssh-action@master
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SSH and deploy to the Ubuntu server
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USERNAME }}
-          key: ${{ secrets.PROD_PASSWORD }}
+          password: ${{ secrets.PROD_PASSWORD }} # Use password for SSH login
+          port: 22 # Default SSH port. Change if you're using a different port.
           script: |
-            cd app/src
+            cd /path/to/your/app  # Adjust to your app's directory on the server
             git pull
             echo ${{ secrets.PROD_PASSWORD }} | sudo -S systemctl restart ryzeapi
