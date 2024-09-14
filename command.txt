@@ -1,0 +1,42 @@
+.\venv\Scripts\Activate
+uvicorn app.main:app --reload
+
+psql -h localhost -p 5432 -U postgres -d fastapi
+
+List all Databases:  \l
+List all Tables:  \dt
+Exit:  \q
+
+TO ACTIVATE VIRTUAL ENVIRONMENT IN UBUNTU:
+
+dane@ubuntu-ryze:~/app$ source venv/bin/activate
+(venv) dane@ubuntu-ryze:~/app$ ls
+src  venv
+(venv) dane@ubuntu-ryze:~/app$
+
+TO LOGIN TO POSTGRES:
+
+To Login to Postgres:
+
+root@ubuntu-ryze:~# su - postgres
+postgres@ubuntu-ryze:~$ psql -U postgres
+psql (16.4 (Ubuntu 16.4-0ubuntu0.24.04.2))
+Type "help" for help.
+
+postgres=#
+
+To Create Password for postgres user:
+
+postgres=# \password postgres
+Enter new password for user "postgres":  (used Guitar0123)
+
+ALTER USER postgres PASSWORD 'Guitar0123';
+
+DATABASE_HOSTNAME=161.35.96.28
+DATABASE_PORT=5432
+DATABASE_PASSWORD=Guitar0123
+DATABASE_NAME=ryze
+DATABASE_USERNAME=postgres
+SECRET_KEY=23165487
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
