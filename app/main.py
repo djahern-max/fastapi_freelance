@@ -30,18 +30,17 @@ logger.info("Application startup")
 
 # Define allowed origins for CORS
 origins = [
-    "https://www.ryze.ai",  # Add your frontend's origin
     "https://ryze.ai",
+    "https://www.ryze.ai"
 ]
 
 # Add CORS middleware to allow specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Only allow the specified origins
+    allow_origins=origins,  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    origins = ["*"]
 )
 
 # Include routers
