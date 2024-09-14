@@ -41,7 +41,7 @@ origins = [
 # Add CORS middleware to allow specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  
+    allow_origins=["https://ryze.ai", "https://www.ryze.ai"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
