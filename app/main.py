@@ -20,7 +20,12 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Application shutdown")
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(lifespan=lifespan)
+
+logger.info("Application startup")
 
 origins = ["*"]
 
