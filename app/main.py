@@ -6,6 +6,7 @@ from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+
 print("Database Username:", settings.database_username)
 
 # Set up logging before application setup
@@ -27,11 +28,16 @@ app = FastAPI(lifespan=lifespan)
 
 logger.info("Application startup")
 
-origins = ["*"]
+# Define allowed origins for CORS
+origins = [
+    "https://www.ryze.ai",  # Add your frontend's origin
+    "https://ryze.ai",
+]
 
+# Add CORS middleware to allow specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,  # Only allow the specified origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +56,7 @@ def read_root():
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
+
 
 
 
