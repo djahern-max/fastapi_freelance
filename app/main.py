@@ -34,14 +34,19 @@ app.add_middleware(HTTPSRedirectMiddleware)
 
 # Define allowed origins for CORS
 origins = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:8000",
     "https://ryze.ai",
-    "https://www.ryze.ai"
+    "https://www.ryze.ai",
+    "https://ryze-frontend.vercel.app",
+    "https://ryze-frontend-git-main-ryze-frontend.vercel.app"
+
 ]
 
-# Add CORS middleware to allow specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ryze.ai", "https://www.ryze.ai"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
