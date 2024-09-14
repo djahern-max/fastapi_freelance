@@ -4,6 +4,7 @@ from app.routers import post, user, auth, vote
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from contextlib import asynccontextmanager
 
 
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI(lifespan=lifespan)
 
 logger.info("Application startup")
+
+# Add HTTPS Redirect Middleware
+app.add_middleware(HTTPSRedirectMiddleware)
 
 # Define allowed origins for CORS
 origins = [
@@ -56,6 +60,7 @@ def read_root():
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
+
 
 
 
