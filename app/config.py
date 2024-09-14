@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings  # Import BaseSettings from pydantic-settings
-from pydantic import ConfigDict  # Import ConfigDict from pydantic
+from pydantic import ConfigDict  
 
 class Settings(BaseSettings):
     database_hostname: str
