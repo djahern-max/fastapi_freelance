@@ -99,5 +99,5 @@ jobs:
           export ACCESS_TOKEN_EXPIRE_MINUTES="${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}"
           echo "Environment variables set for production"
 
-      - name: Restart the application service
-        run: echo ${{ secrets.PROD_PASSWORD }} | sudo -S systemctl restart ryzeapi
+          - name: Restart the application service
+          run: sudo systemctl restart ryzeapi
