@@ -4,9 +4,7 @@ from app.routers import post, user, auth, vote
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from contextlib import asynccontextmanager
-
 
 print("Database Username:", settings.database_username)
 
@@ -22,27 +20,9 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Application shutdown")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 app = FastAPI(lifespan=lifespan)
 
-logger.info("Application startup")
-
-# Add HTTPS Redirect Middleware
-app.add_middleware(HTTPSRedirectMiddleware)
-
-# Define allowed origins for CORS
-origins = [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "https://ryze.ai",
-    "https://www.ryze.ai",
-    "https://ryze-frontend.vercel.app",
-    "https://ryze-frontend-git-main-ryze-frontend.vercel.app"
-
-]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,14 +40,11 @@ app.include_router(vote.router, tags=["Votes"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to ryze (test deploy)!"}
+    return {"message": "Welcome to ryze!"}
 
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
-
-
-
 
 
 
