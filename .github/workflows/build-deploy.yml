@@ -59,7 +59,6 @@ jobs:
     needs: build
     environment:
       name: Production
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,20 +73,14 @@ jobs:
           script: |
             cd /home/dane/app/src  # Adjust the path if needed
             git pull
+            # Set environment variables on the server
+            export DATABASE_HOSTNAME=${{ secrets.DATABASE_HOSTNAME }}
+            export DATABASE_PORT=${{ secrets.DATABASE_PORT }}
+            export DATABASE_USERNAME=${{ secrets.DATABASE_USERNAME }}
+            export DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}
+            export DATABASE_NAME=${{ secrets.DATABASE_NAME }}
+            export SECRET_KEY=${{ secrets.SECRET_KEY }}
+            export ALGORITHM=${{ secrets.ALGORITHM }}
+            export ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+            # Restart the application service
             echo ${{ secrets.PROD_PASSWORD }} | sudo -S systemctl restart ryzeapi
-
-      - name: Set production environment variables
-        env:
-          DATABASE_HOSTNAME: ${{ secrets.DATABASE_HOSTNAME }}
-          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
-          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
-          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
-          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          ALGORITHM: ${{ secrets.ALGORITHM }}
-          ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
-        run: |
-          echo "Environment variables set for production"
-
-      - name: Restart the application service
-        run: sudo systemctl restart ryzeapi
