@@ -5,7 +5,6 @@ from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from fastapi.middleware.cors import CORSMiddleware
 
 print("Database Username:", settings.database_username)
 
@@ -21,15 +20,12 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Application shutdown")
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Or specify domains
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+logger.info("Application startup")
 
 origins = ["*"]
 
@@ -49,7 +45,7 @@ app.include_router(vote.router, tags=["Votes"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to ryze!"}
+    return {"message": "Welcome to ryze (test deploy)!"}
 
 @app.get("/test")
 def test():

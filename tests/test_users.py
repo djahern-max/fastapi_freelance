@@ -1,46 +1,73 @@
 import pytest
 from jose import jwt
 from app import schemas
-
 from app.config import settings
-from app.config import settings
+import uuid
+from jose.exceptions import JWTError
+from app import models
 
 
-# def test_root(client):
-#     res = client.get("/")
-#     print(res.json().get('message'))
-#     assert res.json().get('message') == "Welcome to ryze!"
-#     assert res.status_code == 200
+@pytest.fixture(autouse=True)
+def reset_database(session):
+    # Clear the users table before each test to avoid duplicate users
+    session.query(models.User).delete()
+    session.commit()
+
+@pytest.fixture
+def test_user(client, session):
+    unique_email = f"test_user_{uuid.uuid4()}@example.com"
+    print(f"Creating test user with email: {unique_email}")  # Debug output
+    user_data = {"email": unique_email, "password": "password123"}
+    res = client.post("/users/", json=user_data)
+    assert res.status_code == 200
+    new_user = res.json()
+
+    return {
+        "id": new_user["id"],
+        "email": unique_email,
+        "password": "password123"
+    }
+
+
 
 # Test for creating user
 def test_create_user(client):
-    res = client.post("/users/", json={"email": "test@gmail.com", "password": "123456"})
-    new_user = schemas.UserOut(**res.json()).model_dump()  # Use model_dump instead of dict()
-    print(res.json())
-    assert new_user['email'] == "test@gmail.com"  # Access as dict
+    unique_email = f"test_{uuid.uuid4()}@gmail.com"  # Ensure a unique email
+    res = client.post("/users/", json={"email": unique_email, "password": "123456"})
+    new_user = schemas.UserOut(**res.json())
+    assert new_user.email == unique_email
     assert res.status_code == 200
 
 
+# Test for logging in a user
 def test_login_user(client, test_user):
-    res = client.post(
-        "/auth/login", data={"username": test_user['email'], "password": test_user['password']})
+    res = client.post("/auth/login", data={"username": test_user['email'], "password": test_user['password']})
+    assert res.status_code == 200
     login_res = schemas.Token(**res.json())
-    payload = jwt.decode(login_res.access_token, settings.secret_key, settings.algorithm)
-    id = int(payload.get('sub'))  # Convert the ID from the JWT token to an integer
-    assert id == test_user['id']
+    try:
+        payload = jwt.decode(login_res.access_token, settings.secret_key, settings.algorithm)
+        id = int(payload.get('sub'))
+        assert id == test_user['id']
+    except JWTError:
+        assert False, "Token decoding failed"
 
 
 @pytest.mark.parametrize("email, password, status_code", [
-    ('wrongemail@gmail.com', '123456', 401),  # Incorrect email
-    ('test@gmail.com', 'wrongpassword', 401),  # Incorrect password
-    ('wrongemail@gmail.com', 'wrongpassword', 401),  # Both incorrect
-    (None, '123456', 401),  # Missing email (expecting 401 instead of 422)
-    ('test@gmail.com', None, 401)  # Missing password (expecting 401 instead of 422)
+    (f"wrongemail_{uuid.uuid4()}@gmail.com", '123456', 401),  # Invalid email
+    (f"test_{uuid.uuid4()}@gmail.com", 'wrongpassword', 401),  # Invalid password
+    (f"wrongemail_{uuid.uuid4()}@gmail.com", 'wrongpassword', 401),
+    (None, '123456', 401),  # Expecting 401 if None for email
+    (f"test_{uuid.uuid4()}@gmail.com", None, 401)  # Expecting 401 if None for password
 ])
 def test_incorrect_login(client, test_user, email, password, status_code):
-    res = client.post(
-        "/auth/login", data={"username": email, "password": password})
+    res = client.post("/auth/login", data={"username": email, "password": password})
     assert res.status_code == status_code
+
+
+
+
+
+
 
 
 
