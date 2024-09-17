@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+import jwt
 from datetime import datetime, timedelta
 from app import database, models, utils, schemas, oauth2
 
-SECRET_KEY = "your_secret_key"  # Secure this key by loading it from environment variables
+SECRET_KEY = "your_secret_key"  # Use a secure key from environment variables or a config file
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -16,7 +17,7 @@ def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = oauth2.jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 @router.post('/login', response_model=schemas.Token)
@@ -31,13 +32,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token = create_access_token(data={"sub": str(user.id)})
-
-    # Return success message with token
-    return {
-        "message": "User successfully logged in",
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    access_token = oauth2.create_access_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
