@@ -1,48 +1,86 @@
 name: Build and Deploy Code
 
-on:
+on: #worthless comment
   push:
     branches:
       - main
   pull_request:
 
 jobs:
-  deploy:
+  build:
+    environment:
+      name: Testing
     runs-on: ubuntu-latest
+    env:
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_NAME: test_db
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      ALGORITHM: ${{ secrets.ALGORITHM }}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      # Checkout the repository code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Python (if your deployment involves running Python commands)
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: "3.12"
 
-      # Install dependencies (if needed, you can skip this if not relevant)
+      - name: Update pip
+        run: python -m pip install --upgrade pip
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # SSH into the Ubuntu server and deploy
+      - name: Wait for PostgreSQL to be ready
+        run: sleep 15
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: Production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: SSH and deploy to the Ubuntu server
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.PROD_HOST }} # Add PROD_HOST to your GitHub Secrets
-          username: ${{ secrets.PROD_USERNAME }} # Add PROD_USERNAME to your GitHub Secrets
-          password: ${{ secrets.PROD_PASSWORD }} # Add PROD_PASSWORD to your GitHub Secrets
-          port: 22 # Adjust the port if needed (default is 22)
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USERNAME }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          port: 22
           script: |
-            cd /home/dane/app/src  # Adjust the path to where your app is located
-            git pull                # Pull the latest changes from the repository
-            # Set environment variables on the Ubuntu server
-            export DATABASE_HOSTNAME=${{ secrets.DATABASE_HOSTNAME }}            # Set your database hostname
-            export DATABASE_PORT=${{ secrets.DATABASE_PORT }}                    # Set your database port
-            export DATABASE_USERNAME=${{ secrets.DATABASE_USERNAME }}            # Set your database username
-            export DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}            # Set your database password
-            export DATABASE_NAME=${{ secrets.DATABASE_NAME }}                    # Set your database name
-            export SECRET_KEY=${{ secrets.SECRET_KEY }}                          # Set your secret key
-            export ALGORITHM=${{ secrets.ALGORITHM }}                            # Set your algorithm for token
-            export ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}  # Set token expiration time
+            cd /home/dane/app/src  # Adjust the path if needed
+            git pull
+            # Set environment variables on the server
+            export DATABASE_HOSTNAME=${{ secrets.DATABASE_HOSTNAME }}
+            export DATABASE_PORT=${{ secrets.DATABASE_PORT }}
+            export DATABASE_USERNAME=${{ secrets.DATABASE_USERNAME }}
+            export DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}
+            export DATABASE_NAME=${{ secrets.DATABASE_NAME }}
+            export SECRET_KEY=${{ secrets.SECRET_KEY }}
+            export ALGORITHM=${{ secrets.ALGORITHM }}
+            export ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
             # Restart the application service
-            echo ${{ secrets.PROD_PASSWORD }} | sudo -S systemctl restart ryzeapi # Replace 'ryzeapi' with your service name
+            echo ${{ secrets.PROD_PASSWORD }} | sudo -S systemctl restart ryzeapi
