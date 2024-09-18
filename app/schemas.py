@@ -71,7 +71,8 @@ class PostOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
-
+class EmailSchema(BaseModel):
+    email: EmailStr
 
 
 

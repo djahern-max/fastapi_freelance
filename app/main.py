@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import logging
-from app.routers import post, user, auth, vote
+from app.routers import post, user, auth, vote, newsletter
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +47,7 @@ app.include_router(post.router, prefix="/posts", tags=["Posts"])
 app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(vote.router, tags=["Votes"])
+app.include_router(newsletter.router, prefix="/newsletter", tags=["Newsletter"]) 
 
 @app.get("/")
 def read_root():
