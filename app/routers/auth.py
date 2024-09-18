@@ -20,19 +20,20 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+# Updated login route using JSON (application/json)
 @router.post('/login', response_model=schemas.Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    # Find user by email, using form_data.username as email
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+def login(user_credentials: schemas.UserLogin, db: Session = Depends(database.get_db)):
+    # Find user by email
+    user = db.query(models.User).filter(models.User.email == user_credentials.email).first()
 
-    if not user or not utils.verify_password(form_data.password, user.password):
+    if not user or not utils.verify_password(user_credentials.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Create JWT access token
     access_token = oauth2.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
-
 
