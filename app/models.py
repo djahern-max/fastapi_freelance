@@ -39,6 +39,13 @@ class Vote(Base):
         UniqueConstraint('user_id', 'post_id', name='unique_vote'),
     )
 
+class Newsletter(Base):
+    __tablename__ = "newsletter"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
 
 
 
