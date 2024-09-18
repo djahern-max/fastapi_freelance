@@ -31,11 +31,16 @@ origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "https://www.ryze.ai",     # Production frontend
+        "http://127.0.0.1:8000",   # Local backend (API)
+        "http://localhost:3000",   # Local frontend (React dev server)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Include routers
 app.include_router(post.router, prefix="/posts", tags=["Posts"])
