@@ -32,7 +32,8 @@ origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://www.ryze.ai",     # Production frontend
+        "https://ryze.ai",         # Production frontend (apex domain)
+        "https://www.ryze.ai",     # Production frontend (www subdomain)
         "http://127.0.0.1:8000",   # Local backend (API)
         "http://localhost:3000",   # Local frontend (React dev server)
     ],
