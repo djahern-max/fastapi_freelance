@@ -43,10 +43,11 @@ app.add_middleware(
 
 
 # Include routers
-app.include_router(post.router, prefix="/posts", tags=["Posts"])
-app.include_router(user.router, prefix="/users", tags=["Users"])
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(vote.router, tags=["Votes"])
+# Update route prefixes with /api
+app.include_router(post.router, prefix="/api/posts", tags=["Posts"])
+app.include_router(user.router, prefix="/api/users", tags=["Users"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(vote.router, prefix="/api/votes", tags=["Votes"])
 
 @app.get("/")
 def read_root():
