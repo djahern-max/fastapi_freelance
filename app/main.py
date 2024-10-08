@@ -17,15 +17,15 @@ async def lifespan(app: FastAPI):
     logger.info("Application startup")
     # This line will create all tables that do not exist yet
     Base.metadata.create_all(bind=engine)
+    
+    # Log all registered routes on application startup
+    for route in app.routes:
+        logger.info(f"Route: {route.path} | Methods: {route.methods} | Name: {route.name}")
+
     yield
     logger.info("Application shutdown")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 app = FastAPI(lifespan=lifespan)
-
-logger.info("Application startup")
 
 origins = ["*"]
 
@@ -47,7 +47,7 @@ app.include_router(post.router, prefix="/posts", tags=["Posts"])
 app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(vote.router, tags=["Votes"])
-app.include_router(newsletter.router, prefix="/newsletter", tags=["Newsletter"]) 
+app.include_router(newsletter.router, prefix="/newsletter", tags=["Newsletter"])
 
 @app.get("/")
 def read_root():
