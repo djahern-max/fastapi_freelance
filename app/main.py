@@ -45,15 +45,13 @@ app.add_middleware(
 # Include routers
 app.include_router(register.router, prefix="/auth")
 app.include_router(login.router, prefix="/auth")
-app.include_router(post.router, prefix="/")
-app.include_router(vote.router, prefix="/")
-app.include_router(newsletter.router, prefix="/")
+app.include_router(post.router)  # Removed prefix
+app.include_router(vote.router)  # Removed prefix
+app.include_router(newsletter.router, prefix="/newsletter")
 
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
-
-
 
 
 
