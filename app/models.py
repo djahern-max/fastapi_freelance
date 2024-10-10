@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
+
 
 class TimestampMixin:
     id = Column(Integer, primary_key=True, index=True)
@@ -33,6 +34,23 @@ class Vote(Base):
         UniqueConstraint('user_id', 'post_id', name='unique_vote'),
     )
 
+class Video(Base):
+    __tablename__ = "videos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String, nullable=True)
+    file_path = Column(String, nullable=False)
+    upload_date = Column(DateTime(timezone=True), server_default=func.now())
+    is_project = Column(Boolean, default=False)  # True for larger project videos
+    parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)  # Link to larger project video
+
+class Newsletter(Base):
+    __tablename__ = "newsletter"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
 
 
