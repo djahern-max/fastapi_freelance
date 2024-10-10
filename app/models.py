@@ -10,11 +10,15 @@ class TimestampMixin:
 
 class User(Base):
     __tablename__ = "users"
+    
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)  # Unique username
+    username = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
+    posts = relationship("Post", back_populates="owner", cascade="all, delete")  # Ensure this exists
+    votes = relationship("Vote", back_populates="user", cascade="all, delete")
 
 class Post(Base, TimestampMixin):
     __tablename__ = "posts"  # Changed back to "posts" to match existing table
@@ -34,6 +38,12 @@ class Vote(Base):
     __table_args__ = (
         UniqueConstraint('user_id', 'post_id', name='unique_vote'),
     )
+
+     # Relationship with User
+    user = relationship("User", back_populates="votes")
+    
+    # Relationship with Post
+    post = relationship("Post", back_populates="votes")
 
 class Video(Base):
     __tablename__ = "videos"
