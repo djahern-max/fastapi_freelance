@@ -3,7 +3,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-YOUTUBE_API_KEY = "AIzaSyCRWKJPcIfTPC6mWlZGsyHiCFk_QQkbYe4"
+YOUTUBE_API_KEY = ""
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 
 @router.get("/videos")
