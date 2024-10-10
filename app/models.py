@@ -8,12 +8,13 @@ class TimestampMixin:
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-class User(Base, TimestampMixin):
+class User(Base):
     __tablename__ = "users"
-    username = Column(String, unique=True, index=True, nullable=False)  
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)  # Unique username
     password = Column(String, nullable=False)
-    posts = relationship("Post", back_populates="owner", cascade="all, delete")
-    votes = relationship("Vote", back_populates="user", cascade="all, delete")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
 class Post(Base, TimestampMixin):
     __tablename__ = "posts"  # Changed back to "posts" to match existing table

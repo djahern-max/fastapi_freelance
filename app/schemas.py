@@ -3,13 +3,24 @@ from datetime import datetime
 from typing import Optional
 from pydantic import ConfigDict
 
+from pydantic import BaseModel
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
 
 class UserOut(BaseModel):
     id: int
-    email: EmailStr
-    created_at: datetime
+    username: str
 
-    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
 
 class PostBase(BaseModel):
     title: str
@@ -24,28 +35,6 @@ class PostResponse(PostBase):
     created_at: datetime
     user_id: int
     owner: UserOut
-
-    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str   
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    id: Optional[int] = None
-
-class User(BaseModel):
-    id: int
-    email: str
-    is_active: bool
 
     model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
