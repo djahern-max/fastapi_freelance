@@ -4,7 +4,9 @@ from app.database import get_db
 from app.models import Newsletter
 from app.schemas import EmailSchema
 
-router = APIRouter()
+router = APIRouter(
+    tags=["Newsletter"]
+)
 
 @router.post("/subscribe")
 def subscribe_to_newsletter(email: EmailSchema, db: Session = Depends(get_db)):
