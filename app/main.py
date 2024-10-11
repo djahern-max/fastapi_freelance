@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import logging
-from app.routers import register, login, post, vote, newsletter
+from app.routers import register, login, post, vote, newsletter, video_upload
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,6 +48,7 @@ app.include_router(login.router, prefix="/auth")
 app.include_router(post.router)  # Removed prefix
 app.include_router(vote.router)  # Removed prefix
 app.include_router(newsletter.router, prefix="/newsletter")
+app.include_router(video_upload.router, prefix="/videos")
 
 @app.get("/test")
 def test():

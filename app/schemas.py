@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional
 from pydantic import ConfigDict
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -70,6 +70,15 @@ class PostOut(BaseModel):
 class EmailSchema(BaseModel):
     email: EmailStr
 
+class VideoCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    file_path: str
+    is_project: bool = False
+    parent_project_id: Optional[int] = None  # Allow None as a valid value
+
+    class Config:
+        orm_mode = True  # Ensure ORM support if using SQLAlchemy models
 
 
 
