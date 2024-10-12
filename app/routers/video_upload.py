@@ -15,6 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
+    prefix="/videos",
     tags=["Videos"]
 )
 
@@ -81,32 +82,3 @@ async def upload_video(
 
     return new_video
 
-# Serve video as file response
-@router.get("/{video_id}", response_class=FileResponse)
-async def get_video(video_id: int, db: Session = Depends(get_db)):
-    video = get_video_by_id(video_id, db)
-    return FileResponse(video.file_path)
-
-# Helper function for chunked video streaming using aiofiles
-async def iterfile(file_path):
-    async with aiofiles.open(file_path, mode="rb") as file_like:
-        while chunk := await file_like.read(1024 * 1024):  # Read in 1MB chunks
-            yield chunk
-
-# Stream video in chunks
-@router.get("/stream/{video_id}")
-async def stream_video(video_id: int, db: Session = Depends(get_db)):
-    video = get_video_by_id(video_id, db)
-    file_extension = os.path.splitext(video.file_path)[1].lower()
-    
-    # Mapping file extensions to media types
-    media_types = {
-        ".mp4": "video/mp4",
-        ".mkv": "video/x-matroska",
-        ".avi": "video/avi",
-        ".mov": "video/quicktime"
-    }
-    
-    # Default to "application/octet-stream" if not recognized
-    media_type = media_types.get(file_extension, "application/octet-stream")
-    return StreamingResponse(iterfile(video.file_path), media_type=media_type)
