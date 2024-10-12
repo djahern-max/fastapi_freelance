@@ -25,3 +25,7 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(database.ge
     # Use the create_access_token from oauth2.py
     access_token = oauth2.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/validate-token", response_model=schemas.User)
+async def validate_token(current_user: models.User = Depends(oauth2.get_current_user)):
+    return {"username": current_user.username}

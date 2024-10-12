@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from pydantic import ConfigDict
 from typing import Optional
+from typing import List
 
 from pydantic import BaseModel
 
@@ -75,12 +76,21 @@ class VideoCreate(BaseModel):
     description: Optional[str] = None
     file_path: str
     is_project: bool = False
-    parent_project_id: Optional[int] = None  # Allow None as a valid value
+    parent_project_id: Optional[int] = None
+    user_id: int  # Add this line
+
+    model_config = ConfigDict(from_attributes=True)
+
+class VideoResponse(BaseModel):
+    user_videos: List[VideoCreate]
+    other_videos: List[VideoCreate]
 
     class Config:
         orm_mode = True  # Ensure ORM support if using SQLAlchemy models
 
+class TokenData(BaseModel):
+    username: str = None
+    id: int = None
 
-
-
-
+    class Config:
+        orm_mode = True  # Ensure ORM support if using SQLAlchemy models

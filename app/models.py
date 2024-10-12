@@ -19,6 +19,7 @@ class User(Base):
 
     posts = relationship("Post", back_populates="owner", cascade="all, delete")  # Ensure this exists
     votes = relationship("Vote", back_populates="user", cascade="all, delete")
+    videos = relationship("Video", back_populates="user")
 
 class Post(Base, TimestampMixin):
     __tablename__ = "posts"  # Changed back to "posts" to match existing table
@@ -53,8 +54,11 @@ class Video(Base):
     description = Column(String, nullable=True)
     file_path = Column(String, nullable=False)
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
-    is_project = Column(Boolean, default=False)  # True for larger project videos
-    parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)  # Link to larger project video
+    is_project = Column(Boolean, default=False)
+    parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Add this line
+
+    user = relationship("User", back_populates="videos")  # Add this line if you want to set up a relationship
 
 class Newsletter(Base):
     __tablename__ = "newsletter"
