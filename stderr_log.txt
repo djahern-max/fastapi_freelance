@@ -1,0 +1,247 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\dahern\\Documents\\RYZE.AI\\fastapi']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [4120] using WatchFiles
+C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\pydantic\_internal\_config.py:341: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [1704]
+INFO:     Waiting for application startup.
+INFO:app.main:Application startup
+INFO:app.main:Route: /openapi.json | Methods: {'GET', 'HEAD'} | Name: openapi
+INFO:app.main:Route: /docs | Methods: {'GET', 'HEAD'} | Name: swagger_ui_html
+INFO:app.main:Route: /docs/oauth2-redirect | Methods: {'GET', 'HEAD'} | Name: swagger_ui_redirect
+INFO:app.main:Route: /redoc | Methods: {'GET', 'HEAD'} | Name: redoc_html
+INFO:app.main:Route: /auth/register | Methods: {'POST'} | Name: register_user
+INFO:app.main:Route: /auth/login | Methods: {'POST'} | Name: login
+INFO:app.main:Route: /auth/validate-token | Methods: {'GET'} | Name: validate_token
+INFO:app.main:Route: / | Methods: {'GET'} | Name: read_posts
+INFO:app.main:Route: / | Methods: {'POST'} | Name: create_post
+INFO:app.main:Route: /{id} | Methods: {'GET'} | Name: read_post
+INFO:app.main:Route: /{id} | Methods: {'DELETE'} | Name: delete_post
+INFO:app.main:Route: /{id} | Methods: {'PUT'} | Name: update_post
+INFO:app.main:Route: /posts-with-votes | Methods: {'GET'} | Name: get_posts_with_votes
+INFO:app.main:Route: /vote | Methods: {'POST'} | Name: vote
+INFO:app.main:Route: /newsletter/subscribe | Methods: {'POST'} | Name: subscribe_to_newsletter
+INFO:app.main:Route: /videos/ | Methods: {'POST'} | Name: upload_video
+INFO:app.main:Route: /video_display/ | Methods: {'GET'} | Name: display_videos
+INFO:app.main:Route: /video_display/stream/{video_id} | Methods: {'GET'} | Name: stream_video
+INFO:app.main:Route: /test | Methods: {'GET'} | Name: test
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'venv\Lib\site-packages\cv2\config.py', 'venv\Lib\site-packages\cv2\config-3.py', 'venv\Lib\site-packages\cv2\__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:app.main:Application shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1704]
+WARNING:  WatchFiles detected changes in 'venv\Lib\site-packages\cv2\utils\__init__.py', 'venv\Lib\site-packages\cv2\gapi\__init__.py', 'venv\Lib\site-packages\cv2\__init__.py', 'venv\Lib\site-packages\cv2\load_config_py2.py', 'venv\Lib\site-packages\cv2\config.py', 'venv\Lib\site-packages\cv2\mat_wrapper\__init__.py', 'venv\Lib\site-packages\cv2\misc\__init__.py', 'venv\Lib\site-packages\cv2\data\__init__.py', 'venv\Lib\site-packages\cv2\config-3.py', 'venv\Lib\site-packages\cv2\version.py', 'venv\Lib\site-packages\cv2\typing\__init__.py', 'venv\Lib\site-packages\cv2\load_config_py3.py', 'venv\Lib\site-packages\cv2\misc\version.py'. Reloading...
+C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\pydantic\_internal\_config.py:341: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [30180]
+INFO:     Waiting for application startup.
+INFO:app.main:Application startup
+INFO:app.main:Route: /openapi.json | Methods: {'GET', 'HEAD'} | Name: openapi
+INFO:app.main:Route: /docs | Methods: {'GET', 'HEAD'} | Name: swagger_ui_html
+INFO:app.main:Route: /docs/oauth2-redirect | Methods: {'GET', 'HEAD'} | Name: swagger_ui_redirect
+INFO:app.main:Route: /redoc | Methods: {'GET', 'HEAD'} | Name: redoc_html
+INFO:app.main:Route: /auth/register | Methods: {'POST'} | Name: register_user
+INFO:app.main:Route: /auth/login | Methods: {'POST'} | Name: login
+INFO:app.main:Route: /auth/validate-token | Methods: {'GET'} | Name: validate_token
+INFO:app.main:Route: / | Methods: {'GET'} | Name: read_posts
+INFO:app.main:Route: / | Methods: {'POST'} | Name: create_post
+INFO:app.main:Route: /{id} | Methods: {'GET'} | Name: read_post
+INFO:app.main:Route: /{id} | Methods: {'DELETE'} | Name: delete_post
+INFO:app.main:Route: /{id} | Methods: {'PUT'} | Name: update_post
+INFO:app.main:Route: /posts-with-votes | Methods: {'GET'} | Name: get_posts_with_votes
+INFO:app.main:Route: /vote | Methods: {'POST'} | Name: vote
+INFO:app.main:Route: /newsletter/subscribe | Methods: {'POST'} | Name: subscribe_to_newsletter
+INFO:app.main:Route: /videos/ | Methods: {'POST'} | Name: upload_video
+INFO:app.main:Route: /video_display/ | Methods: {'GET'} | Name: display_videos
+INFO:app.main:Route: /video_display/stream/{video_id} | Methods: {'GET'} | Name: stream_video
+INFO:app.main:Route: /test | Methods: {'GET'} | Name: test
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "C:\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python312\Lib\asyncio\runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\starlette\routing.py", line 700, in lifespan
+    await receive()
+  File "C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+WARNING:  WatchFiles detected changes in 'venv\Lib\site-packages\cv2\misc\version.py', 'venv\Lib\site-packages\cv2\load_config_py2.py', 'venv\Lib\site-packages\cv2\misc\__init__.py', 'venv\Lib\site-packages\cv2\typing\__init__.py', 'venv\Lib\site-packages\cv2\mat_wrapper\__init__.py', 'venv\Lib\site-packages\cv2\load_config_py3.py', 'venv\Lib\site-packages\cv2\gapi\__init__.py', 'venv\Lib\site-packages\cv2\version.py', 'venv\Lib\site-packages\cv2\data\__init__.py', 'venv\Lib\site-packages\cv2\utils\__init__.py'. Reloading...
+C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\pydantic\_internal\_config.py:341: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [25244]
+INFO:     Waiting for application startup.
+INFO:app.main:Application startup
+INFO:app.main:Route: /openapi.json | Methods: {'GET', 'HEAD'} | Name: openapi
+INFO:app.main:Route: /docs | Methods: {'GET', 'HEAD'} | Name: swagger_ui_html
+INFO:app.main:Route: /docs/oauth2-redirect | Methods: {'GET', 'HEAD'} | Name: swagger_ui_redirect
+INFO:app.main:Route: /redoc | Methods: {'GET', 'HEAD'} | Name: redoc_html
+INFO:app.main:Route: /auth/register | Methods: {'POST'} | Name: register_user
+INFO:app.main:Route: /auth/login | Methods: {'POST'} | Name: login
+INFO:app.main:Route: /auth/validate-token | Methods: {'GET'} | Name: validate_token
+INFO:app.main:Route: / | Methods: {'GET'} | Name: read_posts
+INFO:app.main:Route: / | Methods: {'POST'} | Name: create_post
+INFO:app.main:Route: /{id} | Methods: {'GET'} | Name: read_post
+INFO:app.main:Route: /{id} | Methods: {'DELETE'} | Name: delete_post
+INFO:app.main:Route: /{id} | Methods: {'PUT'} | Name: update_post
+INFO:app.main:Route: /posts-with-votes | Methods: {'GET'} | Name: get_posts_with_votes
+INFO:app.main:Route: /vote | Methods: {'POST'} | Name: vote
+INFO:app.main:Route: /newsletter/subscribe | Methods: {'POST'} | Name: subscribe_to_newsletter
+INFO:app.main:Route: /videos/ | Methods: {'POST'} | Name: upload_video
+INFO:app.main:Route: /video_display/ | Methods: {'GET'} | Name: display_videos
+INFO:app.main:Route: /video_display/stream/{video_id} | Methods: {'GET'} | Name: stream_video
+INFO:app.main:Route: /test | Methods: {'GET'} | Name: test
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "C:\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Python312\Lib\asyncio\runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\starlette\routing.py", line 700, in lifespan
+    await receive()
+  File "C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\pydantic\_internal\_config.py:341: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [21184]
+INFO:     Waiting for application startup.
+INFO:app.main:Application startup
+INFO:app.main:Route: /openapi.json | Methods: {'GET', 'HEAD'} | Name: openapi
+INFO:app.main:Route: /docs | Methods: {'GET', 'HEAD'} | Name: swagger_ui_html
+INFO:app.main:Route: /docs/oauth2-redirect | Methods: {'GET', 'HEAD'} | Name: swagger_ui_redirect
+INFO:app.main:Route: /redoc | Methods: {'GET', 'HEAD'} | Name: redoc_html
+INFO:app.main:Route: /auth/register | Methods: {'POST'} | Name: register_user
+INFO:app.main:Route: /auth/login | Methods: {'POST'} | Name: login
+INFO:app.main:Route: /auth/validate-token | Methods: {'GET'} | Name: validate_token
+INFO:app.main:Route: / | Methods: {'GET'} | Name: read_posts
+INFO:app.main:Route: / | Methods: {'POST'} | Name: create_post
+INFO:app.main:Route: /{id} | Methods: {'GET'} | Name: read_post
+INFO:app.main:Route: /{id} | Methods: {'DELETE'} | Name: delete_post
+INFO:app.main:Route: /{id} | Methods: {'PUT'} | Name: update_post
+INFO:app.main:Route: /posts-with-votes | Methods: {'GET'} | Name: get_posts_with_votes
+INFO:app.main:Route: /vote | Methods: {'POST'} | Name: vote
+INFO:app.main:Route: /newsletter/subscribe | Methods: {'POST'} | Name: subscribe_to_newsletter
+INFO:app.main:Route: /videos/ | Methods: {'POST'} | Name: upload_video
+INFO:app.main:Route: /video_display/ | Methods: {'GET'} | Name: display_videos
+INFO:app.main:Route: /video_display/stream/{video_id} | Methods: {'GET'} | Name: stream_video
+INFO:app.main:Route: /test | Methods: {'GET'} | Name: test
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'scripts\play_video.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:app.main:Application shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21184]
+C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\pydantic\_internal\_config.py:341: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [23640]
+INFO:     Waiting for application startup.
+INFO:app.main:Application startup
+INFO:app.main:Route: /openapi.json | Methods: {'HEAD', 'GET'} | Name: openapi
+INFO:app.main:Route: /docs | Methods: {'HEAD', 'GET'} | Name: swagger_ui_html
+INFO:app.main:Route: /docs/oauth2-redirect | Methods: {'HEAD', 'GET'} | Name: swagger_ui_redirect
+INFO:app.main:Route: /redoc | Methods: {'HEAD', 'GET'} | Name: redoc_html
+INFO:app.main:Route: /auth/register | Methods: {'POST'} | Name: register_user
+INFO:app.main:Route: /auth/login | Methods: {'POST'} | Name: login
+INFO:app.main:Route: /auth/validate-token | Methods: {'GET'} | Name: validate_token
+INFO:app.main:Route: / | Methods: {'GET'} | Name: read_posts
+INFO:app.main:Route: / | Methods: {'POST'} | Name: create_post
+INFO:app.main:Route: /{id} | Methods: {'GET'} | Name: read_post
+INFO:app.main:Route: /{id} | Methods: {'DELETE'} | Name: delete_post
+INFO:app.main:Route: /{id} | Methods: {'PUT'} | Name: update_post
+INFO:app.main:Route: /posts-with-votes | Methods: {'GET'} | Name: get_posts_with_votes
+INFO:app.main:Route: /vote | Methods: {'POST'} | Name: vote
+INFO:app.main:Route: /newsletter/subscribe | Methods: {'POST'} | Name: subscribe_to_newsletter
+INFO:app.main:Route: /videos/ | Methods: {'POST'} | Name: upload_video
+INFO:app.main:Route: /video_display/ | Methods: {'GET'} | Name: display_videos
+INFO:app.main:Route: /video_display/stream/{video_id} | Methods: {'GET'} | Name: stream_video
+INFO:app.main:Route: /test | Methods: {'GET'} | Name: test
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'scripts\play_video.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:app.main:Application shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [23640]
+C:\Users\dahern\Documents\RYZE.AI\fastapi\venv\Lib\site-packages\pydantic\_internal\_config.py:341: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [23068]
+INFO:     Waiting for application startup.
+INFO:app.main:Application startup
+INFO:app.main:Route: /openapi.json | Methods: {'HEAD', 'GET'} | Name: openapi
+INFO:app.main:Route: /docs | Methods: {'HEAD', 'GET'} | Name: swagger_ui_html
+INFO:app.main:Route: /docs/oauth2-redirect | Methods: {'HEAD', 'GET'} | Name: swagger_ui_redirect
+INFO:app.main:Route: /redoc | Methods: {'HEAD', 'GET'} | Name: redoc_html
+INFO:app.main:Route: /auth/register | Methods: {'POST'} | Name: register_user
+INFO:app.main:Route: /auth/login | Methods: {'POST'} | Name: login
+INFO:app.main:Route: /auth/validate-token | Methods: {'GET'} | Name: validate_token
+INFO:app.main:Route: / | Methods: {'GET'} | Name: read_posts
+INFO:app.main:Route: / | Methods: {'POST'} | Name: create_post
+INFO:app.main:Route: /{id} | Methods: {'GET'} | Name: read_post
+INFO:app.main:Route: /{id} | Methods: {'DELETE'} | Name: delete_post
+INFO:app.main:Route: /{id} | Methods: {'PUT'} | Name: update_post
+INFO:app.main:Route: /posts-with-votes | Methods: {'GET'} | Name: get_posts_with_votes
+INFO:app.main:Route: /vote | Methods: {'POST'} | Name: vote
+INFO:app.main:Route: /newsletter/subscribe | Methods: {'POST'} | Name: subscribe_to_newsletter
+INFO:app.main:Route: /videos/ | Methods: {'POST'} | Name: upload_video
+INFO:app.main:Route: /video_display/ | Methods: {'GET'} | Name: display_videos
+INFO:app.main:Route: /video_display/stream/{video_id} | Methods: {'GET'} | Name: stream_video
+INFO:app.main:Route: /test | Methods: {'GET'} | Name: test
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:app.main:Application shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [23068]
+INFO:     Stopping reloader process [4120]
