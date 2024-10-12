@@ -72,6 +72,7 @@ class EmailSchema(BaseModel):
     email: EmailStr
 
 class VideoCreate(BaseModel):
+    id: int
     title: str
     description: Optional[str] = None
     file_path: str
