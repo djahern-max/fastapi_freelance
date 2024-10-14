@@ -2,6 +2,8 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 class TimestampMixin:
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
@@ -66,6 +68,17 @@ class Video(Base):
 
     # Relationships
     user = relationship("User", back_populates="videos")
+
+class VideoCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    file_path: str
+    is_project: bool = False
+    parent_project_id: Optional[int] = None
+    user_id: int
+
+    model_config = ConfigDict(from_attributes=True)  # Ensure you're using from_attributes in v2
+
 
 
 class Newsletter(Base):
