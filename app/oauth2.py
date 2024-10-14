@@ -8,6 +8,10 @@ from fastapi.security import OAuth2PasswordBearer
 from app import database, models
 from sqlalchemy.orm import Session
 from .config import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -49,9 +53,14 @@ def verify_access_token(token: str, credentials_exception):
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
     token_data = verify_access_token(token, credentials_exception)
+    logger.info(f"Token Data ID: {token_data.id}")  # Log token data
+
     user = db.query(models.User).filter(models.User.id == token_data.id).first()
     if user is None:
+        logger.error(f"User not found for ID: {token_data.id}")  # Log error if user not found
         raise credentials_exception
+
+    logger.info(f"Current User: {user.username}, ID: {user.id}")  # Log the user details
     return user
 
 

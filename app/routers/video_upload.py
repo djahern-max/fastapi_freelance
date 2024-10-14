@@ -10,7 +10,10 @@ from app.schemas import VideoCreate
 from botocore.exceptions import NoCredentialsError
 from app import oauth2
 from app.models import User
+import logging
 
+# Initialize the logger
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env
 ENV = os.getenv('ENV', 'local')
@@ -47,8 +50,15 @@ async def upload_video(
     parent_project_id: int = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(oauth2.get_current_user)  # Assuming you're using OAuth for user authentication
+    current_user: User = Depends(oauth2.get_current_user)  # User authentication
 ):
+    # Log the current user for debugging purposes
+    if not current_user:
+        logger.error("User authentication failed. No current user.")
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    logger.info(f"Current user ID: {current_user.id}")
+
     # Validate file type
     if not file.filename.lower().endswith(('.mp4', '.avi', '.mkv', '.mov')):
         raise HTTPException(status_code=400, detail="Invalid video format")
@@ -68,6 +78,7 @@ async def upload_video(
                     await buffer.write(content)
             file_url = f"file://{local_file_path}"  # Local file path as URL
         except IOError as e:
+            logger.error(f"Failed to save video locally: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to save video locally: {str(e)}")
     
     else:
@@ -82,8 +93,10 @@ async def upload_video(
             # Generate the public URL for the uploaded file
             file_url = f"https://{SPACES_NAME}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
         except NoCredentialsError:
+            logger.error("Invalid Spaces credentials")
             raise HTTPException(status_code=500, detail="Invalid Spaces credentials")
         except Exception as e:
+            logger.error(f"Failed to upload video to Spaces: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to upload video to Spaces: {str(e)}")
 
     # Save video metadata to the database
@@ -99,7 +112,9 @@ async def upload_video(
         db.add(new_video)
         db.commit()
         db.refresh(new_video)
+        logger.info(f"Video successfully uploaded by user {current_user.id}")
     except Exception as e:
+        logger.error(f"Failed to create video entry in the database: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create video entry in the database")
 
     return new_video

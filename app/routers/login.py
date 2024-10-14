@@ -2,6 +2,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app import database, models, utils, schemas, oauth2
+from app.models import User
+from app.oauth2 import get_current_user
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -29,3 +31,7 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(database.ge
 @router.get("/validate-token", response_model=schemas.User)
 async def validate_token(current_user: models.User = Depends(oauth2.get_current_user)):
     return {"username": current_user.username}
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
