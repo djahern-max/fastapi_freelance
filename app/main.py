@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import logging
-from app.routers import register, login, post, vote, newsletter, video_upload, display_videos
+from app.routers import register, login, post, vote, newsletter, video_upload, display_videos, notes  # Import notes
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,11 +50,11 @@ app.include_router(vote.router)  # Removed prefix
 app.include_router(newsletter.router, prefix="/newsletter")
 app.include_router(video_upload.router)
 app.include_router(display_videos.router)
+app.include_router(notes.router, prefix="/notes")  # Add the notes router
 
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
-
 
 
 
