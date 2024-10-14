@@ -95,3 +95,22 @@ class TokenData(BaseModel):
 
     class Config:
         orm_mode = True  # Ensure ORM support if using SQLAlchemy models
+
+class NoteBase(BaseModel):
+    title: str
+    content: str
+
+class NoteCreate(NoteBase):
+    pass
+
+class NoteUpdate(NoteBase):
+    pass
+
+class NoteOut(NoteBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
