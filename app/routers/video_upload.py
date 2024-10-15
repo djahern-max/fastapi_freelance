@@ -15,7 +15,7 @@ import logging
 # Initialize the logger
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env
+# Load environment variables
 ENV = os.getenv('ENV', 'local')
 LOCAL_VIDEO_UPLOAD_DIR = os.getenv('LOCAL_VIDEO_UPLOAD_DIR', './videos')
 SPACES_NAME = os.getenv('SPACES_NAME')
@@ -25,15 +25,15 @@ SPACES_BUCKET = os.getenv('SPACES_BUCKET')
 SPACES_TOKEN = os.getenv('SPACES_TOKEN')
 
 # Initialize the boto3 client for DigitalOcean Spaces (for production)
-s3 = boto3.client(
-    's3',
-    region_name=SPACES_REGION,
-    endpoint_url=f"https://{SPACES_REGION}.digitaloceanspaces.com",  # Correct endpoint format
-    aws_access_key_id=SPACES_TOKEN,
-    aws_secret_access_key=SPACES_TOKEN
-)
+if ENV != 'local':
+    s3 = boto3.client(
+        's3',
+        region_name=SPACES_REGION,
+        endpoint_url=f"https://{SPACES_REGION}.digitaloceanspaces.com",
+        aws_access_key_id=SPACES_TOKEN,
+        aws_secret_access_key=SPACES_TOKEN
+    )
 
-# Initialize the router
 router = APIRouter(
     prefix="/videos",
     tags=["Videos"]
@@ -47,50 +47,44 @@ async def upload_video(
     parent_project_id: int = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(oauth2.get_current_user)  # User authentication
+    current_user: User = Depends(oauth2.get_current_user)
 ):
-    # Log the current user for debugging purposes
     if not current_user:
         logger.error("User authentication failed. No current user.")
         raise HTTPException(status_code=401, detail="User not authenticated")
     
     logger.info(f"Current user ID: {current_user.id}")
 
-    # Validate file type
     if not file.filename.lower().endswith(('.mp4', '.avi', '.mkv', '.mov')):
         raise HTTPException(status_code=400, detail="Invalid video format")
 
-    # Generate a unique filename
     file_extension = os.path.splitext(file.filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_extension}"
 
-    # Handle file upload based on the environment
     if ENV == 'local':
         # Save file locally
         local_file_path = os.path.join(LOCAL_VIDEO_UPLOAD_DIR, unique_filename)
         try:
+            os.makedirs(LOCAL_VIDEO_UPLOAD_DIR, exist_ok=True)
             async with aiofiles.open(local_file_path, "wb") as buffer:
-                chunk_size = 1024 * 1024  # 1 MB chunks
-                while content := await file.read(chunk_size):
+                while content := await file.read(1024 * 1024):  # 1 MB chunks
                     await buffer.write(content)
-            # Store the relative path (remove 'file://')
-            file_url = f"./videos/{unique_filename}"
+            file_url = f"/videos/{unique_filename}"
+            logger.info(f"Uploaded video locally to: {local_file_path}")
         except IOError as e:
             logger.error(f"Failed to save video locally: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to save video locally: {str(e)}")
-    
     else:
         # Upload to DigitalOcean Spaces (production)
         try:
             s3.upload_fileobj(
                 file.file,
-                SPACES_NAME,
+                SPACES_BUCKET,
                 unique_filename,
-                ExtraArgs={'ACL': 'public-read'}  # Make the file publicly accessible
+                ExtraArgs={'ACL': 'public-read'}
             )
-            # Generate the public URL for the uploaded file
-            file_url = f"https://{SPACES_NAME}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
-            logger.info(f"Uploaded video to: {file_url}")
+            file_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
+            logger.info(f"Uploaded video to Spaces: {file_url}")
         except NoCredentialsError:
             logger.error("Invalid Spaces credentials")
             raise HTTPException(status_code=500, detail="Invalid Spaces credentials")
@@ -98,15 +92,14 @@ async def upload_video(
             logger.error(f"Failed to upload video to Spaces: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to upload video to Spaces: {str(e)}")
 
-    # Save video metadata to the database
     try:
         new_video = Video(
             title=title,
             description=description,
-            file_path=file_url,  # Store the file URL (local or Spaces)
+            file_path=file_url,
             is_project=is_project,
             parent_project_id=parent_project_id,
-            user_id=current_user.id  # Pass the current user ID here
+            user_id=current_user.id
         )
         db.add(new_video)
         db.commit()
