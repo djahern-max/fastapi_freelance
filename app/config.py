@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 class Settings(BaseSettings):
+    env: str = 'development'  # Add this line
     database_hostname: str
     database_port: str
     database_password: str
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = os.getenv('ENV_FILE', '.env')
+        extra = 'ignore'  # Add this line to ignore extra fields
 
 # Load settings based on environment
 settings = Settings()
-
