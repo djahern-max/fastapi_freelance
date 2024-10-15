@@ -21,7 +21,7 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(database.ge
     if not user or not utils.verify_password(user_credentials.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Invalid credentials, please try again."
         )
 
     # Use the create_access_token from oauth2.py
