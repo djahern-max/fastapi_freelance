@@ -51,3 +51,15 @@ junit-xml/
 # Ignore static files generated during builds
 staticfiles/
 media/
+
+# Ignore uploaded videos
+app/uploaded_videos/
+
+# Ignore SQL backup files
+*.sql
+
+# Ignore the specific .env file in the app directory
+app/.env
+
+# Ignore all files in the videos directory
+videos/
