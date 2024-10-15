@@ -76,7 +76,8 @@ async def upload_video(
                 chunk_size = 1024 * 1024  # 1 MB chunks
                 while content := await file.read(chunk_size):
                     await buffer.write(content)
-            file_url = f"file://{local_file_path}"  # Local file path as URL
+            # Store the relative path (remove 'file://')
+            file_url = f"./videos/{unique_filename}"
         except IOError as e:
             logger.error(f"Failed to save video locally: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to save video locally: {str(e)}")
