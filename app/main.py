@@ -5,26 +5,48 @@ from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv  # Import load_dotenv to load environment variables
-import os  # Import os to access environment variables
-
-# Load environment variables from the .env file located in your home directory
-load_dotenv(os.path.expanduser('~/.env'))
+from dotenv import load_dotenv
+import os
 
 # Set up logging before application setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Print database username from environment variables to verify .env is loaded correctly
+# Check if running in production or local environment
+env = os.getenv('ENV', 'local')  # Default to 'local' if ENV is not set
+
+if env == 'local':
+    # Use the absolute path for local development
+    dotenv_path = 'C:/Users/dahern/Documents/RYZE.AI/fastapi/.env'
+    load_dotenv(dotenv_path)
+    logger.info(f"Loaded environment variables from .env file (local): {dotenv_path}")
+else:
+    # Use the .env file from the home directory on the Ubuntu server
+    dotenv_path = os.path.expanduser('~/.env')
+    load_dotenv(dotenv_path)
+    logger.info(f"Loaded environment variables from .env file (production): {dotenv_path}")
+
+# Log all environment variables from .env file to ensure they are loaded correctly
+logger.info(f"Database Hostname: {os.getenv('DATABASE_HOSTNAME')}")
+logger.info(f"Database Port: {os.getenv('DATABASE_PORT')}")
+logger.info(f"Database Name: {os.getenv('DATABASE_NAME')}")
 logger.info(f"Database Username: {os.getenv('DATABASE_USERNAME')}")
+logger.info(f"Database Password: {os.getenv('DATABASE_PASSWORD')}")
+logger.info(f"Secret Key: {os.getenv('SECRET_KEY')}")
+logger.info(f"Algorithm: {os.getenv('ALGORITHM')}")
+logger.info(f"Access Token Expiry: {os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES')}")
+logger.info(f"Spaces Token: {os.getenv('SPACES_TOKEN')}")
+logger.info(f"Spaces Name: {os.getenv('SPACES_NAME')}")
+logger.info(f"Spaces Region: {os.getenv('SPACES_REGION')}")
+logger.info(f"Spaces Endpoint: {os.getenv('SPACES_ENDPOINT')}")
+logger.info(f"Spaces Bucket: {os.getenv('SPACES_BUCKET')}")
+logger.info(f"Local Video Upload Dir: {os.getenv('LOCAL_VIDEO_UPLOAD_DIR')}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application startup")
-    # This line will create all tables that do not exist yet
     Base.metadata.create_all(bind=engine)
-    
-    # Log all registered routes on application startup
+
     for route in app.routes:
         logger.info(f"Route: {route.path} | Methods: {route.methods} | Name: {route.name}")
 
@@ -51,26 +73,16 @@ app.add_middleware(
 # Include routers
 app.include_router(register.router, prefix="/auth")
 app.include_router(login.router, prefix="/auth")
-app.include_router(post.router)  # Removed prefix
-app.include_router(vote.router)  # Removed prefix
+app.include_router(post.router)
+app.include_router(vote.router)
 app.include_router(newsletter.router, prefix="/newsletter")
 app.include_router(video_upload.router)
 app.include_router(display_videos.router)
-app.include_router(notes.router, prefix="/notes")  # Add the notes router
+app.include_router(notes.router, prefix="/notes")
 
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
-
-
-
-
-
-
-
-
-
-
 
 
 
