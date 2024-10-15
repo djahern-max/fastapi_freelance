@@ -1,29 +1,26 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseSettings
+import os
+from typing import Optional
 
 class Settings(BaseSettings):
-    # Database settings
     database_hostname: str
     database_port: str
     database_password: str
     database_name: str
     database_username: str
-
-    # Security settings
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
+    spaces_token: str
+    spaces_name: str
+    spaces_region: str
+    spaces_endpoint: str
+    spaces_bucket: str
+    local_video_upload_dir: Optional[str] = None
 
-    # Environment settings
-    env: str  # "local" or "production"
-    local_video_upload_dir: str  # Path for local storage
-    spaces_token: str  # DigitalOcean Spaces token
-    spaces_name: str  # Name of your Space
-    spaces_region: str  # Region of your Space (e.g., nyc3)
-    spaces_endpoint: str  # DigitalOcean Spaces endpoint URL
-    spaces_bucket: str  # Bucket name in DigitalOcean Spaces
+    class Config:
+        env_file = os.getenv('ENV_FILE', '.env')
 
-    # Configuration for loading environment variables from .env
-    model_config = SettingsConfigDict(env_file=".env")
-
-# Instantiate settings
+# Load settings based on environment
 settings = Settings()
+
