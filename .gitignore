@@ -4,7 +4,8 @@ env/
 .venv/
 
 # Ignore environment files
-*.env  # This will ignore .env.test, .env, and any other .env files
+*.env 
+*.env.test
 
 # Ignore Python compiled files
 *.pyc
