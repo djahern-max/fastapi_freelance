@@ -1,16 +1,22 @@
 from fastapi import FastAPI
 import logging
-from app.routers import register, login, post, vote, newsletter, video_upload, display_videos, notes  # Import notes
+from app.routers import register, login, post, vote, newsletter, video_upload, display_videos, notes
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv  # Import load_dotenv to load environment variables
+import os  # Import os to access environment variables
 
-print("Database Username:", settings.database_username)
+# Load environment variables from the .env file located in your home directory
+load_dotenv(os.path.expanduser('~/.env'))
 
 # Set up logging before application setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Print database username from environment variables to verify .env is loaded correctly
+logger.info(f"Database Username: {os.getenv('DATABASE_USERNAME')}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
