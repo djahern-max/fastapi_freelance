@@ -21,13 +21,14 @@ LOCAL_VIDEO_UPLOAD_DIR = os.getenv('LOCAL_VIDEO_UPLOAD_DIR', './videos')
 SPACES_NAME = os.getenv('SPACES_NAME')
 SPACES_REGION = os.getenv('SPACES_REGION')
 SPACES_ENDPOINT = os.getenv('SPACES_ENDPOINT')
+SPACES_BUCKET = os.getenv('SPACES_BUCKET')
 SPACES_TOKEN = os.getenv('SPACES_TOKEN')
 
 # Initialize the boto3 client for DigitalOcean Spaces (for production)
 s3 = boto3.client(
     's3',
     region_name=SPACES_REGION,
-    endpoint_url=SPACES_ENDPOINT,
+    endpoint_url=f"https://{SPACES_REGION}.digitaloceanspaces.com",  # Correct endpoint format
     aws_access_key_id=SPACES_TOKEN,
     aws_secret_access_key=SPACES_TOKEN
 )
@@ -37,10 +38,6 @@ router = APIRouter(
     prefix="/videos",
     tags=["Videos"]
 )
-
-# Ensure the local video directory exists (for local testing)
-if ENV == 'local':
-    os.makedirs(LOCAL_VIDEO_UPLOAD_DIR, exist_ok=True)
 
 @router.post("/", response_model=VideoCreate)
 async def upload_video(
@@ -93,6 +90,7 @@ async def upload_video(
             )
             # Generate the public URL for the uploaded file
             file_url = f"https://{SPACES_NAME}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
+            logger.info(f"Uploaded video to: {file_url}")
         except NoCredentialsError:
             logger.error("Invalid Spaces credentials")
             raise HTTPException(status_code=500, detail="Invalid Spaces credentials")
