@@ -42,6 +42,18 @@ logger.info(f"Spaces Endpoint: {os.getenv('SPACES_ENDPOINT')}")
 logger.info(f"Spaces Bucket: {os.getenv('SPACES_BUCKET')}")
 logger.info(f"Local Video Upload Dir: {os.getenv('LOCAL_VIDEO_UPLOAD_DIR')}")
 
+db_url = f"postgresql://{os.getenv('DATABASE_USERNAME')}:{os.getenv('DATABASE_PASSWORD')}@{os.getenv('DATABASE_HOSTNAME')}:{os.getenv('DATABASE_PORT')}/{os.getenv('DATABASE_NAME')}"
+db_url_parts = db_url.split('@')
+if len(db_url_parts) > 1:
+    masked_db_url = f"{db_url_parts[0].split(':')[0]}:****@{db_url_parts[1]}"
+else:
+    masked_db_url = db_url.split(':')[0] + ':****'
+logger.info(f"Database URL: {masked_db_url}")
+
+logger.info(f"Running in {env.upper()} environment")
+
+logger.info(f"Connecting to {os.getenv('DATABASE_NAME')} database on {os.getenv('DATABASE_HOSTNAME')}:{os.getenv('DATABASE_PORT')} as user {os.getenv('DATABASE_USERNAME')}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application startup")
