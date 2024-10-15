@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import os
+from fastapi.routing import APIRoute
+from app.database import engine
 
 # Set up logging before application setup
 logging.basicConfig(level=logging.INFO)
@@ -98,4 +100,25 @@ def test():
 
 
 
+@app.get("/routes")
+async def get_routes():
+    routes = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            routes.append(
+                {
+                    "path": route.path,
+                    "name": route.name,
+                    "methods": route.methods
+                }
+            )
+    return {"routes": routes}
 
+
+@app.get("/db-info")
+async def get_db_info():
+    return {
+        "database_url": str(engine.url),
+        "pool_size": engine.pool.size(),
+        "pool_timeout": engine.pool.timeout(),
+    }
