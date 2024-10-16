@@ -61,6 +61,7 @@ class Video(Base):
     title = Column(String, index=True)
     description = Column(String, nullable=True)
     file_path = Column(String, nullable=False)
+    thumbnail_path = Column(String, nullable=True)  # New column for thumbnail
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
     is_project = Column(Boolean, default=False)
     parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)

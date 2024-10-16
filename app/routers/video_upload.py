@@ -48,23 +48,26 @@ async def upload_video(
     is_project: bool = Form(False),
     parent_project_id: int = Form(None),
     file: UploadFile = File(...),
+    thumbnail: UploadFile = File(None),  # Accept thumbnail as optional
     db: Session = Depends(get_db),
     current_user: User = Depends(oauth2.get_current_user)
 ):
     if not current_user:
         logger.error("User authentication failed. No current user.")
         raise HTTPException(status_code=401, detail="User not authenticated")
-    
+
     logger.info(f"Current user ID: {current_user.id}")
 
+    # Validate video file format
     if not file.filename.lower().endswith(('.mp4', '.avi', '.mkv', '.mov')):
         raise HTTPException(status_code=400, detail="Invalid video format")
 
+    # Generate unique filename for video
     file_extension = os.path.splitext(file.filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_extension}"
 
     if ENV == 'local':
-        # Save file locally with full path
+        # Save video file locally
         local_file_path = os.path.abspath(os.path.join(LOCAL_VIDEO_UPLOAD_DIR, unique_filename))
         try:
             os.makedirs(LOCAL_VIDEO_UPLOAD_DIR, exist_ok=True)
@@ -77,7 +80,7 @@ async def upload_video(
             logger.error(f"Failed to save video locally: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to save video locally: {str(e)}")
     else:
-        # Upload to DigitalOcean Spaces (production)
+        # Upload video to DigitalOcean Spaces
         try:
             file_content = await file.read()
             s3.put_object(
@@ -95,11 +98,50 @@ async def upload_video(
             logger.error(f"Failed to upload video to Spaces: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to upload video to Spaces: {str(e)}")
 
+    # Handle thumbnail upload (if provided)
+    thumbnail_url = None
+    if thumbnail:
+        thumbnail_extension = os.path.splitext(thumbnail.filename)[1]
+        unique_thumbnail_filename = f"{uuid.uuid4()}{thumbnail_extension}"
+
+        if ENV == 'local':
+            # Save thumbnail locally
+            local_thumbnail_path = os.path.abspath(os.path.join(LOCAL_VIDEO_UPLOAD_DIR, unique_thumbnail_filename))
+            try:
+                async with aiofiles.open(local_thumbnail_path, "wb") as buffer:
+                    while content := await thumbnail.read(1024 * 1024):  # 1 MB chunks
+                        await buffer.write(content)
+                thumbnail_url = local_thumbnail_path  # Store the full path
+                logger.info(f"Uploaded thumbnail locally to: {local_thumbnail_path}")
+            except IOError as e:
+                logger.error(f"Failed to save thumbnail locally: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Failed to save thumbnail locally: {str(e)}")
+        else:
+            # Upload thumbnail to DigitalOcean Spaces
+            try:
+                thumbnail_content = await thumbnail.read()
+                s3.put_object(
+                    Bucket=SPACES_BUCKET,
+                    Key=unique_thumbnail_filename,
+                    Body=thumbnail_content,
+                    ACL='public-read'
+                )
+                thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_thumbnail_filename}"
+                logger.info(f"Uploaded thumbnail to Spaces: {thumbnail_url}")
+            except NoCredentialsError:
+                logger.error("Invalid Spaces credentials")
+                raise HTTPException(status_code=500, detail="Invalid Spaces credentials")
+            except Exception as e:
+                logger.error(f"Failed to upload thumbnail to Spaces: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Failed to upload thumbnail to Spaces: {str(e)}")
+
+    # Save video and thumbnail info to the database
     try:
         new_video = Video(
             title=title,
             description=description,
             file_path=file_url,
+            thumbnail_path=thumbnail_url,  # Save the thumbnail path
             is_project=is_project,
             parent_project_id=parent_project_id,
             user_id=current_user.id

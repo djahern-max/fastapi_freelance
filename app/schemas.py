@@ -72,13 +72,13 @@ class EmailSchema(BaseModel):
     email: EmailStr
 
 class VideoCreate(BaseModel):
-    id: int
     title: str
     description: Optional[str] = None
     file_path: str
+    thumbnail_path: Optional[str] = None  # Add optional thumbnail path
     is_project: bool = False
     parent_project_id: Optional[int] = None
-    user_id: int  # Add this line
+    user_id: int
 
     model_config = ConfigDict(from_attributes=True)
 

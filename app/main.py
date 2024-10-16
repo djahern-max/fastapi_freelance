@@ -94,6 +94,18 @@ app.include_router(video_upload.router)
 app.include_router(display_videos.router)
 app.include_router(notes.router, prefix="/notes")
 
+@app.get("/debug")
+def debug_spaces():
+    logger.info("Debug route was called")
+    return {
+        "SPACES_BUCKET": os.getenv("SPACES_BUCKET"),
+        "SPACES_REGION": os.getenv("SPACES_REGION"),
+        "SPACES_KEY": os.getenv("SPACES_KEY"),
+        "SPACES_SECRET": os.getenv("SPACES_SECRET")
+    }
+
+
+
 @app.get("/test")
 def test():
     return {"message": "Server is running"}
@@ -122,3 +134,5 @@ async def get_db_info():
         "pool_size": engine.pool.size(),
         "pool_timeout": engine.pool.timeout(),
     }
+
+
