@@ -29,10 +29,11 @@ if ENV != 'local':
     s3 = boto3.client(
         's3',
         region_name=SPACES_REGION,
-        endpoint_url=f"https://{SPACES_REGION}.digitaloceanspaces.com",
-        aws_access_key_id=SPACES_TOKEN,
-        aws_secret_access_key=SPACES_TOKEN
+        endpoint_url=SPACES_ENDPOINT,  # Update this to use SPACES_ENDPOINT directly
+        aws_access_key_id=SPACES_TOKEN,  # Ensure this is correct
+        aws_secret_access_key=SPACES_TOKEN  # Ensure this is correct
     )
+
 
 router = APIRouter(
     prefix="/videos",
@@ -62,14 +63,14 @@ async def upload_video(
     unique_filename = f"{uuid.uuid4()}{file_extension}"
 
     if ENV == 'local':
-        # Save file locally
-        local_file_path = os.path.join(LOCAL_VIDEO_UPLOAD_DIR, unique_filename)
+        # Save file locally with full path
+        local_file_path = os.path.abspath(os.path.join(LOCAL_VIDEO_UPLOAD_DIR, unique_filename))
         try:
             os.makedirs(LOCAL_VIDEO_UPLOAD_DIR, exist_ok=True)
             async with aiofiles.open(local_file_path, "wb") as buffer:
                 while content := await file.read(1024 * 1024):  # 1 MB chunks
                     await buffer.write(content)
-            file_url = f"/videos/{unique_filename}"
+            file_url = local_file_path  # Store the full path
             logger.info(f"Uploaded video locally to: {local_file_path}")
         except IOError as e:
             logger.error(f"Failed to save video locally: {str(e)}")
@@ -77,11 +78,12 @@ async def upload_video(
     else:
         # Upload to DigitalOcean Spaces (production)
         try:
-            s3.upload_fileobj(
-                file.file,
-                SPACES_BUCKET,
-                unique_filename,
-                ExtraArgs={'ACL': 'public-read'}
+            file_content = await file.read()
+            s3.put_object(
+                Bucket=SPACES_BUCKET,
+                Key=unique_filename,
+                Body=file_content,
+                ACL='public-read'
             )
             file_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
             logger.info(f"Uploaded video to Spaces: {file_url}")
