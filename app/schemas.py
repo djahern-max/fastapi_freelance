@@ -89,6 +89,24 @@ class VideoResponse(BaseModel):
     class Config:
         orm_mode = True  # Ensure ORM support if using SQLAlchemy models
 
+class VideoInfo(BaseModel):
+    filename: str
+    size: int
+    last_modified: datetime
+    url: str
+
+    class Config:
+        orm_mode = True
+
+class SpacesVideoInfo(BaseModel):
+    filename: str
+    size: int
+    last_modified: datetime
+    url: str
+
+    class Config:
+        orm_mode = True
+
 class TokenData(BaseModel):
     username: str = None
     id: int = None

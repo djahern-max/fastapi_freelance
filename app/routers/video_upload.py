@@ -22,16 +22,17 @@ SPACES_NAME = os.getenv('SPACES_NAME')
 SPACES_REGION = os.getenv('SPACES_REGION')
 SPACES_ENDPOINT = os.getenv('SPACES_ENDPOINT')
 SPACES_BUCKET = os.getenv('SPACES_BUCKET')
-SPACES_TOKEN = os.getenv('SPACES_TOKEN')
+SPACES_KEY = os.getenv('SPACES_KEY')
+SPACES_SECRET = os.getenv('SPACES_SECRET')
 
 # Initialize the boto3 client for DigitalOcean Spaces (for production)
 if ENV != 'local':
     s3 = boto3.client(
         's3',
         region_name=SPACES_REGION,
-        endpoint_url=SPACES_ENDPOINT,  # Update this to use SPACES_ENDPOINT directly
-        aws_access_key_id=SPACES_TOKEN,  # Ensure this is correct
-        aws_secret_access_key=SPACES_TOKEN  # Ensure this is correct
+        endpoint_url=SPACES_ENDPOINT,
+        aws_access_key_id=SPACES_KEY,
+        aws_secret_access_key=SPACES_SECRET
     )
 
 

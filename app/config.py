@@ -12,16 +12,19 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
-    spaces_token: str
-    spaces_name: str
-    spaces_region: str
-    spaces_endpoint: str
-    spaces_bucket: str
     local_video_upload_dir: Optional[str] = None
 
     class Config:
         env_file = os.getenv('ENV_FILE', '.env')
         extra = 'ignore'  # Add this line to ignore extra fields
+
+    # Digital Ocean Spaces configuration
+    spaces_name: str = ''
+    spaces_region: str = ''
+    spaces_endpoint: str = ''
+    spaces_bucket: str = ''
+    spaces_key: str = ''
+    spaces_secret: str = ''
 
 # Load settings based on environment
 settings = Settings()

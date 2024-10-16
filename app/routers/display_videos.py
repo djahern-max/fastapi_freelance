@@ -7,14 +7,31 @@ from app import models, schemas, database, oauth2
 import aiofiles
 import aiohttp
 from typing import List
+import boto3
+from botocore.exceptions import ClientError
 
 # Initialize the logger
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+SPACES_NAME = os.getenv('SPACES_NAME')
+SPACES_REGION = os.getenv('SPACES_REGION')
+SPACES_ENDPOINT = f"https://{SPACES_REGION}.digitaloceanspaces.com"
+SPACES_BUCKET = os.getenv('SPACES_BUCKET')
+SPACES_KEY = os.getenv('SPACES_KEY')
+SPACES_SECRET = os.getenv('SPACES_SECRET')
 
 router = APIRouter(
     prefix="/video_display",
     tags=["Videos"]
 )
+
+# Initialize the boto3 client
+s3 = boto3.client('s3',
+                  region_name=SPACES_REGION,
+                  endpoint_url=SPACES_ENDPOINT,
+                  aws_access_key_id=SPACES_KEY,
+                  aws_secret_access_key=SPACES_SECRET)
 
 def get_video_by_id(video_id: int, db: Session):
     video = db.query(models.Video).filter(models.Video.id == video_id).first()
@@ -43,6 +60,25 @@ def display_videos(
     except Exception as e:
         logger.error(f"Error retrieving videos: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
+async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
+    try:
+        response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
+        videos = []
+        if 'Contents' in response:
+            for item in response['Contents']:
+                video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{item['Key']}"
+                videos.append(schemas.SpacesVideoInfo(
+                    filename=item['Key'],
+                    size=item['Size'],
+                    last_modified=item['LastModified'],
+                    url=video_url
+                ))
+        return videos
+    except ClientError as e:
+        logger.error(f"Error listing videos from Spaces: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
 
 @router.get("/stream/{video_id}")
 async def stream_video(request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)):
@@ -76,7 +112,7 @@ async def stream_video(request: Request, video_id: int = Path(...), db: Session 
                 logger.error(f"Error streaming from Spaces: {str(e)}")
                 raise HTTPException(status_code=500, detail="Error streaming video from cloud storage")
         else:
-            # Local file streaming
+            # Local file streaming (unchanged)
             if not os.path.exists(video.file_path):
                 logger.error(f"Video file not found at path: {video.file_path}")
                 raise HTTPException(status_code=404, detail="Video file not found")
