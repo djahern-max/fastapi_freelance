@@ -9,6 +9,9 @@ import aiohttp
 from typing import List
 import boto3
 from botocore.exceptions import ClientError
+from dotenv import load_dotenv
+
+load_dotenv() 
 
 # Initialize the logger
 logger = logging.getLogger(__name__)
@@ -20,6 +23,14 @@ SPACES_ENDPOINT = f"https://{SPACES_REGION}.digitaloceanspaces.com"
 SPACES_BUCKET = os.getenv('SPACES_BUCKET')
 SPACES_KEY = os.getenv('SPACES_KEY')
 SPACES_SECRET = os.getenv('SPACES_SECRET')
+
+##This updated Mo FO!!!!!!!!!
+
+print(f"SPACES_NAME: {SPACES_NAME}")
+print(f"SPACES_REGION: {SPACES_REGION}")
+print(f"SPACES_BUCKET: {SPACES_BUCKET}")
+print(f"SPACES_KEY: {SPACES_KEY}")
+print(f"SPACES_SECRET: {SPACES_SECRET}")
 
 router = APIRouter(
     prefix="/video_display",
