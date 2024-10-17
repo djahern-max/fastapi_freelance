@@ -76,20 +76,48 @@ def display_videos(
 async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
-        videos = []
+        videos = {}
+        
         if 'Contents' in response:
             for item in response['Contents']:
-                video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{item['Key']}"
-                videos.append(schemas.SpacesVideoInfo(
-                    filename=item['Key'],
-                    size=item['Size'],
-                    last_modified=item['LastModified'],
-                    url=video_url
-                ))
-        return videos
+                filename = item['Key']
+                file_extension = os.path.splitext(filename)[1]
+
+                # Identify video files and associate thumbnails
+                if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
+                    video_id = os.path.splitext(filename)[0]
+                    video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    videos[video_id] = {
+                        'filename': filename,
+                        'size': item['Size'],
+                        'last_modified': item['LastModified'],
+                        'url': video_url,
+                        'thumbnail_url': None  # Placeholder for thumbnail
+                    }
+
+                # Identify thumbnail files and associate with the correct video
+                elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
+                    video_id = os.path.splitext(filename)[0]  # Assuming same base name as video
+                    thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    
+                    if video_id in videos:  # If the video is already in the list
+                        videos[video_id]['thumbnail_url'] = thumbnail_url
+                    else:  # If the thumbnail exists but video does not (rare)
+                        videos[video_id] = {
+                            'filename': None,
+                            'size': None,
+                            'last_modified': None,
+                            'url': None,
+                            'thumbnail_url': thumbnail_url
+                        }
+        
+        # Return list of videos with their associated thumbnails
+        return list(videos.values())
+
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
+
 
 @router.get("/stream/{video_id}")
 async def stream_video(request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)):
