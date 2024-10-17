@@ -83,6 +83,7 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                 filename = item['Key']
                 file_extension = os.path.splitext(filename)[1]
 
+                # Handle video formats
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
                     video_id = os.path.splitext(filename)[0]
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
@@ -94,22 +95,24 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'thumbnail_path': None  # Placeholder for thumbnail
                     }
 
+                # Handle thumbnail formats
                 elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
                     video_id = os.path.splitext(filename)[0]  # Assuming same base name as video
                     thumbnail_path = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     
                     if video_id in videos:  # If the video is already in the list
                         videos[video_id]['thumbnail_path'] = thumbnail_path
-                    else:  # Ignore orphaned thumbnails (or handle as you prefer)
-                        continue  # Skip thumbnails without a matching video
+                    else:
+                        continue  # Ignore orphaned thumbnails (or handle differently)
 
-        # Remove entries with None for 'filename' or 'url'
+        # Ensure we only return videos that have valid thumbnails or handle missing thumbnails
         filtered_videos = [
             video for video in videos.values() 
-            if video['filename'] and video['url']
+            if video['filename'] and video['url']  # Still return even without a thumbnail
         ]
         
         return filtered_videos
+
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
