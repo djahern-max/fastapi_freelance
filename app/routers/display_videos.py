@@ -83,7 +83,6 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                 filename = item['Key']
                 file_extension = os.path.splitext(filename)[1]
 
-                # Identify video files and associate thumbnails
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
                     video_id = os.path.splitext(filename)[0]
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
@@ -95,28 +94,27 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'thumbnail_url': None  # Placeholder for thumbnail
                     }
 
-                # Identify thumbnail files and associate with the correct video
                 elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
                     video_id = os.path.splitext(filename)[0]  # Assuming same base name as video
                     thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     
                     if video_id in videos:  # If the video is already in the list
                         videos[video_id]['thumbnail_url'] = thumbnail_url
-                    else:  # If the thumbnail exists but video does not (rare)
-                        videos[video_id] = {
-                            'filename': None,
-                            'size': None,
-                            'last_modified': None,
-                            'url': None,
-                            'thumbnail_url': thumbnail_url
-                        }
+                    else:  # Ignore orphaned thumbnails (or handle as you prefer)
+                        continue  # Skip thumbnails without a matching video
+
+        # Remove entries with None for 'filename' or 'url'
+        filtered_videos = [
+            video for video in videos.values() 
+            if video['filename'] and video['url']
+        ]
         
-        # Return list of videos with their associated thumbnails
-        return list(videos.values())
+        return filtered_videos
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
+
 
 
 @router.get("/stream/{video_id}")

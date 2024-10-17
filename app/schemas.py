@@ -99,13 +99,14 @@ class VideoInfo(BaseModel):
         orm_mode = True
 
 class SpacesVideoInfo(BaseModel):
-    filename: str
-    size: int
-    last_modified: datetime
-    url: str
+    filename: Optional[str]  # Make this optional to handle cases where the value is None
+    size: Optional[int]      # Make size optional
+    last_modified: Optional[datetime]  # Make last_modified optional
+    url: Optional[str]       # Make URL optional
+    thumbnail_url: Optional[str] = None  # Add thumbnail_url as optional
 
     class Config:
-        orm_mode = True
+        orm_mode = True  # Keep this if you're using SQLAlchemy ORM models
 
 class TokenData(BaseModel):
     username: str = None
