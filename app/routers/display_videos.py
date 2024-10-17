@@ -91,15 +91,15 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
                         'url': video_url,
-                        'thumbnail_url': None  # Placeholder for thumbnail
+                        'thumbnail_path': None  # Placeholder for thumbnail
                     }
 
                 elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
                     video_id = os.path.splitext(filename)[0]  # Assuming same base name as video
-                    thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    thumbnail_path = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     
                     if video_id in videos:  # If the video is already in the list
-                        videos[video_id]['thumbnail_url'] = thumbnail_url
+                        videos[video_id]['thumbnail_path'] = thumbnail_path
                     else:  # Ignore orphaned thumbnails (or handle as you prefer)
                         continue  # Skip thumbnails without a matching video
 

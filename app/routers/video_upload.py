@@ -99,7 +99,7 @@ async def upload_video(
             raise HTTPException(status_code=500, detail=f"Failed to upload video to Spaces: {str(e)}")
 
     # Handle thumbnail upload (if provided)
-    thumbnail_url = None
+    thumbnail_path = None
     if thumbnail:
         thumbnail_extension = os.path.splitext(thumbnail.filename)[1]
         unique_thumbnail_filename = f"{uuid.uuid4()}{thumbnail_extension}"
@@ -111,7 +111,7 @@ async def upload_video(
                 async with aiofiles.open(local_thumbnail_path, "wb") as buffer:
                     while content := await thumbnail.read(1024 * 1024):  # 1 MB chunks
                         await buffer.write(content)
-                thumbnail_url = local_thumbnail_path  # Store the full path
+                thumbnail_path = local_thumbnail_path  # Store the full path
                 logger.info(f"Uploaded thumbnail locally to: {local_thumbnail_path}")
             except IOError as e:
                 logger.error(f"Failed to save thumbnail locally: {str(e)}")
@@ -126,8 +126,8 @@ async def upload_video(
                     Body=thumbnail_content,
                     ACL='public-read'
                 )
-                thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_thumbnail_filename}"
-                logger.info(f"Uploaded thumbnail to Spaces: {thumbnail_url}")
+                thumbnail_path = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_thumbnail_filename}"
+                logger.info(f"Uploaded thumbnail to Spaces: {thumbnail_path}")
             except NoCredentialsError:
                 logger.error("Invalid Spaces credentials")
                 raise HTTPException(status_code=500, detail="Invalid Spaces credentials")
@@ -141,7 +141,7 @@ async def upload_video(
             title=title,
             description=description,
             file_path=file_url,
-            thumbnail_path=thumbnail_url,  # Save the thumbnail path
+            thumbnail_path=thumbnail_path,  # Save the thumbnail path
             is_project=is_project,
             parent_project_id=parent_project_id,
             user_id=current_user.id
