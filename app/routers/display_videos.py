@@ -80,7 +80,7 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
                         'url': video_url,
-                        'thumbnail_path': thumbnail_path  # Use consistent 'thumbnail_path'
+                        'thumbnail_path': thumbnail_path
                     })
                     logger.info(f"Added video: {filename} with thumbnail: {thumbnail_path}")
 
@@ -94,21 +94,32 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
-@router.get("/thumbnail/{video_filename}")
-async def get_thumbnail(video_filename: str):
+@router.get("/thumbnail/{thumbnail_filename}")
+async def get_thumbnail(thumbnail_filename: str):
+    """
+    Retrieve the thumbnail (image) by its filename, without assuming any association with a video.
+    """
+
     try:
-        logger.info(f"Attempting to retrieve thumbnail for video: {video_filename}")
+        # Ensure the filename includes the extension
+        valid_extensions = ['.webp', '.jpg', '.png']
+        if not any(thumbnail_filename.endswith(ext) for ext in valid_extensions):
+            raise HTTPException(status_code=400, detail="Invalid file extension. Only .webp, .jpg, and .png are allowed.")
+        
+        # Check if the thumbnail exists in the bucket
+        s3.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
+        
+        # If the thumbnail exists, generate and return the URL
+        thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
+        return {"thumbnail_url": thumbnail_url}
 
-        video_name = os.path.splitext(video_filename)[0]
-        thumbnail_path = get_thumbnail_path(video_name)  # Use consistent 'thumbnail_path'
-
-        if thumbnail_path:
-            logger.info(f"Thumbnail found: {thumbnail_path}")
-            return {"thumbnail_path": thumbnail_path}  # Return 'thumbnail_path' in the response
-        else:
-            logger.error(f"No thumbnail found for video: {video_filename}")
+    except ClientError as e:
+        if e.response['Error']['Code'] == '404':
             raise HTTPException(status_code=404, detail="Thumbnail not found")
-
+        else:
+            logger.error(f"Error accessing thumbnail: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error accessing thumbnail: {str(e)}")
+    
     except Exception as e:
-        logger.error(f"Error retrieving thumbnail: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving thumbnail: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
