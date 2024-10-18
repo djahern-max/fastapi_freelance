@@ -32,7 +32,7 @@ s3 = boto3.client('s3',
                   aws_access_key_id=SPACES_KEY,
                   aws_secret_access_key=SPACES_SECRET)
 
-def get_thumbnail_url(video_name):
+def get_thumbnail_path(video_name):
     thumbnail_extensions = ['.webp', '.jpg', '.png']
     
     for ext in thumbnail_extensions:
@@ -74,16 +74,16 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
                     video_name = os.path.splitext(filename)[0]
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    thumbnail_url = thumbnails.get(video_name)
+                    thumbnail_path = thumbnails.get(video_name)
                     
                     videos.append({
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
                         'url': video_url,
-                        'thumbnail_path': thumbnail_url
+                        'thumbnail_path': thumbnail_path
                     })
-                    logger.info(f"Added video: {filename} with thumbnail: {thumbnail_url}")
+                    logger.info(f"Added video: {filename} with thumbnail: {thumbnail_path}")
 
         logger.info(f"Returning {len(videos)} video entries")
         return videos
@@ -101,11 +101,11 @@ async def get_thumbnail(video_filename: str):
         logger.info(f"Attempting to retrieve thumbnail for video: {video_filename}")
 
         video_name = os.path.splitext(video_filename)[0]
-        thumbnail_url = get_thumbnail_url(video_name)
+        thumbnail_path = get_thumbnail_path(video_name)
 
-        if thumbnail_url:
-            logger.info(f"Thumbnail found: {thumbnail_url}")
-            return {"thumbnail_url": thumbnail_url}
+        if thumbnail_path:
+            logger.info(f"Thumbnail found: {thumbnail_path}")
+            return {"thumbnail_path": thumbnail_path}
         else:
             logger.error(f"No thumbnail found for video: {video_filename}")
             raise HTTPException(status_code=404, detail="Thumbnail not found")
