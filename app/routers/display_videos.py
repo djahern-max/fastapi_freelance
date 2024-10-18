@@ -76,11 +76,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from botocore.client import Config
+
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
 async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
         logger.info(f"Listing objects in bucket: {SPACES_BUCKET}")
-        response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
+        
+        # Create S3 client
+        session = boto3.session.Session()
+        s3_client = session.client('s3',
+                                   region_name=SPACES_REGION,
+                                   endpoint_url=SPACES_ENDPOINT,
+                                   aws_access_key_id=SPACES_KEY,
+                                   aws_secret_access_key=SPACES_SECRET,
+                                   config=Config(signature_version='s3v4'))
+
+        # List all objects in the bucket
+        response = s3_client.list_objects_v2(Bucket=SPACES_BUCKET)
+        
         videos = {}
         thumbnails = {}
         
@@ -89,36 +103,33 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
             for item in response['Contents']:
                 filename = item['Key']
                 file_extension = os.path.splitext(filename)[1].lower()
-                logger.debug(f"Processing file: {filename}")
-
+                
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_id = filename
-                    video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    videos[video_id] = {
+                    video_name = os.path.splitext(filename)[0]
+                    videos[video_name] = {
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
-                        'url': video_url,
+                        'url': f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}",
                         'thumbnail_path': None
                     }
                     logger.info(f"Added video: {filename}")
                 elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
-                    thumbnails[filename] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    thumb_name = os.path.splitext(filename)[0]
+                    thumbnails[thumb_name] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     logger.info(f"Added thumbnail: {filename}")
 
         logger.info(f"Found {len(videos)} videos and {len(thumbnails)} thumbnails")
+        logger.info(f"Videos: {list(videos.keys())}")
+        logger.info(f"Thumbnails: {list(thumbnails.keys())}")
 
-        # Associate thumbnails with videos
-        for video_id, video_info in videos.items():
-            video_name = os.path.splitext(video_id)[0]
-            logger.debug(f"Looking for thumbnail for video: {video_name}")
-            for thumb_filename, thumb_url in thumbnails.items():
-                if thumb_filename.startswith(video_name):
-                    video_info['thumbnail_path'] = thumb_url
-                    logger.info(f"Matched thumbnail {thumb_filename} to video {video_id}")
-                    break
-            if video_info['thumbnail_path'] is None:
-                logger.warning(f"No thumbnail found for video: {video_id}")
+        # Match thumbnails with videos
+        for video_name, video_info in videos.items():
+            if video_name in thumbnails:
+                video_info['thumbnail_path'] = thumbnails[video_name]
+                logger.info(f"Matched thumbnail for video: {video_name}")
+            else:
+                logger.warning(f"No thumbnail found for video: {video_name}")
 
         result = list(videos.values())
         logger.info(f"Returning {len(result)} video entries")
@@ -133,85 +144,3 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
-    
-@router.get("/stream/{video_id}")
-async def stream_video(request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)):
-    logger.info(f"Attempting to stream video with ID: {video_id}")
-    try:
-        video = get_video_by_id(video_id, db)
-        logger.info(f"Video found: {video.title}, File path: {video.file_path}")
-
-        is_spaces_video = video.file_path.startswith('https://')
-
-        if is_spaces_video:
-            # Streaming from Digital Ocean Spaces
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(video.file_path) as response:
-                        if response.status != 200:
-                            raise HTTPException(status_code=404, detail="Video file not found")
-                        
-                        headers = {
-                            'Content-Type': response.headers.get('Content-Type', 'video/mp4'),
-                            'Content-Length': response.headers.get('Content-Length', ''),
-                            'Accept-Ranges': 'bytes',
-                        }
-
-                        return StreamingResponse(
-                            response.content.iter_any(),
-                            status_code=200,
-                            headers=headers,
-                        )
-            except aiohttp.ClientError as e:
-                logger.error(f"Error streaming from Spaces: {str(e)}")
-                raise HTTPException(status_code=500, detail="Error streaming video from cloud storage")
-        else:
-            # Local file streaming (unchanged)
-            if not os.path.exists(video.file_path):
-                logger.error(f"Video file not found at path: {video.file_path}")
-                raise HTTPException(status_code=404, detail="Video file not found")
-
-            file_size = os.path.getsize(video.file_path)
-            logger.info(f"Video file size: {file_size} bytes")
-            
-            range_header = request.headers.get('Range')
-
-            start = 0
-            end = file_size - 1
-
-            if range_header:
-                range_data = range_header.replace('bytes=', '').split('-')
-                start = int(range_data[0])
-                end = int(range_data[1]) if range_data[1] else file_size - 1
-
-            chunk_size = 1024 * 1024  # 1MB chunks
-            headers = {
-                'Content-Range': f'bytes {start}-{end}/{file_size}',
-                'Accept-Ranges': 'bytes',
-                'Content-Length': str(end - start + 1),
-                'Content-Type': 'video/mp4',
-            }
-
-            async def stream_generator():
-                async with aiofiles.open(video.file_path, mode='rb') as video_file:
-                    await video_file.seek(start)
-                    remaining = end - start + 1
-                    while remaining:
-                        chunk = await video_file.read(min(chunk_size, remaining))
-                        if not chunk:
-                            break
-                        remaining -= len(chunk)
-                        yield chunk
-
-            return StreamingResponse(
-                stream_generator(),
-                status_code=206 if range_header else 200,
-                headers=headers,
-            )
-
-    except HTTPException as he:
-        logger.error(f"HTTP Exception: {str(he)}")
-        raise he
-    except Exception as e:
-        logger.error(f"Error streaming video {video_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
