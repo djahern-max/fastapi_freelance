@@ -72,20 +72,27 @@ def display_videos(
         logger.error(f"Error retrieving videos: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
 async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
+        logger.info(f"Listing objects in bucket: {SPACES_BUCKET}")
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
         videos = {}
         thumbnails = {}
         
         if 'Contents' in response:
+            logger.info(f"Found {len(response['Contents'])} objects in the bucket")
             for item in response['Contents']:
                 filename = item['Key']
                 file_extension = os.path.splitext(filename)[1].lower()
+                logger.debug(f"Processing file: {filename}")
 
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_id = filename  # Use the full filename as the video_id
+                    video_id = filename
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     videos[video_id] = {
                         'filename': filename,
@@ -94,24 +101,39 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'url': video_url,
                         'thumbnail_path': None
                     }
+                    logger.info(f"Added video: {filename}")
                 elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
                     thumbnails[filename] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    logger.info(f"Added thumbnail: {filename}")
+
+        logger.info(f"Found {len(videos)} videos and {len(thumbnails)} thumbnails")
 
         # Associate thumbnails with videos
         for video_id, video_info in videos.items():
             video_name = os.path.splitext(video_id)[0]
+            logger.debug(f"Looking for thumbnail for video: {video_name}")
             for thumb_filename, thumb_url in thumbnails.items():
                 if thumb_filename.startswith(video_name):
                     video_info['thumbnail_path'] = thumb_url
+                    logger.info(f"Matched thumbnail {thumb_filename} to video {video_id}")
                     break
+            if video_info['thumbnail_path'] is None:
+                logger.warning(f"No thumbnail found for video: {video_id}")
 
-        return list(videos.values())
+        result = list(videos.values())
+        logger.info(f"Returning {len(result)} video entries")
+        for video in result:
+            logger.debug(f"Video entry: {video}")
+
+        return result
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
-
-
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+    
 @router.get("/stream/{video_id}")
 async def stream_video(request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)):
     logger.info(f"Attempting to stream video with ID: {video_id}")
