@@ -31,28 +31,14 @@ s3 = boto3.client('s3',
                   aws_access_key_id=SPACES_KEY,
                   aws_secret_access_key=SPACES_SECRET)
 
-def get_thumbnail_path(video_name):
-    thumbnail_extensions = ['.webp', '.jpg', '.png']
-    
-    for ext in thumbnail_extensions:
-        thumbnail_filename = f"{video_name}{ext}"
-        try:
-            s3.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
-            return f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
-        except ClientError:
-            continue
-    
-    return None
-
-@router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
-async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
+@router.get("/videos", response_model=List[schemas.SpacesVideoInfo])
+async def list_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
-        logger.info(f"Listing objects in bucket: {SPACES_BUCKET}")
+        logger.info(f"Listing video objects in bucket: {SPACES_BUCKET}")
         
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
         
         videos = []
-        images = []
         
         if 'Contents' in response:
             logger.info(f"Found {len(response['Contents'])} objects in the bucket")
@@ -67,11 +53,37 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
-                        'url': video_url,
-                        'thumbnail_path': None
+                        'url': video_url
                     })
                     logger.info(f"Added video: {filename}")
-                elif file_extension in ['.jpg', '.png', '.webp']:  # Image formats
+
+        logger.info(f"Returning {len(videos)} video entries")
+        return videos
+
+    except ClientError as e:
+        logger.error(f"Error listing videos from Spaces: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+@router.get("/images", response_model=List[schemas.SpacesImageInfo])
+async def list_images(current_user: schemas.User = Depends(oauth2.get_current_user)):
+    try:
+        logger.info(f"Listing image objects in bucket: {SPACES_BUCKET}")
+        
+        response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
+        
+        images = []
+        
+        if 'Contents' in response:
+            logger.info(f"Found {len(response['Contents'])} objects in the bucket")
+            
+            for item in response['Contents']:
+                filename = item['Key']
+                file_extension = os.path.splitext(filename)[1].lower()
+                
+                if file_extension in ['.jpg', '.png', '.webp']:  # Image formats
                     image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     images.append({
                         'filename': filename,
@@ -79,41 +91,36 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                     })
                     logger.info(f"Added image: {filename}")
 
-        logger.info(f"Returning {len(videos)} video entries and {len(images)} image entries")
-        return {"videos": videos, "images": images}
+        logger.info(f"Returning {len(images)} image entries")
+        return images
 
     except ClientError as e:
-        logger.error(f"Error listing objects from Spaces: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error listing objects: {str(e)}")
+        logger.error(f"Error listing images from Spaces: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing images: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
-    
-@router.get("/thumbnail/{thumbnail_filename}")
-async def get_thumbnail(thumbnail_filename: str):
+
+@router.get("/image/{image_filename}")
+async def get_image(image_filename: str):
     """
-    Retrieve the thumbnail (image) by its filename, without assuming any association with a video.
+    Retrieve the image by its filename.
     """
 
     try:
-        # Ensure the filename includes the extension
-        valid_extensions = ['.webp', '.jpg', '.png']
-        if not any(thumbnail_filename.endswith(ext) for ext in valid_extensions):
-            raise HTTPException(status_code=400, detail="Invalid file extension. Only .webp, .jpg, and .png are allowed.")
+        # Check if the image exists in the bucket
+        s3.head_object(Bucket=SPACES_BUCKET, Key=image_filename)
         
-        # Check if the thumbnail exists in the bucket
-        s3.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
-        
-        # If the thumbnail exists, generate and return the URL
-        thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
-        return {"thumbnail_url": thumbnail_url}
+        # If the image exists, generate and return the URL
+        image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{image_filename}"
+        return {"image_url": image_url}
 
     except ClientError as e:
         if e.response['Error']['Code'] == '404':
-            raise HTTPException(status_code=404, detail="Thumbnail not found")
+            raise HTTPException(status_code=404, detail="Image not found")
         else:
-            logger.error(f"Error accessing thumbnail: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error accessing thumbnail: {str(e)}")
+            logger.error(f"Error accessing image: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error accessing image: {str(e)}")
     
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
