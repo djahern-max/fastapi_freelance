@@ -66,8 +66,6 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
         for video in videos_from_db:
             videos.append({
                 'filename': video.file_path.split('/')[-1],  # Extract filename from file_path
-                # Remove this if last_modified is not used
-                # 'last_modified': video.last_modified,
                 'url': video.file_path,  # The video URL
                 'thumbnail_path': video.thumbnail_path  # The thumbnail URL from DB
             })
@@ -77,7 +75,8 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
 
     except Exception as e:
         logger.error(f"Error retrieving videos: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving videos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 
 
 
