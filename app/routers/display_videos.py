@@ -144,3 +144,49 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
+    
+
+@router.get("/thumbnail/{video_filename}")
+async def get_thumbnail(video_filename: str):
+    try:
+        logger.info(f"Attempting to retrieve thumbnail for video: {video_filename}")
+
+        # Create S3 client
+        session = boto3.session.Session()
+        s3_client = session.client('s3',
+                                   region_name=SPACES_REGION,
+                                   endpoint_url=SPACES_ENDPOINT,
+                                   aws_access_key_id=SPACES_KEY,
+                                   aws_secret_access_key=SPACES_SECRET,
+                                   config=Config(signature_version='s3v4'))
+
+        # Construct the expected thumbnail filename
+        video_name = os.path.splitext(video_filename)[0]
+        thumbnail_extensions = ['.webp', '.jpg', '.png']
+        
+        for ext in thumbnail_extensions:
+            thumbnail_filename = f"{video_name}{ext}"
+            logger.info(f"Checking for thumbnail: {thumbnail_filename}")
+            
+            try:
+                # Check if the thumbnail exists
+                s3_client.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
+                
+                # If we reach here, the thumbnail exists
+                thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
+                logger.info(f"Thumbnail found: {thumbnail_url}")
+                return {"thumbnail_url": thumbnail_url}
+            
+            except s3_client.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == '404':
+                    logger.warning(f"Thumbnail not found: {thumbnail_filename}")
+                else:
+                    raise
+
+        # If we've checked all extensions and found nothing
+        logger.error(f"No thumbnail found for video: {video_filename}")
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    except Exception as e:
+        logger.error(f"Error retrieving thumbnail: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving thumbnail: {str(e)}")
