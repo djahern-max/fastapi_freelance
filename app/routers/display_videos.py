@@ -52,48 +52,43 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
         
         videos = []
-        thumbnails = {}
+        images = []
         
         if 'Contents' in response:
             logger.info(f"Found {len(response['Contents'])} objects in the bucket")
             
-            # First, collect all thumbnails
-            for item in response['Contents']:
-                filename = item['Key']
-                file_extension = os.path.splitext(filename)[1].lower()
-                if file_extension in ['.webp', '.jpg', '.png']:
-                    video_name = os.path.splitext(filename)[0]
-                    thumbnails[video_name] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-            
-            # Then process videos and associate thumbnails
             for item in response['Contents']:
                 filename = item['Key']
                 file_extension = os.path.splitext(filename)[1].lower()
                 
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_name = os.path.splitext(filename)[0]
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    thumbnail_path = thumbnails.get(video_name)
-                    
                     videos.append({
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
                         'url': video_url,
-                        'thumbnail_path': thumbnail_path
+                        'thumbnail_path': None
                     })
-                    logger.info(f"Added video: {filename} with thumbnail: {thumbnail_path}")
+                    logger.info(f"Added video: {filename}")
+                elif file_extension in ['.jpg', '.png', '.webp']:  # Image formats
+                    image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    images.append({
+                        'filename': filename,
+                        'url': image_url
+                    })
+                    logger.info(f"Added image: {filename}")
 
-        logger.info(f"Returning {len(videos)} video entries")
-        return videos
+        logger.info(f"Returning {len(videos)} video entries and {len(images)} image entries")
+        return {"videos": videos, "images": images}
 
     except ClientError as e:
-        logger.error(f"Error listing videos from Spaces: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
+        logger.error(f"Error listing objects from Spaces: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing objects: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
-
+    
 @router.get("/thumbnail/{thumbnail_filename}")
 async def get_thumbnail(thumbnail_filename: str):
     """
