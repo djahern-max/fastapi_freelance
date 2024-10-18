@@ -75,8 +75,11 @@ def display_videos(
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
 async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
+        # List all objects in the bucket
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
-        videos = []
+        
+        # Create a dictionary to store video information
+        videos = {}
         
         if 'Contents' in response:
             for item in response['Contents']:
@@ -85,32 +88,26 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
 
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    video_id = os.path.splitext(filename)[0]
-                    
-                    # Look for a matching thumbnail
-                    thumbnail_extensions = ['.webp', '.jpg', '.png']
-                    thumbnail_path = None
-                    for thumb_ext in thumbnail_extensions:
-                        possible_thumbnail = f"{video_id}{thumb_ext}"
-                        if any(item['Key'] == possible_thumbnail for item in response['Contents']):
-                            thumbnail_path = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{possible_thumbnail}"
-                            break
-                    
-                    videos.append({
+                    videos[filename] = {
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
                         'url': video_url,
-                        'thumbnail_path': thumbnail_path
-                    })
+                        'thumbnail_path': None
+                    }
+                elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
+                    thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    # Find the corresponding video and update its thumbnail_path
+                    for video in videos.values():
+                        if video['thumbnail_path'] is None:
+                            video['thumbnail_path'] = thumbnail_url
+                            break
 
-        return videos
+        return list(videos.values())
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
-
-
 
 
 @router.get("/stream/{video_id}")
