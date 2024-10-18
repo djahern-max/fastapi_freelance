@@ -32,80 +32,83 @@ s3 = boto3.client('s3',
                   aws_access_key_id=SPACES_KEY,
                   aws_secret_access_key=SPACES_SECRET)
 
-def get_all_objects():
-    objects = []
-    paginator = s3.get_paginator('list_objects_v2')
-    for page in paginator.paginate(Bucket=SPACES_BUCKET):
-        if 'Contents' in page:
-            objects.extend(page['Contents'])
-    return objects
+def get_thumbnail_url(video_name):
+    thumbnail_extensions = ['.webp', '.jpg', '.png']
+    
+    for ext in thumbnail_extensions:
+        thumbnail_filename = f"{video_name}{ext}"
+        try:
+            s3.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
+            return f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
+        except ClientError:
+            continue
+    
+    return None
 
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
 async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
         logger.info(f"Listing objects in bucket: {SPACES_BUCKET}")
         
-        objects = get_all_objects()
+        response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
         
         videos = []
-        thumbnails = []
+        thumbnails = {}
         
-        logger.info(f"Found {len(objects)} objects in the bucket")
-        
-        for item in objects:
-            filename = item['Key']
-            file_extension = os.path.splitext(filename)[1].lower()
+        if 'Contents' in response:
+            logger.info(f"Found {len(response['Contents'])} objects in the bucket")
             
-            if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                videos.append({
-                    'filename': filename,
-                    'size': item['Size'],
-                    'last_modified': item['LastModified'],
-                    'url': video_url,
-                    'thumbnail_path': None
-                })
-                logger.info(f"Added video: {filename}")
-            elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
-                thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                thumbnails.append({
-                    'filename': filename,
-                    'url': thumbnail_url
-                })
-                logger.info(f"Added thumbnail: {filename}")
+            # First, collect all thumbnails
+            for item in response['Contents']:
+                filename = item['Key']
+                file_extension = os.path.splitext(filename)[1].lower()
+                if file_extension in ['.webp', '.jpg', '.png']:
+                    video_name = os.path.splitext(filename)[0]
+                    thumbnails[video_name] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+            
+            # Then process videos and associate thumbnails
+            for item in response['Contents']:
+                filename = item['Key']
+                file_extension = os.path.splitext(filename)[1].lower()
+                
+                if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
+                    video_name = os.path.splitext(filename)[0]
+                    video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    thumbnail_url = thumbnails.get(video_name)
+                    
+                    videos.append({
+                        'filename': filename,
+                        'size': item['Size'],
+                        'last_modified': item['LastModified'],
+                        'url': video_url,
+                        'thumbnail_path': thumbnail_url
+                    })
+                    logger.info(f"Added video: {filename} with thumbnail: {thumbnail_url}")
 
-        # Add thumbnail information to the response
-        response = {
-            'videos': videos,
-            'thumbnails': thumbnails
-        }
-
-        logger.info(f"Returning {len(videos)} video entries and {len(thumbnails)} thumbnail entries")
-        return response
+        logger.info(f"Returning {len(videos)} video entries")
+        return videos
 
     except ClientError as e:
-        logger.error(f"Error listing objects from Spaces: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error listing objects: {str(e)}")
+        logger.error(f"Error listing videos from Spaces: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
-@router.get("/thumbnail/{thumbnail_filename}")
-async def get_thumbnail(thumbnail_filename: str):
+@router.get("/thumbnail/{video_filename}")
+async def get_thumbnail(video_filename: str):
     try:
-        logger.info(f"Attempting to retrieve thumbnail: {thumbnail_filename}")
+        logger.info(f"Attempting to retrieve thumbnail for video: {video_filename}")
 
-        try:
-            s3.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
-            thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
+        video_name = os.path.splitext(video_filename)[0]
+        thumbnail_url = get_thumbnail_url(video_name)
+
+        if thumbnail_url:
             logger.info(f"Thumbnail found: {thumbnail_url}")
             return {"thumbnail_url": thumbnail_url}
-        except ClientError as e:
-            if e.response['Error']['Code'] == '404':
-                logger.warning(f"Thumbnail not found: {thumbnail_filename}")
-                return {"thumbnail_url": None}
-            else:
-                raise
+        else:
+            logger.error(f"No thumbnail found for video: {video_filename}")
+            raise HTTPException(status_code=404, detail="Thumbnail not found")
 
     except Exception as e:
         logger.error(f"Error retrieving thumbnail: {str(e)}")
