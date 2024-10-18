@@ -1,12 +1,15 @@
 import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 from app import schemas, oauth2
 from typing import List
 import boto3
 from botocore.exceptions import ClientError
 from botocore.client import Config
 from dotenv import load_dotenv
+from app.database import get_db
+from app.models import Video  # Assuming you have a Video model defined in models.py
 
 load_dotenv()
 
@@ -15,101 +18,79 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 SPACES_REGION = os.getenv('SPACES_REGION')
-SPACES_ENDPOINT = f"https://{SPACES_REGION}.digitaloceanspaces.com"
+SPACES_ENDPOINT = os.getenv('SPACES_ENDPOINT')
 SPACES_BUCKET = os.getenv('SPACES_BUCKET')
 SPACES_KEY = os.getenv('SPACES_KEY')
 SPACES_SECRET = os.getenv('SPACES_SECRET')
+
+# Initialize the boto3 client
+s3_client = boto3.client('s3',
+                         region_name=SPACES_REGION,
+                         endpoint_url=SPACES_ENDPOINT,
+                         aws_access_key_id=SPACES_KEY,
+                         aws_secret_access_key=SPACES_SECRET,
+                         config=Config(signature_version='s3v4'))
+
 
 router = APIRouter(
     prefix="/video_display",
     tags=["Videos"]
 )
 
-# Initialize the boto3 client
-s3 = boto3.client('s3',
-                  region_name=SPACES_REGION,
-                  endpoint_url=SPACES_ENDPOINT,
-                  aws_access_key_id=SPACES_KEY,
-                  aws_secret_access_key=SPACES_SECRET)
+async def get_videos_from_db(db: Session):
+    # Fetch video and thumbnail paths from the database
+    return db.query(Video).all()
 
-def get_thumbnail_path(video_name):
-    thumbnail_extensions = ['.webp', '.jpg', '.png']
-    
-    for ext in thumbnail_extensions:
-        thumbnail_filename = f"{video_name}{ext}"
-        try:
-            s3.head_object(Bucket=SPACES_BUCKET, Key=thumbnail_filename)
-            return f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{thumbnail_filename}"
-        except ClientError:
-            continue
-    
-    return None
+# Function to download the thumbnail from Spaces
+def download_thumbnail(file_name: str, local_path: str):
+    try:
+        logger.info(f"Attempting to download {file_name} from {SPACES_BUCKET}")
+        s3_client.download_file(SPACES_BUCKET, file_name, local_path)
+        logger.info(f"File downloaded successfully to {local_path}")
+        return local_path
+    except Exception as e:
+        logger.error(f"Error downloading thumbnail: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error downloading thumbnail")
+
 
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
-async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
+async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user), db: Session = Depends(get_db)):
     try:
-        logger.info(f"Listing objects in bucket: {SPACES_BUCKET}")
-        
-        response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
-        
-        videos = []
-        thumbnails = {}
-        
-        if 'Contents' in response:
-            logger.info(f"Found {len(response['Contents'])} objects in the bucket")
-            
-            # First, collect all thumbnails
-            for item in response['Contents']:
-                filename = item['Key']
-                file_extension = os.path.splitext(filename)[1].lower()
-                if file_extension in ['.webp', '.jpg', '.png']:
-                    video_name = os.path.splitext(filename)[0]
-                    thumbnails[video_name] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-            
-            # Then process videos and associate thumbnails
-            for item in response['Contents']:
-                filename = item['Key']
-                file_extension = os.path.splitext(filename)[1].lower()
-                
-                if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_name = os.path.splitext(filename)[0]
-                    video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    thumbnail_path = thumbnails.get(video_name)
-                    
-                    videos.append({
-                        'filename': filename,
-                        'size': item['Size'],
-                        'last_modified': item['LastModified'],
-                        'url': video_url,
-                        'thumbnail_path': thumbnail_path
-                    })
-                    logger.info(f"Added video: {filename} with thumbnail: {thumbnail_path}")
+        logger.info(f"Fetching video and thumbnail paths from the database")
 
+        # Fetch video and thumbnail info from the database
+        videos_from_db = await get_videos_from_db(db)
+
+        videos = []
+        
+        for video in videos_from_db:
+            videos.append({
+                'filename': video.file_path.split('/')[-1],  # Extract filename from file_path
+                'size': video.size,  # Assuming size is stored in the database
+                'last_modified': video.last_modified,  # Assuming last_modified is stored in the database
+                'url': video.file_path,  # The video URL
+                'thumbnail_path': video.thumbnail_path  # The thumbnail URL from DB
+            })
+        
         logger.info(f"Returning {len(videos)} video entries")
         return videos
 
-    except ClientError as e:
-        logger.error(f"Error listing videos from Spaces: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error retrieving videos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving videos: {str(e)}")
+
+
+# FastAPI route to download and serve the thumbnail
+@router.get("/download_thumbnail/{thumbnail_filename}")
+async def download_thumbnail_endpoint(thumbnail_filename: str):
+    local_file_path = f"/tmp/{thumbnail_filename}"  # You can change the local path as needed
+
+    try:
+        # Call the function to download the thumbnail
+        downloaded_file_path = download_thumbnail(thumbnail_filename, local_file_path)
+        return {"message": f"File downloaded successfully", "file_path": downloaded_file_path}
+    except HTTPException as e:
+        raise e
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred")
-
-@router.get("/thumbnail/{video_filename}")
-async def get_thumbnail(video_filename: str):
-    try:
-        logger.info(f"Attempting to retrieve thumbnail for video: {video_filename}")
-
-        video_name = os.path.splitext(video_filename)[0]
-        thumbnail_path = get_thumbnail_path(video_name)
-
-        if thumbnail_path:
-            logger.info(f"Thumbnail found: {thumbnail_path}")
-            return {"thumbnail_path": thumbnail_path}
-        else:
-            logger.error(f"No thumbnail found for video: {video_filename}")
-            raise HTTPException(status_code=404, detail="Thumbnail not found")
-
-    except Exception as e:
-        logger.error(f"Error retrieving thumbnail: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving thumbnail: {str(e)}")
+        raise HTTPException(status_code=500, detail="Unexpected error occurred")
