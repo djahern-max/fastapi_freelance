@@ -81,62 +81,36 @@ from botocore.client import Config
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
 async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user)):
     try:
-        logger.info(f"Listing objects in bucket: {SPACES_BUCKET}")
+        logger.info(f"Listing video objects in bucket: {SPACES_BUCKET}")
         
         # Create S3 client
-        session = boto3.session.Session()
-        s3_client = session.client('s3',
-                                   region_name=SPACES_REGION,
-                                   endpoint_url=SPACES_ENDPOINT,
-                                   aws_access_key_id=SPACES_KEY,
-                                   aws_secret_access_key=SPACES_SECRET,
-                                   config=Config(signature_version='s3v4'))
+        s3_client = boto3.client('s3',
+                                 region_name=SPACES_REGION,
+                                 endpoint_url=SPACES_ENDPOINT,
+                                 aws_access_key_id=SPACES_KEY,
+                                 aws_secret_access_key=SPACES_SECRET,
+                                 config=Config(signature_version='s3v4'))
 
-        # List all objects in the bucket
+        # List all video objects in the bucket
         response = s3_client.list_objects_v2(Bucket=SPACES_BUCKET)
-        
-        videos = {}
-        thumbnails = {}
+
+        videos = []
         
         if 'Contents' in response:
-            logger.info(f"Found {len(response['Contents'])} objects in the bucket")
             for item in response['Contents']:
                 filename = item['Key']
                 file_extension = os.path.splitext(filename)[1].lower()
                 
-                if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_name = os.path.splitext(filename)[0]
-                    videos[video_name] = {
+                if file_extension in ['.mp4', '.avi', '.mov']:  # Only process video files
+                    videos.append({
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
-                        'url': f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}",
-                        'thumbnail_path': None
-                    }
-                    logger.info(f"Added video: {filename}")
-                elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
-                    thumb_name = os.path.splitext(filename)[0]
-                    thumbnails[thumb_name] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    logger.info(f"Added thumbnail: {filename}")
+                        'url': f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
+                    })
 
-        logger.info(f"Found {len(videos)} videos and {len(thumbnails)} thumbnails")
-        logger.info(f"Videos: {list(videos.keys())}")
-        logger.info(f"Thumbnails: {list(thumbnails.keys())}")
-
-        # Match thumbnails with videos
-        for video_name, video_info in videos.items():
-            if video_name in thumbnails:
-                video_info['thumbnail_path'] = thumbnails[video_name]
-                logger.info(f"Matched thumbnail for video: {video_name}")
-            else:
-                logger.warning(f"No thumbnail found for video: {video_name}")
-
-        result = list(videos.values())
-        logger.info(f"Returning {len(result)} video entries")
-        for video in result:
-            logger.debug(f"Video entry: {video}")
-
-        return result
+        logger.info(f"Returning {len(videos)} video entries")
+        return videos
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
@@ -144,3 +118,21 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+@router.get("/thumbnail/{video_name}")
+async def get_thumbnail(video_name: str, db: Session = Depends(database.get_db)):
+    try:
+        # Fetch the video by its name and retrieve the thumbnail_path from the model
+        video = db.query(models.Video).filter(models.Video.file_path.like(f"%{video_name}%")).first()
+        
+        if video and video.thumbnail_path:
+            logger.info(f"Thumbnail found for video: {video_name}")
+            return {"thumbnail_url": video.thumbnail_path}
+        else:
+            logger.warning(f"No thumbnail found for video: {video_name}")
+            raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    except Exception as e:
+        logger.error(f"Error retrieving thumbnail: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error retrieving thumbnail")
+
