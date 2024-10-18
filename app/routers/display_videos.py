@@ -77,47 +77,39 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
     try:
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
         videos = {}
+        thumbnails = {}
         
         if 'Contents' in response:
             for item in response['Contents']:
                 filename = item['Key']
-                file_extension = os.path.splitext(filename)[1]
+                file_extension = os.path.splitext(filename)[1].lower()
 
-                # Handle video formats
                 if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_id = os.path.splitext(filename)[0]
+                    video_id = filename  # Use the full filename as the video_id
                     video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
                     videos[video_id] = {
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
                         'url': video_url,
-                        'thumbnail_path': None  # Placeholder for thumbnail
+                        'thumbnail_path': None
                     }
-
-                # Handle thumbnail formats
                 elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
-                    video_id = os.path.splitext(filename)[0]  # Assuming same base name as video
-                    thumbnail_path = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    
-                    if video_id in videos:  # If the video is already in the list
-                        videos[video_id]['thumbnail_path'] = thumbnail_path
-                    else:
-                        continue  # Ignore orphaned thumbnails (or handle differently)
+                    thumbnails[filename] = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
 
-        # Ensure we only return videos that have valid thumbnails or handle missing thumbnails
-        filtered_videos = [
-            video for video in videos.values() 
-            if video['filename'] and video['url']  # Still return even without a thumbnail
-        ]
-        
-        return filtered_videos
+        # Associate thumbnails with videos
+        for video_id, video_info in videos.items():
+            video_name = os.path.splitext(video_id)[0]
+            for thumb_filename, thumb_url in thumbnails.items():
+                if thumb_filename.startswith(video_name):
+                    video_info['thumbnail_path'] = thumb_url
+                    break
 
+        return list(videos.values())
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
-
 
 
 @router.get("/stream/{video_id}")
