@@ -104,6 +104,8 @@ class SpacesVideoInfo(BaseModel):
     last_modified: datetime
     url: str
     thumbnail_path: Optional[str] = None
+    title: Optional[str] = None  # Add title field
+    description: Optional[str] = None  # Add description field
 
     class Config:
         from_attributes = True
