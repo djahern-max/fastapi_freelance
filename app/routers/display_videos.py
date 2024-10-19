@@ -101,6 +101,7 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                         'last_modified': item['LastModified'],
                         'url': f"{base_url}/{filename}",
                         'thumbnail_path': None
+                        
                     }
                 elif file_extension.lower() in ['.webp', '.jpg', '.png']:  # Thumbnail formats
                     thumbnails[file_name] = f"{base_url}/{filename}"
