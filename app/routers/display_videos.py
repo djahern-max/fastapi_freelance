@@ -10,6 +10,7 @@ from typing import List
 import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
+import uuid
 
 load_dotenv() 
 
@@ -78,37 +79,48 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
         # List all objects in the bucket
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
         
-        # Create a dictionary to store video information
         videos = {}
+        thumbnails = {}
+        base_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com"
         
         if 'Contents' in response:
             for item in response['Contents']:
                 filename = item['Key']
-                file_extension = os.path.splitext(filename)[1].lower()
+                file_name, file_extension = os.path.splitext(filename)
 
-                if file_extension in ['.mp4', '.avi', '.mov']:  # Video formats
-                    video_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    videos[filename] = {
+                # Check if the filename (without extension) is a valid UUID
+                try:
+                    file_uuid = uuid.UUID(file_name)
+                except ValueError:
+                    continue  # Skip this file if it's not a valid UUID
+
+                if file_extension.lower() in ['.mp4', '.avi', '.mov']:  # Video formats
+                    videos[file_name] = {
                         'filename': filename,
                         'size': item['Size'],
                         'last_modified': item['LastModified'],
-                        'url': video_url,
+                        'url': f"{base_url}/{filename}",
                         'thumbnail_path': None
                     }
-                elif file_extension in ['.webp', '.jpg', '.png']:  # Thumbnail formats
-                    thumbnail_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{filename}"
-                    # Find the corresponding video and update its thumbnail_path
-                    for video in videos.values():
-                        if video['thumbnail_path'] is None:
-                            video['thumbnail_path'] = thumbnail_url
-                            break
+                elif file_extension.lower() in ['.webp', '.jpg', '.png']:  # Thumbnail formats
+                    thumbnails[file_name] = f"{base_url}/{filename}"
+
+        # Match thumbnails to videos
+        for video_uuid, video_info in videos.items():
+            for thumb_uuid, thumb_url in thumbnails.items():
+                if thumb_uuid != video_uuid:  # Ensure we're not matching a video to itself
+                    video_info['thumbnail_path'] = thumb_url
+                    break  # Assign the first non-matching thumbnail and move to next video
+            
+            if video_info['thumbnail_path'] is None:
+                # If no thumbnail was found, we could either leave it as None or assign a default
+                video_info['thumbnail_path'] = "URL_TO_DEFAULT_THUMBNAIL"
 
         return list(videos.values())
 
     except ClientError as e:
         logger.error(f"Error listing videos from Spaces: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
-
 
 @router.get("/stream/{video_id}")
 async def stream_video(request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)):
