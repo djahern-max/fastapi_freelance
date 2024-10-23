@@ -23,6 +23,7 @@ class User(Base):
     votes = relationship("Vote", back_populates="user", cascade="all, delete")
     videos = relationship("Video", back_populates="user")
     notes = relationship("Note", back_populates="user")
+    projects = relationship("Project", back_populates="user")
 
 
 class Post(Base, TimestampMixin):
@@ -97,11 +98,23 @@ class Note(Base):
     title = Column(String, nullable=False)
     content = Column(String, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)  # Add project_id here
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="notes")
+    project = relationship("Project", back_populates="notes")  # Relationship with Project model
 
+class Project(Base):
+    __tablename__ = 'projects'
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # Add the user_id field
+
+    user = relationship("User", back_populates="projects")  # Establish relationship with User model
+    notes = relationship("Note", back_populates="project")
 
 
 

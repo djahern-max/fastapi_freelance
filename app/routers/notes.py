@@ -4,6 +4,8 @@ from ..database import get_db
 from ..oauth2 import get_current_user
 from app.crud import crud_note
 from app import schemas
+from typing import List
+from app.crud import crud_project
 
 router = APIRouter()
 
@@ -11,10 +13,10 @@ router = APIRouter()
 def create_note(note: schemas.NoteCreate, db: Session = Depends(get_db), current_user: int = Depends(get_current_user)):
     return crud_note.create_note(db=db, note=note, user_id=current_user.id)
 
-@router.get("/", response_model=list[schemas.NoteOut])
-def read_notes(skip: int = 0, limit: int = 10, db: Session = Depends(get_db), current_user: int = Depends(get_current_user)):
-    # Filter notes by the current logged-in user
-    return crud_note.get_notes_by_user(db=db, user_id=current_user.id, skip=skip, limit=limit)
+@router.get("/", response_model=List[schemas.ProjectOut])
+def get_projects(db: Session = Depends(get_db), current_user: int = Depends(get_current_user)):
+    projects = crud_project.get_projects_by_user(db=db, user_id=current_user.id)
+    return projects or []  # Return an empty list if no projects exist
 
 
 @router.get("/{note_id}", response_model=schemas.NoteOut)

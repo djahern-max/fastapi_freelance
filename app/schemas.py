@@ -120,6 +120,7 @@ class TokenData(BaseModel):
 class NoteBase(BaseModel):
     title: str
     content: str
+    project_id: int  # Add project_id
 
 class NoteCreate(NoteBase):
     pass
@@ -135,3 +136,24 @@ class NoteOut(NoteBase):
 
     class Config:
         orm_mode = True
+
+class ProjectBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectUpdate(ProjectBase):
+    pass
+
+class ProjectOut(ProjectBase):
+    id: int
+    user_id: int
+
+    class Config:
+        orm_mode = True
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
