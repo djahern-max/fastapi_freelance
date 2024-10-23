@@ -35,3 +35,10 @@ async def validate_token(current_user: models.User = Depends(oauth2.get_current_
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.get("/users/{id}")
+def get_user(id: int, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
