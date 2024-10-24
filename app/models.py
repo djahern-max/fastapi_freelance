@@ -95,6 +95,8 @@ class Newsletter(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class Note(Base):

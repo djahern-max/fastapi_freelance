@@ -4,7 +4,10 @@ from ..database import get_db
 from ..oauth2 import get_current_user
 from app import schemas, crud
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/projects",
+    tags=["Projects"]
+)
 
 # Create a new project
 @router.post("/", response_model=schemas.ProjectOut)

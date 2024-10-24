@@ -74,11 +74,18 @@ app.include_router(register.router, prefix="/auth")
 app.include_router(login.router, prefix="/auth")
 app.include_router(post.router)
 app.include_router(vote.router)
-app.include_router(newsletter.router, prefix="/newsletter")
+logger.info("About to register newsletter router")
+try:
+    app.include_router(newsletter.router, prefix="/newsletter")
+    logger.info("Successfully registered newsletter router")
+except Exception as e:
+    logger.error(f"Failed to register newsletter router: {e}")
 app.include_router(video_upload.router)
 app.include_router(display_videos.router)
+print("Registering notes router")
 app.include_router(notes.router)
-app.include_router(projects.router, prefix="/projects", tags=["Projects"])  # Include the projects router
+print("Notes router registered")
+app.include_router(projects.router)
 
 # Debug route to check Spaces configuration
 @app.get("/debug")

@@ -81,8 +81,12 @@ class PostOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
 
+from pydantic import BaseModel, EmailStr
+
 class EmailSchema(BaseModel):
     email: EmailStr
+
+    model_config = ConfigDict(from_attributes=True)
 
 class VideoCreate(BaseModel):
     title: str
