@@ -11,7 +11,10 @@ from app.schemas import SimpleNoteOut
 
 
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/notes",
+    tags=["Notes"]
+)
 
 @router.post("/", response_model=schemas.NoteOut)
 def create_note(
