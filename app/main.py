@@ -77,7 +77,7 @@ app.include_router(vote.router)
 app.include_router(newsletter.router, prefix="/newsletter")
 app.include_router(video_upload.router)
 app.include_router(display_videos.router)
-app.include_router(notes.router, prefix="/notes")
+app.include_router(notes.router)
 app.include_router(projects.router, prefix="/projects", tags=["Projects"])  # Include the projects router
 
 # Debug route to check Spaces configuration
