@@ -25,10 +25,23 @@ class User(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)  
 
+class UserBasic(BaseModel):
+    id: int
+    username: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class UserBase(BaseModel):
+    id: int
+    username: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    id: Optional[int] = None
 
 class PostBase(BaseModel):
     title: str
@@ -120,7 +133,18 @@ class TokenData(BaseModel):
 class NoteBase(BaseModel):
     title: str
     content: str
-    project_id: int  # Add project_id
+    project_id: Optional[int]
+    is_public: bool = False
+
+class SimpleNoteOut(NoteBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+    is_public: bool
+    contains_sensitive_data: bool
+
+    model_config = ConfigDict(from_attributes=True)
 
 class NoteCreate(NoteBase):
     pass
@@ -128,14 +152,37 @@ class NoteCreate(NoteBase):
 class NoteUpdate(NoteBase):
     pass
 
+class NoteShare(BaseModel):
+    shared_with_user_id: int  # Accept a single user ID
+    can_edit: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class NoteShareResponse(BaseModel):
+    id: int
+    note_id: int
+    shared_with_user_id: int
+    can_edit: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SharedUserInfo(BaseModel):
+    user: UserBasic  # Ensure user information is being serialized properly
+    can_edit: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
 class NoteOut(NoteBase):
     id: int
     user_id: int
     created_at: datetime
     updated_at: Optional[datetime]
+    is_public: bool
+    contains_sensitive_data: bool
+    shared_with: Optional[List[SharedUserInfo]] = []  # Make it optional
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProjectBase(BaseModel):
     name: str
@@ -150,9 +197,8 @@ class ProjectUpdate(ProjectBase):
 class ProjectOut(ProjectBase):
     id: int
     user_id: int
-
-    class Config:
-        orm_mode = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class ProjectCreate(BaseModel):
     name: str
