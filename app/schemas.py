@@ -1,10 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
-from pydantic import ConfigDict
-from typing import Optional
-from typing import List
+from typing import Optional, List
 
-from pydantic import BaseModel
+# ------------------ User Schemas ------------------
 
 class UserCreate(BaseModel):
     username: str
@@ -35,6 +33,8 @@ class UserBase(BaseModel):
     id: int
     username: str
 
+# ------------------ Token Schemas ------------------
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -42,6 +42,8 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
     id: Optional[int] = None
+
+# ------------------ Post and Vote Schemas ------------------
 
 class PostBase(BaseModel):
     title: str
@@ -57,13 +59,13 @@ class PostResponse(PostBase):
     user_id: int
     owner: UserOut
 
-    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
+    model_config = ConfigDict(from_attributes=True)
 
 class Vote(BaseModel):
     post_id: int
     dir: int = Field(..., le=1)
 
-    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
+    model_config = ConfigDict(from_attributes=True)
 
 class Post(BaseModel):
     id: int
@@ -71,7 +73,7 @@ class Post(BaseModel):
     owner_id: int
     owner: UserOut
 
-    model_config = ConfigDict(from_attributes=True)  # Replacing orm_mode with from_attributes
+    model_config = ConfigDict(from_attributes=True)
 
 class PostOut(BaseModel):
     id: int
@@ -79,20 +81,22 @@ class PostOut(BaseModel):
     content: str
     votes: int
 
-    model_config = ConfigDict(from_attributes=True)  # Use ConfigDict for Pydantic v2.0
+    model_config = ConfigDict(from_attributes=True)
 
-from pydantic import BaseModel, EmailStr
+# ------------------ Email Schema ------------------
 
 class EmailSchema(BaseModel):
     email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)
 
+# ------------------ Video Schemas ------------------
+
 class VideoCreate(BaseModel):
     title: str
     description: Optional[str] = None
     file_path: str
-    thumbnail_path: Optional[str] = None  # Add optional thumbnail path
+    thumbnail_path: Optional[str] = None
     is_project: bool = False
     parent_project_id: Optional[int] = None
     user_id: int
@@ -104,7 +108,7 @@ class VideoResponse(BaseModel):
     other_videos: List[VideoCreate]
 
     class Config:
-        orm_mode = True  # Ensure ORM support if using SQLAlchemy models
+        orm_mode = True
 
 class VideoInfo(BaseModel):
     filename: str
@@ -121,18 +125,13 @@ class SpacesVideoInfo(BaseModel):
     last_modified: datetime
     url: str
     thumbnail_path: Optional[str] = None
-    title: Optional[str] = None  # Add title field
-    description: Optional[str] = None  # Add description field
+    title: Optional[str] = None
+    description: Optional[str] = None
 
     class Config:
         from_attributes = True
 
-class TokenData(BaseModel):
-    username: str = None
-    id: int = None
-
-    class Config:
-        orm_mode = True  # Ensure ORM support if using SQLAlchemy models
+# ------------------ Note Schemas ------------------
 
 class NoteBase(BaseModel):
     title: str
@@ -157,7 +156,7 @@ class NoteUpdate(NoteBase):
     pass
 
 class NoteShare(BaseModel):
-    shared_with_user_id: int  # Accept a single user ID
+    shared_with_user_id: int
     can_edit: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -172,7 +171,7 @@ class NoteShareResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class SharedUserInfo(BaseModel):
-    user: UserBasic  # Ensure user information is being serialized properly
+    user: UserBasic
     can_edit: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -184,9 +183,11 @@ class NoteOut(NoteBase):
     updated_at: Optional[datetime]
     is_public: bool
     contains_sensitive_data: bool
-    shared_with: Optional[List[SharedUserInfo]] = []  # Make it optional
+    shared_with: Optional[List[SharedUserInfo]] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+# ------------------ Project Schemas ------------------
 
 class ProjectBase(BaseModel):
     name: str
@@ -203,7 +204,3 @@ class ProjectOut(ProjectBase):
     user_id: int
     
     model_config = ConfigDict(from_attributes=True)
-
-class ProjectCreate(BaseModel):
-    name: str
-    description: Optional[str] = None

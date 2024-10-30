@@ -5,11 +5,12 @@ from .database import Base
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
+# ------------------ Mixin ------------------
+
 class TimestampMixin:
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-# Single User Model Definition
-# In models.py, update the User class
+# ------------------ User Model ------------------
 
 class User(Base):
     __tablename__ = "users"
@@ -20,16 +21,15 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-    # Existing relationships
+    # Relationships
     posts = relationship("Post", back_populates="owner", cascade="all, delete")
     votes = relationship("Vote", back_populates="user", cascade="all, delete")
     videos = relationship("Video", back_populates="user")
     notes = relationship("Note", back_populates="user")
     projects = relationship("Project", back_populates="user")
-    
-    # Add this new relationship for shared notes
     shared_notes = relationship("NoteShare", foreign_keys="[NoteShare.shared_with_user_id]", back_populates="user")
 
+# ------------------ Post and Vote Models ------------------
 
 class Post(Base, TimestampMixin):
     __tablename__ = "posts"
@@ -43,7 +43,6 @@ class Post(Base, TimestampMixin):
     # Relationships
     owner = relationship("User", back_populates="posts")
     votes = relationship("Vote", back_populates="post", cascade="all, delete")
-
 
 class Vote(Base):
     __tablename__ = "votes"
@@ -59,6 +58,7 @@ class Vote(Base):
         UniqueConstraint('user_id', 'post_id', name='unique_vote'),
     )
 
+# ------------------ Video Model ------------------
 
 class Video(Base):
     __tablename__ = "videos"
@@ -67,7 +67,7 @@ class Video(Base):
     title = Column(String, index=True)
     description = Column(String, nullable=True)
     file_path = Column(String, nullable=False)
-    thumbnail_path = Column(String, nullable=True)  # New column for thumbnail
+    thumbnail_path = Column(String, nullable=True)  # Thumbnail path column
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
     is_project = Column(Boolean, default=False)
     parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
@@ -75,6 +75,8 @@ class Video(Base):
 
     # Relationships
     user = relationship("User", back_populates="videos")
+
+# ------------------ Video Pydantic Model ------------------
 
 class VideoCreate(BaseModel):
     title: str
@@ -84,9 +86,9 @@ class VideoCreate(BaseModel):
     parent_project_id: Optional[int] = None
     user_id: int
 
-    model_config = ConfigDict(from_attributes=True)  # Ensure you're using from_attributes in v2
+    model_config = ConfigDict(from_attributes=True)
 
-
+# ------------------ Newsletter Model ------------------
 
 class Newsletter(Base):
     __tablename__ = "newsletter"
@@ -97,10 +99,11 @@ class Newsletter(Base):
 
     model_config = ConfigDict(from_attributes=True)
 
-
+# ------------------ Note and NoteShare Models ------------------
 
 class Note(Base):
     __tablename__ = "notes"
+    
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     content = Column(String, nullable=False)
@@ -116,9 +119,9 @@ class Note(Base):
     project = relationship("Project", back_populates="notes")
     shared_with = relationship("NoteShare", back_populates="note", cascade="all, delete")
 
-
 class NoteShare(Base):
     __tablename__ = "note_shares"
+    
     id = Column(Integer, primary_key=True, index=True)
     note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False)
     shared_with_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -133,6 +136,7 @@ class NoteShare(Base):
         UniqueConstraint('note_id', 'shared_with_user_id', name='unique_note_share'),
     )
 
+# ------------------ Project Model ------------------
 
 class Project(Base):
     __tablename__ = 'projects'
@@ -140,13 +144,11 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # Add the user_id field
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
-    user = relationship("User", back_populates="projects")  # Establish relationship with User model
+    # Relationships
+    user = relationship("User", back_populates="projects")
     notes = relationship("Note", back_populates="project")
-
-
-
 
 
 
