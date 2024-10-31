@@ -57,48 +57,77 @@ def get_notes(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Note).offset(skip).limit(limit).all()
 
 def get_notes_by_user(
-    db: Session, 
-    user_id: int, 
-    project_id: Optional[int] = None, 
+    db: Session,
+    user_id: int,
+    project_id: Optional[int] = None,
     include_shared: bool = True,
-    skip: int = 0, 
+    skip: int = 0,
     limit: int = 100
 ):
-    """Retrieve notes for a specific user, with optional filters for project and shared notes."""
+    """Get notes for a specific user with optional project filtering."""
+    # Start with user's own notes
     query = db.query(models.Note)
     
     if project_id:
         query = query.filter(models.Note.project_id == project_id)
     
-    if include_shared:
-        query = query.filter(
-            or_(
-                models.Note.user_id == user_id,
-                models.Note.id.in_(
-                    db.query(models.NoteShare.note_id)
-                    .filter(models.NoteShare.shared_with_user_id == user_id)
-                )
-            )
-        )
-    else:
-        query = query.filter(models.Note.user_id == user_id)
+    # Filter for user's own notes
+    own_notes = query.filter(models.Note.user_id == user_id)
     
+    if include_shared:
+        # Get notes shared with the user
+        shared_notes_query = db.query(models.Note).join(
+            models.NoteShare, 
+            models.Note.id == models.NoteShare.note_id
+        ).filter(models.NoteShare.shared_with_user_id == user_id)
+        
+        if project_id:
+            shared_notes_query = shared_notes_query.filter(models.Note.project_id == project_id)
+        
+        # Combine own notes and shared notes
+        query = own_notes.union(shared_notes_query)
+    else:
+        query = own_notes
+    
+    # Apply pagination and get notes
     notes = query.offset(skip).limit(limit).all()
     
+    # Convert notes to dictionary representation
+    result = []
     for note in notes:
-        note.shared_with = [
-            schemas.SharedUserInfo(
-                user=schemas.UserBasic(
-                    id=share.user.id,
-                    username=share.user.username,
-                    email=share.user.email
-                ),
-                can_edit=share.can_edit
-            )
-            for share in note.shared_with
-        ]
+        # Get all shares for this note
+        shares = db.query(models.NoteShare).join(
+            models.User, 
+            models.NoteShare.shared_with_user_id == models.User.id
+        ).filter(
+            models.NoteShare.note_id == note.id
+        ).all()
+        
+        # Convert note to dict and add shares
+        note_dict = {
+            "id": note.id,
+            "title": note.title,
+            "content": note.content,
+            "project_id": note.project_id,
+            "user_id": note.user_id,
+            "is_public": note.is_public,
+            "created_at": note.created_at,
+            "updated_at": note.updated_at,
+            "contains_sensitive_data": note.contains_sensitive_data,
+            "shared_with": [
+                {
+                    "user_id": share.shared_with_user_id,
+                    "username": db.query(models.User)
+                        .filter(models.User.id == share.shared_with_user_id)
+                        .first().username,
+                    "can_edit": share.can_edit
+                }
+                for share in shares
+            ]
+        }
+        result.append(note_dict)
     
-    return notes
+    return result
 
 def get_public_notes(db: Session, skip: int = 0, limit: int = 100):
     """Retrieve all public notes without sensitive data."""
@@ -227,10 +256,17 @@ def remove_share(
     return share
 
 def get_note_shares(db: Session, note_id: int):
-    """Retrieve all users a note is shared with."""
-    return db.query(models.NoteShare)\
+    """Retrieve all users a note is shared with, including usernames."""
+    # Join NoteShare with User to include the username
+    return db.query(models.NoteShare, models.User.username)\
+        .join(models.User, models.NoteShare.shared_with_user_id == models.User.id)\
         .filter(models.NoteShare.note_id == note_id)\
         .all()
+
+def search_users(db: Session, username_prefix: str, limit: int = 5):
+    return db.query(models.User).filter(
+        models.User.username.ilike(f"{username_prefix}%")
+    ).limit(limit).all()
 
 # ------------------ Privacy Control ------------------
 

@@ -8,6 +8,7 @@ from app.crud.crud_project import get_or_create_general_notes_project
 from app.schemas import SimpleNoteOut
 from ..database import get_db
 from ..oauth2 import get_current_user
+from app.crud import crud_note, crud_user
 
 router = APIRouter(
     prefix="/notes",
@@ -29,7 +30,7 @@ def create_note(
 
     return crud_note.create_note(db=db, note=note, user_id=current_user.id)
 
-@router.get("/", response_model=List[SimpleNoteOut])
+@router.get("/", response_model=List[schemas.SimpleNoteOut])
 def get_notes(
     project_id: Optional[int] = None,
     include_shared: bool = True,
@@ -131,13 +132,13 @@ def remove_share(
         shared_user_id=user_id
     )
 
-@router.get("/{note_id}/shares", response_model=List[schemas.NoteShareResponse])
+@router.get("/{note_id}/shares", response_model=List[schemas.NoteShareWithUsername])
 def get_note_shares(
     note_id: int,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
 ):
-    """Get all users a note is shared with."""
+    """Get all users a note is shared with, including usernames."""
     note = crud_note.get_note_by_id(db=db, note_id=note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
@@ -148,7 +149,31 @@ def get_note_shares(
             detail="Not authorized to view share information for this note"
         )
     
-    return crud_note.get_note_shares(db=db, note_id=note_id)
+    # Get shares with usernames
+    shares = crud_note.get_note_shares(db=db, note_id=note_id)
+    
+    # Format response to include username
+    return [
+        {
+            "id": share.NoteShare.id,
+            "note_id": share.NoteShare.note_id,
+            "shared_with_user_id": share.NoteShare.shared_with_user_id,
+            "can_edit": share.NoteShare.can_edit,
+            "created_at": share.NoteShare.created_at,
+            "username": share.username  # Extract username from the join
+        }
+        for share in shares
+    ]
+
+
+@router.get("/users/search")
+def search_users(
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """Search users by username prefix."""
+    return crud_user.search_users(db=db, username_prefix=q)
 
 # ------------------ Privacy Control ------------------
 

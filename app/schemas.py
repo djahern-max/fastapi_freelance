@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 
+
 # ------------------ User Schemas ------------------
 
 class UserCreate(BaseModel):
@@ -139,15 +140,28 @@ class NoteBase(BaseModel):
     project_id: Optional[int]
     is_public: bool = False
 
-class SimpleNoteOut(NoteBase):
-    id: int
+class NoteShareInfo(BaseModel):
     user_id: int
+    username: str
+    can_edit: bool
+
+    class Config:
+        orm_mode = True
+
+class SimpleNoteOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    project_id: Optional[int]
+    user_id: int
+    is_public: bool
     created_at: datetime
     updated_at: Optional[datetime]
-    is_public: bool
     contains_sensitive_data: bool
+    shared_with: List[NoteShareInfo]
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True
 
 class NoteCreate(NoteBase):
     pass
@@ -186,6 +200,17 @@ class NoteOut(NoteBase):
     shared_with: Optional[List[SharedUserInfo]] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+class NoteShareWithUsername(BaseModel):
+    id: int
+    note_id: int
+    shared_with_user_id: int
+    can_edit: bool
+    created_at: datetime
+    username: str  # New field for username
+
+    class Config:
+        orm_mode = True
 
 # ------------------ Project Schemas ------------------
 
