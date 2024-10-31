@@ -1,10 +1,11 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload, Session
 from sqlalchemy import or_, and_
 from typing import Optional, List
 from fastapi import HTTPException
 import re
 from app import models, schemas
 from app.crud.crud_project import get_or_create_general_notes_project
+
 
 # ------------------ Utility Functions ------------------
 
@@ -64,9 +65,9 @@ def get_notes_by_user(
     skip: int = 0,
     limit: int = 100
 ):
-    """Get notes for a specific user with optional project filtering."""
-    # Start with user's own notes
-    query = db.query(models.Note)
+    """Get notes for a specific user with optional project filtering, including notes shared with the user."""
+    # Query user's own notes with user relationship loaded
+    query = db.query(models.Note).options(joinedload(models.Note.user))
     
     if project_id:
         query = query.filter(models.Note.project_id == project_id)
@@ -92,7 +93,7 @@ def get_notes_by_user(
     # Apply pagination and get notes
     notes = query.offset(skip).limit(limit).all()
     
-    # Convert notes to dictionary representation
+    # Convert notes to dictionary representation with owner_username populated
     result = []
     for note in notes:
         # Get all shares for this note
@@ -103,13 +104,14 @@ def get_notes_by_user(
             models.NoteShare.note_id == note.id
         ).all()
         
-        # Convert note to dict and add shares
+        # Create note representation with `owner_username`
         note_dict = {
             "id": note.id,
             "title": note.title,
             "content": note.content,
             "project_id": note.project_id,
             "user_id": note.user_id,
+            "owner_username": note.user.username,  # Populate owner_username here
             "is_public": note.is_public,
             "created_at": note.created_at,
             "updated_at": note.updated_at,
@@ -266,36 +268,38 @@ def remove_share(
         db.commit()
     return share
 
-# In crud_note.py, add this function:
 
 def get_shared_notes(db: Session, user_id: int):
     """Get all notes that have been shared with the user."""
+    # Query shared notes and eagerly load the owner (user) relationship
     shared_notes = (
         db.query(models.Note)
         .join(models.NoteShare, models.Note.id == models.NoteShare.note_id)
+        .options(joinedload(models.Note.user))  # Load the owner for username access
         .filter(models.NoteShare.shared_with_user_id == user_id)
         .all()
     )
     
     result = []
     for note in shared_notes:
-        # Get the owner's username
-        owner = db.query(models.User).filter(models.User.id == note.user_id).first()
+        # Directly access owner_username from loaded user relationship
+        owner_username = note.user.username if note.user else "Unknown"
         
+        # Get all shares for this note
         shares = db.query(models.NoteShare).join(
-            models.User, 
-            models.NoteShare.shared_with_user_id == models.User.id
+            models.User, models.NoteShare.shared_with_user_id == models.User.id
         ).filter(
             models.NoteShare.note_id == note.id
         ).all()
         
+        # Construct the note dictionary with shared information
         note_dict = {
             "id": note.id,
             "title": note.title,
             "content": note.content,
             "project_id": note.project_id,
             "user_id": note.user_id,
-            "owner_username": owner.username,  # Added this line
+            "owner_username": owner_username,  # Access owner username directly
             "is_public": note.is_public,
             "created_at": note.created_at,
             "updated_at": note.updated_at,
@@ -303,9 +307,7 @@ def get_shared_notes(db: Session, user_id: int):
             "shared_with": [
                 {
                     "user_id": share.shared_with_user_id,
-                    "username": db.query(models.User)
-                        .filter(models.User.id == share.shared_with_user_id)
-                        .first().username,
+                    "username": share.user.username,  # Avoid redundant queries here
                     "can_edit": share.can_edit
                 }
                 for share in shares
@@ -314,48 +316,3 @@ def get_shared_notes(db: Session, user_id: int):
         result.append(note_dict)
     
     return result
-# ------------------ Privacy Control ------------------
-
-def toggle_note_privacy(
-    db: Session, 
-    note_id: int, 
-    user_id: int, 
-    is_public: bool
-):
-    """Toggle the privacy status of a note."""
-    note = get_note_by_id(db, note_id)
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    
-    if note.user_id != user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to modify this note's privacy settings"
-        )
-    
-    if is_public and note.contains_sensitive_data:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot make notes containing sensitive data public"
-        )
-    
-    note.is_public = is_public
-    db.commit()
-    db.refresh(note)
-    return note
-
-# ------------------ User Search ------------------
-
-def search_users(db: Session, query: str, current_user_id: int, limit: int = 10):
-    """Search users for sharing, excluding the current user."""
-    return db.query(models.User)\
-        .filter(
-            and_(
-                models.User.username.ilike(f"%{query}%"),
-                models.User.id != current_user_id
-            )
-        )\
-        .limit(limit)\
-        .all()
-
-

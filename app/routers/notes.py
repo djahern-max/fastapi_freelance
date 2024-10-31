@@ -11,6 +11,7 @@ from ..oauth2 import get_current_user
 from app.crud import crud_note, crud_user
 from fastapi import status
 from app import models
+from app.models import NoteShare, User
 
 router = APIRouter(
     prefix="/notes",
@@ -30,6 +31,22 @@ def get_shared_notes(
     """Get all notes shared with the current user."""
     return crud_note.get_shared_notes(db=db, user_id=current_user.id)
 
+@router.get("/notes/{note_id}/shares/users")
+async def get_note_shares(
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Get all users that the note is shared with
+    shares = db.query(NoteShare).filter(NoteShare.note_id == note_id).all()
+    shared_users = [
+        {
+            "id": share.shared_with_user_id,
+            "username": share.shared_with_user.username
+        }
+        for share in shares
+    ]
+    return shared_users
 
 
 # ------------------ CRUD Operations ------------------
@@ -65,6 +82,7 @@ def get_notes(
         skip=skip,
         limit=limit
     )
+
 
 @router.get("/public", response_model=List[schemas.NoteOut])
 def get_public_notes(
@@ -149,39 +167,6 @@ def remove_share(
         user_id=current_user.id,
         shared_user_id=user_id
     )
-
-@router.get("/{note_id}/shares", response_model=List[schemas.NoteShareWithUsername])
-def get_note_shares(
-    note_id: int,
-    db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(get_current_user)
-):
-    """Get all users a note is shared with, including usernames."""
-    note = crud_note.get_note_by_id(db=db, note_id=note_id)
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    
-    if note.user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to view share information for this note"
-        )
-    
-    # Get shares with usernames
-    shares = crud_note.get_note_shares(db=db, note_id=note_id)
-    
-    # Format response to include username
-    return [
-        {
-            "id": share.NoteShare.id,
-            "note_id": share.NoteShare.note_id,
-            "shared_with_user_id": share.NoteShare.shared_with_user_id,
-            "can_edit": share.NoteShare.can_edit,
-            "created_at": share.NoteShare.created_at,
-            "username": share.username  # Extract username from the join
-        }
-        for share in shares
-    ]
 
 
 @router.get("/users/search")
