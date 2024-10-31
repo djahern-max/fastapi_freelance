@@ -154,6 +154,7 @@ class SimpleNoteOut(BaseModel):
     content: str
     project_id: Optional[int]
     user_id: int
+    owner_username: str  # Add this line
     is_public: bool
     created_at: datetime
     updated_at: Optional[datetime]

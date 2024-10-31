@@ -9,11 +9,28 @@ from app.schemas import SimpleNoteOut
 from ..database import get_db
 from ..oauth2 import get_current_user
 from app.crud import crud_note, crud_user
+from fastapi import status
+from app import models
 
 router = APIRouter(
     prefix="/notes",
     tags=["Notes"]
 )
+
+
+# In router.py, at the top with your other imports
+from app.crud import crud_note
+
+# Make sure this route is BEFORE any routes with path parameters (like /{note_id})
+@router.get("/shared-with-me", response_model=List[schemas.SimpleNoteOut])
+def get_shared_notes(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """Get all notes shared with the current user."""
+    return crud_note.get_shared_notes(db=db, user_id=current_user.id)
+
+
 
 # ------------------ CRUD Operations ------------------
 
@@ -91,7 +108,7 @@ def update_note(
         user_id=current_user.id
     )
 
-@router.delete("/{note_id}", response_model=schemas.NoteOut)
+@router.delete("/{note_id}", status_code=status.HTTP_200_OK)
 def delete_note(
     note_id: int,
     db: Session = Depends(get_db),
@@ -99,6 +116,7 @@ def delete_note(
 ):
     """Delete a note."""
     return crud_note.delete_note(db=db, note_id=note_id, user_id=current_user.id)
+
 
 # ------------------ Sharing Functionality ------------------
 
@@ -174,6 +192,8 @@ def search_users(
 ):
     """Search users by username prefix."""
     return crud_user.search_users(db=db, username_prefix=q)
+
+
 
 # ------------------ Privacy Control ------------------
 

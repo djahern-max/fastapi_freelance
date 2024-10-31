@@ -173,16 +173,27 @@ def update_note(
 
 def delete_note(db: Session, note_id: int, user_id: int):
     """Delete a note, ensuring only the owner can delete it."""
-    db_note = db.query(models.Note).filter(models.Note.id == note_id).first()
+    # Get the note and eagerly load the shared_with relationship
+    db_note = db.query(models.Note)\
+        .filter(models.Note.id == note_id)\
+        .first()
+    
     if not db_note:
         raise HTTPException(status_code=404, detail="Note not found")
     
     if db_note.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this note")
     
+    # Delete associated shares first
+    db.query(models.NoteShare)\
+        .filter(models.NoteShare.note_id == note_id)\
+        .delete()
+    
+    # Delete the note
     db.delete(db_note)
     db.commit()
-    return db_note
+    
+    return {"message": "Note deleted successfully"}
 
 # ------------------ Sharing Functionality ------------------
 
@@ -255,19 +266,54 @@ def remove_share(
         db.commit()
     return share
 
-def get_note_shares(db: Session, note_id: int):
-    """Retrieve all users a note is shared with, including usernames."""
-    # Join NoteShare with User to include the username
-    return db.query(models.NoteShare, models.User.username)\
-        .join(models.User, models.NoteShare.shared_with_user_id == models.User.id)\
-        .filter(models.NoteShare.note_id == note_id)\
+# In crud_note.py, add this function:
+
+def get_shared_notes(db: Session, user_id: int):
+    """Get all notes that have been shared with the user."""
+    shared_notes = (
+        db.query(models.Note)
+        .join(models.NoteShare, models.Note.id == models.NoteShare.note_id)
+        .filter(models.NoteShare.shared_with_user_id == user_id)
         .all()
-
-def search_users(db: Session, username_prefix: str, limit: int = 5):
-    return db.query(models.User).filter(
-        models.User.username.ilike(f"{username_prefix}%")
-    ).limit(limit).all()
-
+    )
+    
+    result = []
+    for note in shared_notes:
+        # Get the owner's username
+        owner = db.query(models.User).filter(models.User.id == note.user_id).first()
+        
+        shares = db.query(models.NoteShare).join(
+            models.User, 
+            models.NoteShare.shared_with_user_id == models.User.id
+        ).filter(
+            models.NoteShare.note_id == note.id
+        ).all()
+        
+        note_dict = {
+            "id": note.id,
+            "title": note.title,
+            "content": note.content,
+            "project_id": note.project_id,
+            "user_id": note.user_id,
+            "owner_username": owner.username,  # Added this line
+            "is_public": note.is_public,
+            "created_at": note.created_at,
+            "updated_at": note.updated_at,
+            "contains_sensitive_data": note.contains_sensitive_data,
+            "shared_with": [
+                {
+                    "user_id": share.shared_with_user_id,
+                    "username": db.query(models.User)
+                        .filter(models.User.id == share.shared_with_user_id)
+                        .first().username,
+                    "can_edit": share.can_edit
+                }
+                for share in shares
+            ]
+        }
+        result.append(note_dict)
+    
+    return result
 # ------------------ Privacy Control ------------------
 
 def toggle_note_privacy(
