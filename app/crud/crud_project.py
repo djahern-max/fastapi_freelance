@@ -97,3 +97,32 @@ def get_or_create_general_notes_project(user_id: int, db: Session):
         db.refresh(new_project)
         return new_project
     return project
+
+def check_project_has_notes(db: Session, project_id: int) -> bool:
+    """Check if a project has any associated notes."""
+    note_count = db.query(models.Note).filter(models.Note.project_id == project_id).count()
+    return note_count > 0
+
+def delete_project(db: Session, project_id: int, user_id: int) -> models.Project:
+    try:
+        db_project = get_project_by_id_and_user(db, project_id, user_id)
+        
+        # Check if project has notes
+        if check_project_has_notes(db, project_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete project that contains notes. Please delete all notes first."
+            )
+        
+        db.delete(db_project)
+        db.commit()
+        return db_project
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete project: {str(e)}"
+        )
