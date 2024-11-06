@@ -16,6 +16,9 @@ class UserLogin(BaseModel):
 class UserOut(BaseModel):
     id: int
     username: str
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
 
 class User(BaseModel):
     id: int
@@ -36,13 +39,12 @@ class UserBase(BaseModel):
 
 # ------------------ Token Schemas ------------------
 
+class TokenData(BaseModel):
+    id: Optional[int] = None  # Changed from user_id to id to match usage
+
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-    id: Optional[int] = None
 
 # ------------------ Post and Vote Schemas ------------------
 
@@ -228,5 +230,36 @@ class ProjectUpdate(ProjectBase):
 class ProjectOut(ProjectBase):
     id: int
     user_id: int
+    
+    model_config = ConfigDict(from_attributes=True)
+
+# ------------------ Command Note Schemas ------------------
+
+class CommandNoteBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    commands: List[str]
+    tags: List[str] = []
+
+class CommandNoteCreate(CommandNoteBase):
+    pass
+
+class CommandNoteResponse(CommandNoteBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CommandExecutionResult(BaseModel):
+    command: str
+    success: bool
+    output: str
+    executed_at: datetime
+
+class CommandExecutionResponse(BaseModel):
+    note_id: int
+    title: str
+    results: List[CommandExecutionResult]
     
     model_config = ConfigDict(from_attributes=True)

@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint, DateTime, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 
 # ------------------ Mixin ------------------
 
@@ -28,7 +29,7 @@ class User(Base):
     notes = relationship("Note", back_populates="user")
     projects = relationship("Project", back_populates="user")
     shared_notes = relationship("NoteShare", foreign_keys="[NoteShare.shared_with_user_id]", back_populates="user")
-
+    command_notes = relationship("CommandNote", back_populates="owner", cascade="all, delete")  # Add this line
 # ------------------ Post and Vote Models ------------------
 
 class Post(Base, TimestampMixin):
@@ -150,6 +151,17 @@ class Project(Base):
     user = relationship("User", back_populates="projects")
     notes = relationship("Note", back_populates="project")
 
+# ------------------ Command Models ------------------
 
+class CommandNote(Base):
+    __tablename__ = "command_notes"
 
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    commands = Column(PG_ARRAY(String), nullable=False)  # Use PostgreSQL ARRAY
+    tags = Column(PG_ARRAY(String), nullable=True)       # Use PostgreSQL ARRAY
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    owner = relationship("User", back_populates="command_notes")

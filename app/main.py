@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import logging
-from app.routers import register, login, post, vote, newsletter, video_upload, display_videos, notes, projects  # Import projects router
+from app.routers import register, login, post, vote, newsletter, video_upload, display_videos, notes, projects, command_notes
 from app.database import engine, Base
 from app.config import settings
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,6 +87,11 @@ print("Registering notes router")
 app.include_router(notes.router)
 print("Notes router registered")
 app.include_router(projects.router)
+
+
+# Add command notes router with logging
+logger.info("Registering command notes router")
+app.include_router(command_notes.router)
 
 # Debug route to check Spaces configuration
 @app.get("/debug")
