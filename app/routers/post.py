@@ -29,14 +29,24 @@ def read_posts(
             for post, votes in posts]
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.PostResponse)
-def create_post(post: schemas.PostCreate, db: Session = Depends(database.get_db), current_user: schemas.User = Depends(oauth2.get_current_user)):   
- 
-    # Use model_dump() instead of dict() as per Pydantic v2.0
-    new_post = models.Post(**post.model_dump(), user_id=current_user.id)
+def create_post(
+    post: schemas.PostCreate, 
+    note_id: Optional[int] = None,
+    db: Session = Depends(database.get_db), 
+    current_user: schemas.User = Depends(oauth2.get_current_user)
+):   
+    # Ensure the note exists if note_id is provided
+    if note_id:
+        note = db.query(models.Note).filter(models.Note.id == note_id).first()
+        if not note:
+            raise HTTPException(status_code=404, detail="Note not found")
+
+    new_post = models.Post(**post.model_dump(), user_id=current_user.id, note_id=note_id)
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
     return new_post
+
 
 @router.get("/{id}", response_model=schemas.PostResponse)
 def read_post(id: int, db: Session = Depends(database.get_db)):
@@ -91,4 +101,20 @@ def get_posts_with_votes(db: Session = Depends(database.get_db)):
     
     return [{"post": post, "votes": votes} for post, votes in results]
 
+@router.post("/posts/{post_id}/comments", response_model=schemas.CommentResponse)
+def create_comment(
+    post_id: int, 
+    comment: schemas.CommentCreate, 
+    db: Session = Depends(database.get_db), 
+    current_user: schemas.User = Depends(oauth2.get_current_user)
+):
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    new_comment = models.Comment(content=comment.content, user_id=current_user.id, post_id=post_id)
+    db.add(new_comment)
+    db.commit()
+    db.refresh(new_comment)
+    return new_comment
 

@@ -9,6 +9,7 @@ from app import oauth2, models
 from app.models import User
 import subprocess
 from datetime import datetime
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,8 @@ async def get_command_notes(
         logger.error(f"Error getting notes: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
+
+
 @router.post("/{note_id}/execute", response_model=CommandExecutionResponse)
 async def execute_command_note(
     note_id: int,
@@ -94,9 +97,9 @@ async def execute_command_note(
             )
         
         results = []
+        
         for cmd in note.commands:
             if dry_run:
-                # Just log what would be executed
                 result = CommandExecutionResult(
                     command=cmd,
                     success=True,
@@ -105,21 +108,31 @@ async def execute_command_note(
                 )
             else:
                 try:
-                    # Execute command and capture output
-                    process = subprocess.run(
-                        cmd,
-                        shell=True,
-                        capture_output=True,
-                        text=True,
-                        timeout=30  # 30 second timeout
-                    )
-                    
-                    result = CommandExecutionResult(
-                        command=cmd,
-                        success=process.returncode == 0,
-                        output=process.stdout if process.returncode == 0 else process.stderr,
-                        executed_at=datetime.now()
-                    )
+                    if "cd" in cmd:
+                        # Handle directory changes in Python
+                        directory = cmd.split("cd ")[1].strip()
+                        os.chdir(directory)
+                        result = CommandExecutionResult(
+                            command=cmd,
+                            success=True,
+                            output=f"Changed directory to {directory}",
+                            executed_at=datetime.now()
+                        )
+                    else:
+                        # Run command in subprocess for non-'cd' commands
+                        process = subprocess.run(
+                            cmd,
+                            shell=True,
+                            capture_output=True,
+                            text=True,
+                            timeout=30
+                        )
+                        result = CommandExecutionResult(
+                            command=cmd,
+                            success=process.returncode == 0,
+                            output=process.stdout if process.returncode == 0 else process.stderr,
+                            executed_at=datetime.now()
+                        )
                 except subprocess.TimeoutExpired:
                     result = CommandExecutionResult(
                         command=cmd,

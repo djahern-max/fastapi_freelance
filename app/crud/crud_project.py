@@ -86,32 +86,33 @@ def delete_project(db: Session, project_id: int, user_id: int) -> models.Project
             detail=f"Failed to delete project: {str(e)}"
         )
 
-# This function was indented incorrectly, so now it is at the correct level
-def get_or_create_general_notes_project(user_id: int, db: Session):
-    project = db.query(models.Project).filter(models.Project.user_id == user_id, models.Project.name == "General Notes").first()
+# Refactored function to use "General Requests" project
+def get_or_create_general_requests_project(user_id: int, db: Session):
+    project = db.query(models.Project).filter(models.Project.user_id == user_id, models.Project.name == "General Requests").first()
     if not project:
-        # Create the "General Notes" project if it doesn't exist
-        new_project = models.Project(name="General Notes", description="Default project for unassigned notes", user_id=user_id)
+        # Create the "General Requests" project if it doesn't exist
+        new_project = models.Project(name="General Requests", description="Default project for unassigned requests", user_id=user_id)
         db.add(new_project)
         db.commit()
         db.refresh(new_project)
         return new_project
     return project
 
-def check_project_has_notes(db: Session, project_id: int) -> bool:
-    """Check if a project has any associated notes."""
-    note_count = db.query(models.Note).filter(models.Note.project_id == project_id).count()
-    return note_count > 0
+# Check if a project has any associated requests
+def check_project_has_requests(db: Session, project_id: int) -> bool:
+    """Check if a project has any associated requests."""
+    request_count = db.query(models.Request).filter(models.Request.project_id == project_id).count()
+    return request_count > 0
 
 def delete_project(db: Session, project_id: int, user_id: int) -> models.Project:
     try:
         db_project = get_project_by_id_and_user(db, project_id, user_id)
         
-        # Check if project has notes
-        if check_project_has_notes(db, project_id):
+        # Check if project has requests
+        if check_project_has_requests(db, project_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete project that contains notes. Please delete all notes first."
+                detail="Cannot delete project that contains requests. Please delete all requests first."
             )
         
         db.delete(db_project)

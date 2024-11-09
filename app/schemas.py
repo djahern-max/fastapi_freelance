@@ -2,7 +2,6 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 
-
 # ------------------ User Schemas ------------------
 
 class UserCreate(BaseModel):
@@ -25,7 +24,7 @@ class User(BaseModel):
     username: str
     is_active: bool
 
-    model_config = ConfigDict(from_attributes=True)  
+    model_config = ConfigDict(from_attributes=True)
 
 class UserBasic(BaseModel):
     id: int
@@ -45,53 +44,6 @@ class TokenData(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-# ------------------ Post and Vote Schemas ------------------
-
-class PostBase(BaseModel):
-    title: str
-    content: str
-    published: bool = True
-
-class PostCreate(PostBase):
-    pass
-
-class PostResponse(PostBase):
-    id: int
-    created_at: datetime
-    user_id: int
-    owner: UserOut
-
-    model_config = ConfigDict(from_attributes=True)
-
-class Vote(BaseModel):
-    post_id: int
-    dir: int = Field(..., le=1)
-
-    model_config = ConfigDict(from_attributes=True)
-
-class Post(BaseModel):
-    id: int
-    created_at: datetime
-    owner_id: int
-    owner: UserOut
-
-    model_config = ConfigDict(from_attributes=True)
-
-class PostOut(BaseModel):
-    id: int
-    title: str
-    content: str
-    votes: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-# ------------------ Email Schema ------------------
-
-class EmailSchema(BaseModel):
-    email: EmailStr
-
-    model_config = ConfigDict(from_attributes=True)
 
 # ------------------ Video Schemas ------------------
 
@@ -134,87 +86,6 @@ class SpacesVideoInfo(BaseModel):
     class Config:
         from_attributes = True
 
-# ------------------ Note Schemas ------------------
-
-class NoteBase(BaseModel):
-    title: str
-    content: str
-    project_id: Optional[int]
-    is_public: bool = False
-
-class NoteShareInfo(BaseModel):
-    user_id: int
-    username: str
-    can_edit: bool
-
-    class Config:
-        orm_mode = True
-
-class SimpleNoteOut(BaseModel):
-    id: int
-    title: str
-    content: str
-    project_id: Optional[int]
-    user_id: int
-    owner_username: str  # Add this line
-    is_public: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
-    contains_sensitive_data: bool
-    shared_with: List[NoteShareInfo]
-
-    class Config:
-        orm_mode = True
-
-class NoteCreate(NoteBase):
-    pass
-
-class NoteUpdate(NoteBase):
-    pass
-
-class NoteShare(BaseModel):
-    shared_with_user_id: int
-    can_edit: bool
-
-    model_config = ConfigDict(from_attributes=True)
-
-class NoteShareResponse(BaseModel):
-    id: int
-    note_id: int
-    shared_with_user_id: int
-    can_edit: bool
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-class SharedUserInfo(BaseModel):
-    user: UserBasic
-    can_edit: bool
-
-    model_config = ConfigDict(from_attributes=True)
-
-class NoteOut(NoteBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    updated_at: Optional[datetime]
-    is_public: bool
-    contains_sensitive_data: bool
-    shared_with: Optional[List[SharedUserInfo]] = []
-
-    model_config = ConfigDict(from_attributes=True)
-
-class NoteShareWithUsername(BaseModel):
-    id: int
-    note_id: int
-    shared_with_user_id: int
-    can_edit: bool
-    created_at: datetime
-    username: str  # New field for username
-
-    class Config:
-        orm_mode = True
-
 # ------------------ Project Schemas ------------------
 
 class ProjectBase(BaseModel):
@@ -233,18 +104,142 @@ class ProjectOut(ProjectBase):
     
     model_config = ConfigDict(from_attributes=True)
 
-# ------------------ Command Note Schemas ------------------
+# ------------------ Request Schemas (formerly Note Schemas) ------------------
 
-class CommandNoteBase(BaseModel):
+class RequestBase(BaseModel):
+    title: str
+    content: str
+    project_id: Optional[int]
+    is_public: bool = False
+
+class RequestShareInfo(BaseModel):
+    user_id: int
+    username: str
+    can_edit: bool
+
+    class Config:
+        orm_mode = True
+
+class SimpleRequestOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    project_id: Optional[int]
+    user_id: int
+    owner_username: str
+    is_public: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+    contains_sensitive_data: bool
+    shared_with: List[RequestShareInfo]
+
+    class Config:
+        orm_mode = True
+
+class RequestCreate(RequestBase):
+    pass
+
+class RequestUpdate(RequestBase):
+    pass
+
+class RequestShare(BaseModel):
+    shared_with_user_id: int
+    can_edit: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RequestShareResponse(BaseModel):
+    id: int
+    request_id: int
+    shared_with_user_id: int
+    can_edit: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SharedUserInfo(BaseModel):
+    user: UserBasic
+    can_edit: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RequestOut(RequestBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+    is_public: bool
+    contains_sensitive_data: bool
+    shared_with: Optional[List[SharedUserInfo]] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RequestShareWithUsername(BaseModel):
+    id: int
+    request_id: int
+    shared_with_user_id: int
+    can_edit: bool
+    created_at: datetime
+    username: str
+
+    class Config:
+        orm_mode = True
+
+class PublicRequestOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    user_id: int
+    owner_username: str
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+# ------------------ Comment Schemas (formerly Note Comment) ------------------
+
+class RequestCommentBase(BaseModel):
+    content: str
+
+class RequestCommentCreate(RequestCommentBase):
+    request_id: int
+    parent_id: Optional[int] = None
+
+class RequestCommentVoteCreate(BaseModel):
+    vote_type: int = Field(..., ge=-1, le=1)
+
+class RequestCommentResponse(RequestCommentBase):
+    id: int
+    request_id: int
+    user_id: int
+    parent_id: Optional[int]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    user: UserBasic
+    vote_count: int = 0
+    user_vote: Optional[int] = None
+    replies: List['RequestCommentResponse'] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RequestCommentCreate(BaseModel):
+    content: str
+    request_id: int
+    parent_id: Optional[int] = None
+
+# ------------------ CommandRequest Schemas (formerly CommandNote) ------------------
+
+class CommandRequestBase(BaseModel):
     title: str
     description: Optional[str] = None
     commands: List[str]
     tags: List[str] = []
 
-class CommandNoteCreate(CommandNoteBase):
+class CommandRequestCreate(CommandRequestBase):
     pass
 
-class CommandNoteResponse(CommandNoteBase):
+class CommandRequestResponse(CommandRequestBase):
     id: int
     user_id: int
     created_at: datetime
@@ -258,8 +253,23 @@ class CommandExecutionResult(BaseModel):
     executed_at: datetime
 
 class CommandExecutionResponse(BaseModel):
-    note_id: int
+    request_id: int
     title: str
     results: List[CommandExecutionResult]
     
     model_config = ConfigDict(from_attributes=True)
+
+class CommandNoteResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    description: str
+    commands: List[str]
+    tags: List[str]
+    created_at: datetime
+
+class CommandNoteCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    commands: List[str]
+    tags: Optional[List[str]] = []
