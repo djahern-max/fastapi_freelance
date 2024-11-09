@@ -22,10 +22,23 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
             detail="Username already taken"
         )
     
+    # Check if email already exists
+    existing_email = db.query(models.User).filter(
+        models.User.email == user.email
+    ).first()
+
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
     # Create new user with hashed password
     hashed_password = utils.hash_password(user.password)
     new_user = models.User(
-        username=user.username, 
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
         password=hashed_password,
         is_active=True
     )
@@ -36,6 +49,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
     db.refresh(new_user)
 
     return new_user
+
 
 @router.get("/users/{id}", response_model=schemas.UserOut)
 def get_user(id: int, db: Session = Depends(database.get_db)):

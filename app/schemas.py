@@ -6,6 +6,8 @@ from typing import Optional, List
 
 class UserCreate(BaseModel):
     username: str
+    email: EmailStr
+    full_name: str
     password: str
 
 class UserLogin(BaseModel):
@@ -15,6 +17,8 @@ class UserLogin(BaseModel):
 class UserOut(BaseModel):
     id: int
     username: str
+    email: str
+    full_name: str
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
