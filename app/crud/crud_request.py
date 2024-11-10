@@ -33,19 +33,19 @@ def has_edit_permission(db: Session, request: models.Request, user_id: int) -> b
 
 # ------------------ CRUD Operations ------------------
 
+# crud/crud_request.py
 def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
-    """Create a new request, assigning it to 'General Requests' if no project ID is provided."""
-    if request.project_id is None:
-        general_project = get_or_create_general_requests_project(user_id=user_id, db=db)
-        request.project_id = general_project.id
-    
+    """Create a new request."""
     contains_sensitive = check_sensitive_content(request.content)
     if request.is_public and contains_sensitive:
         raise HTTPException(status_code=400, detail="Cannot create public request with sensitive data")
 
     db_request = models.Request(
-        **request.dict(),
+        title=request.title,
+        content=request.content,
+        project_id=request.project_id,  # This will now accept None
         user_id=user_id,
+        is_public=request.is_public,
         contains_sensitive_data=contains_sensitive
     )
     db.add(db_request)
@@ -68,7 +68,8 @@ def get_requests_by_user(
     """Get requests for a specific user with optional project filtering, including requests shared with the user."""
     query = db.query(models.Request).options(joinedload(models.Request.user))
     
-    if project_id:
+    # Only filter by project_id if it's not None
+    if project_id is not None:  # Changed from if project_id: to handle 0 properly
         query = query.filter(models.Request.project_id == project_id)
     
     own_requests = query.filter(models.Request.user_id == user_id)
@@ -79,7 +80,8 @@ def get_requests_by_user(
             models.Request.id == models.RequestShare.request_id
         ).filter(models.RequestShare.shared_with_user_id == user_id)
         
-        if project_id:
+        # Only filter shared requests by project if project_id is not None
+        if project_id is not None:  # Changed from if project_id:
             shared_requests_query = shared_requests_query.filter(models.Request.project_id == project_id)
         
         query = own_requests.union(shared_requests_query)
@@ -101,7 +103,7 @@ def get_requests_by_user(
             "id": request.id,
             "title": request.title,
             "content": request.content,
-            "project_id": request.project_id,
+            "project_id": request.project_id,  # This will now be None for requests without projects
             "user_id": request.user_id,
             "owner_username": request.user.username,
             "is_public": request.is_public,

@@ -11,20 +11,21 @@ router = APIRouter(
 
 @router.post("/", response_model=schemas.RequestCommentResponse)
 def create_comment(
-    comment: schemas.RequestCommentCreate,  # Updated to RequestCommentCreate
+    comment: schemas.RequestCommentCreate,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
 ):
-    # Ensure the post exists (assuming you have a `post_id` to associate the comment)
-    post_id = comment.post_id
-    post = db.query(models.Post).filter(models.Post.id == post_id).first()
-    if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
+    # Validate that the associated request exists
+    request_id = comment.request_id
+    request = db.query(models.Request).filter(models.Request.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
 
-    new_comment = models.Comment(
-        content=comment.content,  # Corrected the parameter to 'content'
+    new_comment = models.RequestComment(
+        content=comment.content,
         user_id=current_user.id,
-        post_id=post_id
+        request_id=request_id,
+        parent_id=comment.parent_id
     )
 
     db.add(new_comment)

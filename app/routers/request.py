@@ -50,6 +50,7 @@ def get_public_requests(
 
 # ------------------ CRUD Operations ------------------
 
+# routers/requests.py
 @router.post("/", response_model=schemas.RequestOut)
 def create_request(
     request: schemas.RequestCreate,
@@ -57,10 +58,6 @@ def create_request(
     current_user: schemas.User = Depends(get_current_user)
 ):
     """Create a new request."""
-    if request.project_id is None:
-        general_requests_project = get_or_create_general_requests_project(user_id=current_user.id, db=db)
-        request.project_id = general_requests_project.id
-
     return crud_request.create_request(db=db, request=request, user_id=current_user.id)
 
 @router.get("/", response_model=List[schemas.SimpleRequestOut])

@@ -113,7 +113,7 @@ class ProjectOut(ProjectBase):
 class RequestBase(BaseModel):
     title: str
     content: str
-    project_id: Optional[int]
+    project_id: Optional[int] = None  
     is_public: bool = False
 
 class RequestShareInfo(BaseModel):
@@ -231,6 +231,56 @@ class RequestCommentCreate(BaseModel):
     content: str
     request_id: int
     parent_id: Optional[int] = None
+
+# ------------------ Conversation Schemas ------------------
+
+
+class ConversationCreate(BaseModel):
+    request_id: int
+
+    class Config:
+        orm_mode = True
+
+class ConversationOut(BaseModel):
+    id: int
+    request_id: int
+    starter_user_id: int
+    recipient_user_id: int
+    status: str
+
+    class Config:
+        orm_mode = True
+
+class ConversationMessageCreate(BaseModel):
+    content: str
+
+    class Config:
+        orm_mode = True
+
+class ConversationMessageOut(BaseModel):
+    id: int
+    conversation_id: int
+    user_id: int
+    content: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class ConversationWithMessages(BaseModel):
+    id: int
+    request_id: int
+    starter_user_id: int
+    recipient_user_id: int
+    starter_username: str
+    recipient_username: str
+    status: str
+    created_at: datetime
+    messages: List[ConversationMessageOut]
+    request_title: str
+
+    class Config:
+        orm_mode = True
 
 # ------------------ CommandRequest Schemas (formerly CommandNote) ------------------
 

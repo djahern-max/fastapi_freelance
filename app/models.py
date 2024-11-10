@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -78,10 +78,12 @@ class Request(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    user = relationship("User", back_populates="requests")
     project = relationship("Project", back_populates="requests")
+    user = relationship("User", back_populates="requests")
     shared_with = relationship("RequestShare", back_populates="request", cascade="all, delete")
     comments = relationship("RequestComment", back_populates="request", cascade="all, delete")
+    conversations = relationship("Conversation", back_populates="request", cascade="all, delete")
+
 
 class RequestShare(Base):
     __tablename__ = "request_shares"
@@ -134,6 +136,37 @@ class RequestCommentVote(Base):
     __table_args__ = (
         UniqueConstraint('user_id', 'comment_id', name='unique_request_comment_vote'),
     )
+
+# ------------------ Conversation and ConversationMessage Models ------------------
+
+class Conversation(Base, TimestampMixin):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False, index=True)
+    starter_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    recipient_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="active")
+    
+    # Relationships
+    request = relationship("Request", back_populates="conversations")
+    starter = relationship("User", foreign_keys=[starter_user_id])
+    recipient = relationship("User", foreign_keys=[recipient_user_id])
+    messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete")
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+    user = relationship("User")
+
 
 # ------------------ CommandRequest Model ------------------
 
