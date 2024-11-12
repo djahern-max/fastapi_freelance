@@ -118,6 +118,15 @@ class Request(Base):
     comments = relationship("RequestComment", back_populates="request", cascade="all, delete")
     conversations = relationship("Conversation", back_populates="request", cascade="all, delete")
 
+    @property
+    def owner_username(self):
+        return self.user.username if self.user else None
+
+    @owner_username.setter
+    def owner_username(self, value):
+        # This is needed for Pydantic to work properly
+        pass
+
 class RequestShare(Base):
     __tablename__ = "request_shares"
     

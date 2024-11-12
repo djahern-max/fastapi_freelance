@@ -33,7 +33,7 @@ def has_edit_permission(db: Session, request: models.Request, user_id: int) -> b
 def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
     """Create a new request, ensuring only clients can create requests."""
     user = db.query(models.User).filter(models.User.id == user_id).first()
-    if user.user_type != models.UserType.CLIENT:
+    if user.user_type != models.UserType.client:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can create requests")
     
     if request.is_public and check_sensitive_content(request.content):
@@ -53,6 +53,10 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
     db.refresh(db_request)
     return db_request
 
+from sqlalchemy.orm import joinedload, contains_eager
+from typing import Optional, List
+from app import models, schemas
+
 def get_requests_by_user(
     db: Session,
     user_id: int,
@@ -62,22 +66,40 @@ def get_requests_by_user(
     limit: int = 100
 ):
     """Get requests for a specific user with optional project filtering, including shared requests."""
-    query = db.query(models.Request).options(joinedload(models.Request.user)).filter(models.Request.user_id == user_id)
+    # Base query with user join to get owner_username
+    query = (
+        db.query(models.Request)
+        .join(models.User, models.Request.user_id == models.User.id)
+        .options(contains_eager(models.Request.user))
+        .options(joinedload(models.Request.shared_with))
+        .filter(models.Request.user_id == user_id)
+    )
     
     if project_id:
         query = query.filter(models.Request.project_id == project_id)
     
     if include_shared:
-        shared_requests_query = db.query(models.Request).join(
-            models.RequestShare, models.Request.id == models.RequestShare.request_id
-        ).filter(models.RequestShare.shared_with_user_id == user_id)
+        shared_requests_query = (
+            db.query(models.Request)
+            .join(models.User, models.Request.user_id == models.User.id)
+            .options(contains_eager(models.Request.user))
+            .options(joinedload(models.Request.shared_with))
+            .join(models.RequestShare, models.Request.id == models.RequestShare.request_id)
+            .filter(models.RequestShare.shared_with_user_id == user_id)
+        )
         
         if project_id:
             shared_requests_query = shared_requests_query.filter(models.Request.project_id == project_id)
         
         query = query.union(shared_requests_query)
 
-    return query.offset(skip).limit(limit).all()
+    requests = query.offset(skip).limit(limit).all()
+    
+    # Add the owner_username to each request
+    for request in requests:
+        request.owner_username = request.user.username
+        
+    return requests
 
 def get_public_requests(db: Session, skip: int = 0, limit: int = 100, developer_id: Optional[int] = None):
     """Get public requests with optional developer filtering."""

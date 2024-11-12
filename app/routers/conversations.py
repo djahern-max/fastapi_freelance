@@ -24,8 +24,8 @@ def create_conversation(
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    # Verify user roles
-    if current_user.user_type == models.UserType.CLIENT:
+    # Verify user roles - Changed to lowercase
+    if current_user.user_type == models.UserType.client:  # Changed from CLIENT
         if request.user_id == current_user.id:
             raise HTTPException(
                 status_code=400,
@@ -36,8 +36,8 @@ def create_conversation(
             detail="Only developers can initiate conversations"
         )
 
-    if current_user.user_type == models.UserType.DEVELOPER:
-        if request.user.user_type != models.UserType.CLIENT:
+    if current_user.user_type == models.UserType.developer:  # Changed from DEVELOPER
+        if request.user.user_type != models.UserType.client:  # Changed from CLIENT
             raise HTTPException(
                 status_code=400,
                 detail="Can only respond to client requests"

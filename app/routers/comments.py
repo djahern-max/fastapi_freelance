@@ -1,8 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app import models, schemas
-from app.database import get_db
-from app.oauth2 import get_current_user
+# In comments.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app import models, schemas
@@ -21,14 +17,14 @@ def create_comment(
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
 ):
-    # Validate that the associated request exists
+    # Get the request
     request = db.query(models.Request).filter(models.Request.id == comment.request_id).first()
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
     # If it's a private request, verify the user has access
     if not request.is_public:
-        if current_user.user_type == models.UserType.DEVELOPER:
+        if current_user.user_type == models.UserType.developer:  # Changed from DEVELOPER
             # Developers can only comment if they have an active conversation
             conversation = db.query(models.Conversation).filter(
                 models.Conversation.request_id == request.id,

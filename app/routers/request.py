@@ -30,7 +30,7 @@ def get_public_requests(
 ):
     """Get all public requests, optionally filtering for developer-specific results."""
     try:
-        developer_id = current_user.id if current_user and current_user.user_type.lower() == UserType.DEVELOPER.lower() else None
+        developer_id = current_user.id if current_user and current_user.user_type == UserType.developer else None
         requests = crud_request.get_public_requests(db=db, skip=skip, limit=limit, developer_id=developer_id)
         # Return empty list if no requests found
         return requests if requests else []
@@ -48,7 +48,7 @@ def create_request(
     current_user: models.User = Depends(get_current_user)
 ):
     """Create a new request, restricted to clients."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can create requests")
     return crud_request.create_request(db=db, request=request, user_id=current_user.id)
 
@@ -62,7 +62,7 @@ def get_requests(
     current_user: models.User = Depends(get_current_user)
 ):
     """Retrieve all requests for the current user."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can access their requests")
     return crud_request.get_requests_by_user(
         db=db,
@@ -99,7 +99,7 @@ def update_request(
     current_user: models.User = Depends(get_current_user)
 ):
     """Update a request, ensuring only clients have update permissions."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can update requests")
     return crud_request.update_request(
         db=db,
@@ -115,7 +115,7 @@ def delete_request(
     current_user: models.User = Depends(get_current_user)
 ):
     """Delete a request, limited to the owner."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can delete requests")
     return crud_request.delete_request(db=db, request_id=request_id, user_id=current_user.id)
 
@@ -141,7 +141,7 @@ def share_request(
     current_user: models.User = Depends(get_current_user)
 ):
     """Share a request with another user."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can share requests")
     return crud_request.share_request(db=db, request_id=request_id, user_id=current_user.id, share=share)
 
@@ -153,7 +153,7 @@ def remove_share(
     current_user: models.User = Depends(get_current_user)
 ):
     """Remove request sharing for a specific user."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can modify request shares")
     return crud_request.remove_share(db=db, request_id=request_id, user_id=current_user.id, shared_user_id=user_id)
 
@@ -194,6 +194,6 @@ def update_request_privacy(
     current_user: models.User = Depends(get_current_user)
 ):
     """Toggle a request's public/private status."""
-    if current_user.user_type != UserType.CLIENT:
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can modify request privacy")
     return crud_request.toggle_request_privacy(db=db, request_id=request_id, user_id=current_user.id, is_public=is_public)
