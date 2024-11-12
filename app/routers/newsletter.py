@@ -27,7 +27,7 @@ router = APIRouter(
 
 @router.post("/subscribe")
 def subscribe_to_newsletter(email: EmailSchema, db: Session = Depends(get_db)):
-    logger.debug(f"Attempting to subscribe email: {email.email}")
+    logger.debug(f"Attempting to subscribe to email: {email.email}")
     try:
         # Check if the email already exists
         email_exist = db.query(Newsletter).filter(Newsletter.email == email.email).first()
