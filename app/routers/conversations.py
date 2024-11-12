@@ -1,4 +1,4 @@
-# Create a new file: app/routers/conversations.py
+# app/routers/conversations.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -16,18 +16,32 @@ def create_conversation(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user)
 ):
-    # Get the request
-    request = db.query(models.Request).filter(models.Request.id == conversation.request_id).first()
+    # Get the request and its owner
+    request = db.query(models.Request).join(models.User).filter(
+        models.Request.id == conversation.request_id
+    ).first()
     
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    # Prevent self-conversation
-    if current_user.id == request.user_id:
+    # Verify user roles
+    if current_user.user_type == models.UserType.CLIENT:
+        if request.user_id == current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot respond to your own request"
+            )
         raise HTTPException(
-            status_code=400,
-            detail="Cannot start a conversation with yourself"
+            status_code=403,
+            detail="Only developers can initiate conversations"
         )
+
+    if current_user.user_type == models.UserType.DEVELOPER:
+        if request.user.user_type != models.UserType.CLIENT:
+            raise HTTPException(
+                status_code=400,
+                detail="Can only respond to client requests"
+            )
 
     # Check if conversation already exists
     existing_conversation = db.query(models.Conversation).filter(

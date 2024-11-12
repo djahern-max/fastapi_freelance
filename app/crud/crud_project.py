@@ -4,6 +4,14 @@ from app import models, schemas
 from typing import List
 
 def create_project(db: Session, project: schemas.ProjectCreate, user_id: int) -> models.Project:
+    # Check if user is a client
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user.user_type != models.UserType.client:  # Using lowercase
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients can create projects"
+        )
+
     try:
         db_project = models.Project(
             name=project.name,
@@ -22,6 +30,14 @@ def create_project(db: Session, project: schemas.ProjectCreate, user_id: int) ->
         )
 
 def get_projects_by_user(db: Session, user_id: int) -> List[models.Project]:
+    # Check user type
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user.user_type != models.UserType.client:  # Changed from CLIENT to client
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients can access projects"
+        )
+
     try:
         return db.query(models.Project).filter(models.Project.user_id == user_id).all()
     except Exception as e:
@@ -29,7 +45,7 @@ def get_projects_by_user(db: Session, user_id: int) -> List[models.Project]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch projects: {str(e)}"
         )
-
+    
 def get_project(db: Session, project_id: int) -> models.Project:
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
@@ -127,3 +143,12 @@ def delete_project(db: Session, project_id: int, user_id: int) -> models.Project
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete project: {str(e)}"
         )
+    
+def get_project(db: Session, project_id: int) -> models.Project:
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project with id {project_id} not found"
+        )
+    return project

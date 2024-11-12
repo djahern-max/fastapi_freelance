@@ -1,61 +1,57 @@
 from sqlalchemy.orm import joinedload, Session
-from sqlalchemy import or_, and_
+from sqlalchemy import and_, or_
 from typing import Optional, List
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 import re
 from app import models, schemas
-from app.crud.crud_project import get_or_create_general_requests_project
-from app.models import Request
 
 # ------------------ Utility Functions ------------------
 
 def check_sensitive_content(content: str) -> bool:
     """Check if content contains sensitive information."""
     sensitive_patterns = [
-        r'api[_-]key', r'password', r'secret', r'token', 
+        r'api[_-]key', r'password', r'secret', r'token',
         r'access[_-]key', r'private[_-]key', r'auth', r'credential'
     ]
-    content_lower = content.lower()
-    return any(re.search(pattern, content_lower) for pattern in sensitive_patterns)
+    return any(re.search(pattern, content.lower()) for pattern in sensitive_patterns)
 
 def has_edit_permission(db: Session, request: models.Request, user_id: int) -> bool:
     """Check if a user has permission to edit a request."""
-    if request.user_id == user_id:
-        return True
-    share = db.query(models.RequestShare).filter(
-        and_(
-            models.RequestShare.request_id == request.id,
-            models.RequestShare.shared_with_user_id == user_id,
-            models.RequestShare.can_edit == True
-        )
-    ).first()
-    return bool(share)
+    return (
+        request.user_id == user_id or
+        db.query(models.RequestShare).filter(
+            and_(
+                models.RequestShare.request_id == request.id,
+                models.RequestShare.shared_with_user_id == user_id,
+                models.RequestShare.can_edit == True
+            )
+        ).first()
+    )
 
 # ------------------ CRUD Operations ------------------
 
-# crud/crud_request.py
 def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
-    """Create a new request."""
-    contains_sensitive = check_sensitive_content(request.content)
-    if request.is_public and contains_sensitive:
+    """Create a new request, ensuring only clients can create requests."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user.user_type != models.UserType.CLIENT:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can create requests")
+    
+    if request.is_public and check_sensitive_content(request.content):
         raise HTTPException(status_code=400, detail="Cannot create public request with sensitive data")
 
     db_request = models.Request(
         title=request.title,
         content=request.content,
-        project_id=request.project_id,  # This will now accept None
+        project_id=request.project_id,
         user_id=user_id,
         is_public=request.is_public,
-        contains_sensitive_data=contains_sensitive
+        contains_sensitive_data=check_sensitive_content(request.content),
+        status="open"
     )
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
     return db_request
-
-def get_requests(db: Session, skip: int = 0, limit: int = 100):
-    """Retrieve all requests with optional pagination."""
-    return db.query(models.Request).offset(skip).limit(limit).all()
 
 def get_requests_by_user(
     db: Session,
@@ -65,86 +61,49 @@ def get_requests_by_user(
     skip: int = 0,
     limit: int = 100
 ):
-    """Get requests for a specific user with optional project filtering, including requests shared with the user."""
-    query = db.query(models.Request).options(joinedload(models.Request.user))
+    """Get requests for a specific user with optional project filtering, including shared requests."""
+    query = db.query(models.Request).options(joinedload(models.Request.user)).filter(models.Request.user_id == user_id)
     
-    # Only filter by project_id if it's not None
-    if project_id is not None:  # Changed from if project_id: to handle 0 properly
+    if project_id:
         query = query.filter(models.Request.project_id == project_id)
-    
-    own_requests = query.filter(models.Request.user_id == user_id)
     
     if include_shared:
         shared_requests_query = db.query(models.Request).join(
-            models.RequestShare, 
-            models.Request.id == models.RequestShare.request_id
+            models.RequestShare, models.Request.id == models.RequestShare.request_id
         ).filter(models.RequestShare.shared_with_user_id == user_id)
         
-        # Only filter shared requests by project if project_id is not None
-        if project_id is not None:  # Changed from if project_id:
+        if project_id:
             shared_requests_query = shared_requests_query.filter(models.Request.project_id == project_id)
         
-        query = own_requests.union(shared_requests_query)
-    else:
-        query = own_requests
+        query = query.union(shared_requests_query)
+
+    return query.offset(skip).limit(limit).all()
+
+def get_public_requests(db: Session, skip: int = 0, limit: int = 100, developer_id: Optional[int] = None):
+    """Get public requests with optional developer filtering."""
+    print(f"Getting public requests. Developer ID: {developer_id}")
+    
+    # Base query for public requests
+    query = db.query(models.Request).filter(models.Request.is_public == True)
+    
+    if developer_id:
+        print(f"Developer with ID {developer_id} is viewing requests")
+        # You could add developer-specific logic here in the future
+        # For example:
+        # - Filtering by developer skills
+        # - Excluding requests the developer has already responded to
+        # - Showing only requests in certain categories
     
     requests = query.offset(skip).limit(limit).all()
-    
-    result = []
-    for request in requests:
-        shares = db.query(models.RequestShare).join(
-            models.User, 
-            models.RequestShare.shared_with_user_id == models.User.id
-        ).filter(
-            models.RequestShare.request_id == request.id
-        ).all()
-        
-        request_dict = {
-            "id": request.id,
-            "title": request.title,
-            "content": request.content,
-            "project_id": request.project_id,  # This will now be None for requests without projects
-            "user_id": request.user_id,
-            "owner_username": request.user.username,
-            "is_public": request.is_public,
-            "created_at": request.created_at,
-            "updated_at": request.updated_at,
-            "contains_sensitive_data": request.contains_sensitive_data,
-            "shared_with": [
-                {
-                    "user_id": share.shared_with_user_id,
-                    "username": db.query(models.User)
-                        .filter(models.User.id == share.shared_with_user_id)
-                        .first().username,
-                    "can_edit": share.can_edit
-                }
-                for share in shares
-            ]
-        }
-        result.append(request_dict)
-    
-    return result
-
-def get_public_requests(db: Session, skip: int = 0, limit: int = 100):
-    """Retrieve all public requests without sensitive data."""
-    return db.query(models.Request)\
-        .filter(models.Request.is_public == True)\
-        .filter(models.Request.contains_sensitive_data == False)\
-        .offset(skip)\
-        .limit(limit)\
-        .all()
+    print(f"Found {len(requests)} requests")
+    return requests
 
 def get_request_by_id(db: Session, request_id: int):
     """Retrieve a specific request by its ID."""
     return db.query(models.Request).filter(models.Request.id == request_id).first()
 
-def update_request(
-    db: Session, 
-    request_id: int, 
-    request_update: schemas.RequestUpdate, 
-    user_id: int
-):
-    """Update an existing request, checking for edit permissions and sensitive content."""
+def update_request(db: Session, request_id: int, request_update: schemas.RequestUpdate, user_id: int):
+    """Update an existing request, ensuring edit permissions and checking for sensitive content."""
     db_request = db.query(models.Request).filter(models.Request.id == request_id).first()
     if not db_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -154,10 +113,7 @@ def update_request(
     
     contains_sensitive = check_sensitive_content(request_update.content)
     if request_update.is_public and contains_sensitive:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot make request public as it contains sensitive data"
-        )
+        raise HTTPException(status_code=400, detail="Cannot make request public as it contains sensitive data")
     
     for key, value in request_update.dict(exclude_unset=True).items():
         setattr(db_request, key, value)
@@ -170,7 +126,6 @@ def update_request(
 def delete_request(db: Session, request_id: int, user_id: int):
     """Delete a request, ensuring only the owner can delete it."""
     db_request = db.query(models.Request).filter(models.Request.id == request_id).first()
-    
     if not db_request:
         raise HTTPException(status_code=404, detail="Request not found")
     
@@ -178,7 +133,6 @@ def delete_request(db: Session, request_id: int, user_id: int):
         raise HTTPException(status_code=403, detail="Not authorized to delete this request")
     
     db.query(models.RequestShare).filter(models.RequestShare.request_id == request_id).delete()
-    
     db.delete(db_request)
     db.commit()
     
@@ -186,13 +140,8 @@ def delete_request(db: Session, request_id: int, user_id: int):
 
 # ------------------ Sharing Functionality ------------------
 
-def share_request(
-    db: Session, 
-    request_id: int, 
-    user_id: int, 
-    share: schemas.RequestShare
-):
-    """Share a request with another user, ensuring ownership and no sensitive data."""
+def share_request(db: Session, request_id: int, user_id: int, share: schemas.RequestShare):
+    """Share a request with another user, ensuring no sensitive data is shared."""
     request = get_request_by_id(db, request_id)
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -201,10 +150,7 @@ def share_request(
         raise HTTPException(status_code=403, detail="Not authorized to share this request")
     
     if request.contains_sensitive_data:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot share requests containing sensitive data"
-        )
+        raise HTTPException(status_code=400, detail="Cannot share requests containing sensitive data")
     
     existing_share = db.query(models.RequestShare).filter(
         and_(
@@ -226,22 +172,14 @@ def share_request(
     db.refresh(db_share)
     return db_share
 
-def remove_share(
-    db: Session, 
-    request_id: int, 
-    user_id: int, 
-    shared_user_id: int
-):
+def remove_share(db: Session, request_id: int, user_id: int, shared_user_id: int):
     """Remove sharing of a request for a specific user, ensuring ownership."""
     request = get_request_by_id(db, request_id)
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
     
     if request.user_id != user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to modify sharing settings for this request"
-        )
+        raise HTTPException(status_code=403, detail="Not authorized to modify sharing settings for this request")
     
     share = db.query(models.RequestShare).filter(
         and_(
@@ -256,52 +194,17 @@ def remove_share(
     return share
 
 def get_shared_requests(db: Session, user_id: int):
-    """Get all requests that have been shared with the user."""
-    shared_requests = (
+    """Get all requests shared with the user."""
+    return (
         db.query(models.Request)
         .join(models.RequestShare, models.Request.id == models.RequestShare.request_id)
-        .options(joinedload(models.Request.user))
         .filter(models.RequestShare.shared_with_user_id == user_id)
         .all()
     )
-    
-    result = []
-    for request in shared_requests:
-        owner_username = request.user.username if request.user else "Unknown"
-        
-        shares = db.query(models.RequestShare).join(
-            models.User, models.RequestShare.shared_with_user_id == models.User.id
-        ).filter(
-            models.RequestShare.request_id == request.id
-        ).all()
-        
-        request_dict = {
-            "id": request.id,
-            "title": request.title,
-            "content": request.content,
-            "project_id": request.project_id,
-            "user_id": request.user_id,
-            "owner_username": owner_username,
-            "is_public": request.is_public,
-            "created_at": request.created_at,
-            "updated_at": request.updated_at,
-            "contains_sensitive_data": request.contains_sensitive_data,
-            "shared_with": [
-                {
-                    "user_id": share.shared_with_user_id,
-                    "username": share.user.username,
-                    "can_edit": share.can_edit
-                }
-                for share in shares
-            ]
-        }
-        result.append(request_dict)
-    
-    return result
 
 def toggle_request_privacy(db: Session, request_id: int, user_id: int, is_public: bool):
-    """Toggle the privacy of a request if the user has permission."""
-    request = db.query(Request).filter(Request.id == request_id).first()
+    """Toggle the privacy of a request, ensuring ownership."""
+    request = get_request_by_id(db, request_id)
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
     if request.user_id != user_id:
@@ -311,14 +214,3 @@ def toggle_request_privacy(db: Session, request_id: int, user_id: int, is_public
     db.commit()
     db.refresh(request)
     return request
-
-def get_public_requests(db: Session, skip: int = 0, limit: int = 100):
-    """Retrieve all public requests that serve as requests for help (e.g., public AI Agent or Automation requests)."""
-    return (
-        db.query(models.Request)
-        .filter(models.Request.is_public == True)
-        .filter(models.Request.contains_sensitive_data == False)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )

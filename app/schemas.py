@@ -1,14 +1,65 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from datetime import datetime
 from typing import Optional, List
+from enum import Enum
+import enum
+
+
+
+# ------------------ Enums ------------------
+class UserType(str, enum.Enum):
+    client = "client"
+    developer = "developer"
+
+
+class ConversationStatus(str, Enum):
+    ACTIVE = "active"
+    NEGOTIATING = "negotiating"
+    AGREED = "agreed"
+    COMPLETED = "completed"
 
 # ------------------ User Schemas ------------------
-
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
     full_name: str
     password: str
+    user_type: UserType
+
+    # Use field_validator for Pydantic v2
+    @field_validator("user_type", mode="before")
+    def user_type_to_lower(cls, v):
+        return v.lower() if isinstance(v, str) else v
+
+# Modified Profile Creation Schemas
+class DeveloperProfileCreate(BaseModel):
+    skills: Optional[str] = None
+    experience_years: Optional[int] = None
+    hourly_rate: Optional[int] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    bio: Optional[str] = None
+
+class ClientProfileCreate(BaseModel):
+    company_name: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    website: Optional[str] = None
+
+# Add new Profile Update Schemas
+class DeveloperProfileUpdate(BaseModel):
+    skills: Optional[str] = None
+    experience_years: Optional[int] = None
+    hourly_rate: Optional[int] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    bio: Optional[str] = None
+
+class ClientProfileUpdate(BaseModel):
+    company_name: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    website: Optional[str] = None
 
 class UserLogin(BaseModel):
     username: str
@@ -20,6 +71,8 @@ class UserOut(BaseModel):
     email: str
     full_name: str
     is_active: bool
+    user_type: UserType
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -27,6 +80,7 @@ class User(BaseModel):
     id: int
     username: str
     is_active: bool
+    user_type: UserType
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,17 +94,40 @@ class UserBase(BaseModel):
     id: int
     username: str
 
-# ------------------ Token Schemas ------------------
+# ------------------ Profile Schemas ------------------
+class DeveloperProfileOut(BaseModel):
+    id: int
+    user_id: int
+    skills: str
+    experience_years: int
+    hourly_rate: Optional[int]
+    github_url: Optional[str]
+    portfolio_url: Optional[str]
+    bio: Optional[str]
+    created_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
+class ClientProfileOut(BaseModel):
+    id: int
+    user_id: int
+    company_name: Optional[str]
+    industry: Optional[str]
+    company_size: Optional[str]
+    website: Optional[str]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# ------------------ Token Schemas ------------------
 class TokenData(BaseModel):
-    id: Optional[int] = None  # Changed from user_id to id to match usage
+    id: Optional[int] = None
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 # ------------------ Video Schemas ------------------
-
 class VideoCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -66,8 +143,7 @@ class VideoResponse(BaseModel):
     user_videos: List[VideoCreate]
     other_videos: List[VideoCreate]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class VideoInfo(BaseModel):
     filename: str
@@ -75,8 +151,7 @@ class VideoInfo(BaseModel):
     last_modified: datetime
     url: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SpacesVideoInfo(BaseModel):
     filename: str
@@ -87,11 +162,9 @@ class SpacesVideoInfo(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ------------------ Project Schemas ------------------
-
 class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -108,21 +181,20 @@ class ProjectOut(ProjectBase):
     
     model_config = ConfigDict(from_attributes=True)
 
-# ------------------ Request Schemas (formerly Note Schemas) ------------------
-
+# ------------------ Request Schemas ------------------
 class RequestBase(BaseModel):
     title: str
     content: str
-    project_id: Optional[int] = None  
+    project_id: Optional[int] = None
     is_public: bool = False
+    estimated_budget: Optional[int] = None
 
 class RequestShareInfo(BaseModel):
     user_id: int
     username: str
     can_edit: bool
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimpleRequestOut(BaseModel):
     id: int
@@ -132,13 +204,14 @@ class SimpleRequestOut(BaseModel):
     user_id: int
     owner_username: str
     is_public: bool
+    status: str
+    estimated_budget: Optional[int]
     created_at: datetime
     updated_at: Optional[datetime]
     contains_sensitive_data: bool
     shared_with: List[RequestShareInfo]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class RequestCreate(RequestBase):
     pass
@@ -170,6 +243,7 @@ class SharedUserInfo(BaseModel):
 class RequestOut(RequestBase):
     id: int
     user_id: int
+    status: str
     created_at: datetime
     updated_at: Optional[datetime]
     is_public: bool
@@ -186,8 +260,7 @@ class RequestShareWithUsername(BaseModel):
     created_at: datetime
     username: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PublicRequestOut(BaseModel):
     id: int
@@ -195,14 +268,14 @@ class PublicRequestOut(BaseModel):
     content: str
     user_id: int
     owner_username: str
+    status: str
+    estimated_budget: Optional[int]
     created_at: datetime
     updated_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
-# ------------------ Comment Schemas (formerly Note Comment) ------------------
-
+# ------------------ Comment Schemas ------------------
 class RequestCommentBase(BaseModel):
     content: str
 
@@ -227,35 +300,26 @@ class RequestCommentResponse(RequestCommentBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-class RequestCommentCreate(BaseModel):
-    content: str
-    request_id: int
-    parent_id: Optional[int] = None
-
 # ------------------ Conversation Schemas ------------------
-
-
 class ConversationCreate(BaseModel):
     request_id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ConversationOut(BaseModel):
     id: int
     request_id: int
     starter_user_id: int
     recipient_user_id: int
-    status: str
+    status: ConversationStatus
+    agreed_amount: Optional[int] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ConversationMessageCreate(BaseModel):
     content: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ConversationMessageOut(BaseModel):
     id: int
@@ -264,8 +328,7 @@ class ConversationMessageOut(BaseModel):
     content: str
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ConversationWithMessages(BaseModel):
     id: int
@@ -274,56 +337,10 @@ class ConversationWithMessages(BaseModel):
     recipient_user_id: int
     starter_username: str
     recipient_username: str
-    status: str
+    status: ConversationStatus
+    agreed_amount: Optional[int] = None
     created_at: datetime
     messages: List[ConversationMessageOut]
     request_title: str
 
-    class Config:
-        orm_mode = True
-
-# ------------------ CommandRequest Schemas (formerly CommandNote) ------------------
-
-class CommandRequestBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    commands: List[str]
-    tags: List[str] = []
-
-class CommandRequestCreate(CommandRequestBase):
-    pass
-
-class CommandRequestResponse(CommandRequestBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    
     model_config = ConfigDict(from_attributes=True)
-
-class CommandExecutionResult(BaseModel):
-    command: str
-    success: bool
-    output: str
-    executed_at: datetime
-
-class CommandExecutionResponse(BaseModel):
-    request_id: int
-    title: str
-    results: List[CommandExecutionResult]
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class CommandNoteResponse(BaseModel):
-    id: int
-    user_id: int
-    title: str
-    description: str
-    commands: List[str]
-    tags: List[str]
-    created_at: datetime
-
-class CommandNoteCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    commands: List[str]
-    tags: Optional[List[str]] = []

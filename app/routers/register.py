@@ -3,14 +3,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app import database, models, schemas, utils
 from app.models import User
+from typing import Optional
 
 router = APIRouter(
     tags=["Users"]
 )
 
 @router.post("/register", response_model=schemas.UserOut)
-def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    """Register a new user"""
+def register_user(
+    user: schemas.UserCreate, 
+    developer_profile: Optional[schemas.DeveloperProfileCreate] = None,
+    client_profile: Optional[schemas.ClientProfileCreate] = None,
+    db: Session = Depends(database.get_db)
+):
+    """Register a new user with optional profile information"""
     # Check if username already exists
     existing_user = db.query(models.User).filter(
         models.User.username == user.username
@@ -33,6 +39,18 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
             detail="Email already registered"
         )
     
+    # Validate profile data based on user type
+    if user.user_type == models.UserType.developer and not developer_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Developer profile information is required for developer registration"
+        )
+    elif user.user_type == models.UserType.client and not client_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Client profile information is required for client registration"
+        )
+    
     # Create new user with hashed password
     hashed_password = utils.hash_password(user.password)
     new_user = models.User(
@@ -40,16 +58,33 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         email=user.email,
         full_name=user.full_name,
         password=hashed_password,
+        user_type=user.user_type.lower(),  # Ensure lowercase for consistency
         is_active=True
     )
     
-    # Save to database
+    # Save user to database
     db.add(new_user)
+    db.flush()  # Flush to get the user ID without committing
+
+    # Create corresponding profile based on user type
+    if user.user_type == models.UserType.developer and developer_profile:
+        new_profile = models.DeveloperProfile(
+            user_id=new_user.id,
+            **developer_profile.model_dump()
+        )
+        db.add(new_profile)
+    elif user.user_type == models.UserType.client and client_profile:
+        new_profile = models.ClientProfile(
+            user_id=new_user.id,
+            **client_profile.model_dump()
+        )
+        db.add(new_profile)
+
+    # Commit all changes
     db.commit()
     db.refresh(new_user)
 
     return new_user
-
 
 @router.get("/users/{id}", response_model=schemas.UserOut)
 def get_user(id: int, db: Session = Depends(database.get_db)):
@@ -60,6 +95,15 @@ def get_user(id: int, db: Session = Depends(database.get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with id: {id} does not exist"
         )
+
+    # Get profile information based on user type
+    if user.user_type == models.UserType.developer:
+        user.developer_profile = db.query(models.DeveloperProfile).filter(
+            models.DeveloperProfile.user_id == user.id
+        ).first()
+    elif user.user_type == models.UserType.client:
+        user.client_profile = db.query(models.ClientProfile).filter(
+            models.ClientProfile.user_id == user.id
+        ).first()
+
     return user
-
-

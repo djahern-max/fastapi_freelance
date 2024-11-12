@@ -1,18 +1,18 @@
 """Initial migration
 
-Revision ID: 88c91aa2b2df
+Revision ID: 70d283a6f825
 Revises: 
-Create Date: 2024-11-10 05:51:49.071209
+Create Date: 2024-11-11 18:06:38.674676
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
 
 # revision identifiers, used by Alembic.
-revision: str = '88c91aa2b2df'
+revision: str = '70d283a6f825'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,24 +27,41 @@ def upgrade() -> None:
     sa.Column('full_name', sa.String(), nullable=False),
     sa.Column('password', sa.String(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.Column('user_type', sa.Enum('client', 'developer', name='usertype'), nullable=False),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
-    op.create_table('command_requests',
+    op.create_table('client_profiles',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('title', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), nullable=True),
-    sa.Column('commands', postgresql.ARRAY(sa.String()), nullable=False),
-    sa.Column('tags', postgresql.ARRAY(sa.String()), nullable=True),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('company_name', sa.String(), nullable=True),
+    sa.Column('industry', sa.String(), nullable=True),
+    sa.Column('company_size', sa.String(), nullable=True),
+    sa.Column('website', sa.String(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id')
     )
-    op.create_index(op.f('ix_command_requests_id'), 'command_requests', ['id'], unique=False)
+    op.create_index(op.f('ix_client_profiles_id'), 'client_profiles', ['id'], unique=False)
+    op.create_table('developer_profiles',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('skills', sa.String(), nullable=True),
+    sa.Column('experience_years', sa.Integer(), nullable=True),
+    sa.Column('hourly_rate', sa.Integer(), nullable=True),
+    sa.Column('github_url', sa.String(), nullable=True),
+    sa.Column('portfolio_url', sa.String(), nullable=True),
+    sa.Column('bio', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id')
+    )
+    op.create_index(op.f('ix_developer_profiles_id'), 'developer_profiles', ['id'], unique=False)
     op.create_table('projects',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
@@ -78,6 +95,8 @@ def upgrade() -> None:
     sa.Column('project_id', sa.Integer(), nullable=True),
     sa.Column('is_public', sa.Boolean(), nullable=True),
     sa.Column('contains_sensitive_data', sa.Boolean(), nullable=True),
+    sa.Column('status', sa.String(), nullable=True),
+    sa.Column('estimated_budget', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
@@ -91,6 +110,7 @@ def upgrade() -> None:
     sa.Column('starter_user_id', sa.Integer(), nullable=False),
     sa.Column('recipient_user_id', sa.Integer(), nullable=False),
     sa.Column('status', sa.String(length=50), nullable=False),
+    sa.Column('agreed_amount', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['recipient_user_id'], ['users.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='CASCADE'),
@@ -174,8 +194,10 @@ def downgrade() -> None:
     op.drop_table('videos')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
-    op.drop_index(op.f('ix_command_requests_id'), table_name='command_requests')
-    op.drop_table('command_requests')
+    op.drop_index(op.f('ix_developer_profiles_id'), table_name='developer_profiles')
+    op.drop_table('developer_profiles')
+    op.drop_index(op.f('ix_client_profiles_id'), table_name='client_profiles')
+    op.drop_table('client_profiles')
     op.drop_index(op.f('ix_users_username'), table_name='users')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')

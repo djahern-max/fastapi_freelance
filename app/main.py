@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import os
-from app.routers import register, login, video_upload, display_videos, projects, command_notes, comments, conversations
+from app.routers import register, login, video_upload, display_videos, projects, comments, conversations, profile
 from app.routers import request as requests_router
 from fastapi.routing import APIRoute
 import logging
@@ -54,8 +54,8 @@ routers_with_prefixes = [
     (display_videos.router, ""),
     (requests_router.router, ""),
     (comments.router, ""),
-    (command_notes.router, ""),
     (conversations.router, ""),
+    (profile.router, "")
 ]
 
 for router, prefix in routers_with_prefixes:

@@ -1,37 +1,74 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, UniqueConstraint, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, Enum as SQLAlchemyEnum, TIMESTAMP, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
 from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.orm import backref
+import enum
 
 # ------------------ Mixin ------------------
-
 class TimestampMixin:
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-# ------------------ User Model ------------------
+# ------------------ Enums ------------------
+class UserType(str, enum.Enum):
+    client = "client"
+    developer = "developer"
+
+# In your User model
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    user_type = Column(SQLAlchemyEnum(UserType), nullable=False)  # This uses the corrected enum
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-    # Relationships remain the same
+    # Existing relationships
     videos = relationship("Video", back_populates="user")
     requests = relationship("Request", back_populates="user")
     projects = relationship("Project", back_populates="user")
     shared_requests = relationship("RequestShare", foreign_keys="[RequestShare.shared_with_user_id]", back_populates="user")
-    command_requests = relationship("CommandRequest", back_populates="owner")
     request_comments = relationship("RequestComment", back_populates="user")
+    
+    # New profile relationships
+    developer_profile = relationship("DeveloperProfile", back_populates="user", uselist=False)
+    client_profile = relationship("ClientProfile", back_populates="user", uselist=False)
+
+# ------------------ Profile Models ------------------
+class DeveloperProfile(Base):
+    __tablename__ = "developer_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    skills = Column(String)
+    experience_years = Column(Integer)
+    hourly_rate = Column(Integer, nullable=True)
+    github_url = Column(String, nullable=True)
+    portfolio_url = Column(String, nullable=True)
+    bio = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    
+    user = relationship("User", back_populates="developer_profile")
+
+class ClientProfile(Base):
+    __tablename__ = "client_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    company_name = Column(String, nullable=True)
+    industry = Column(String, nullable=True)
+    company_size = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    
+    user = relationship("User", back_populates="client_profile")
 
 # ------------------ Video Model ------------------
-
 class Video(Base):
     __tablename__ = "videos"
 
@@ -45,11 +82,9 @@ class Video(Base):
     parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    # Relationships
     user = relationship("User", back_populates="videos")
 
 # ------------------ Project Model ------------------
-
 class Project(Base):
     __tablename__ = 'projects'
 
@@ -58,12 +93,10 @@ class Project(Base):
     description = Column(String, nullable=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
-    # Relationships
     user = relationship("User", back_populates="projects")
     requests = relationship("Request", back_populates="project")
 
 # ------------------ Request and RequestShare Models ------------------
-
 class Request(Base):
     __tablename__ = "requests"
     
@@ -74,16 +107,16 @@ class Request(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     is_public = Column(Boolean, default=False)
     contains_sensitive_data = Column(Boolean, default=False)
+    status = Column(String, default="open")  # New field: open, in_progress, completed
+    estimated_budget = Column(Integer, nullable=True)  # New field
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships
     project = relationship("Project", back_populates="requests")
     user = relationship("User", back_populates="requests")
     shared_with = relationship("RequestShare", back_populates="request", cascade="all, delete")
     comments = relationship("RequestComment", back_populates="request", cascade="all, delete")
     conversations = relationship("Conversation", back_populates="request", cascade="all, delete")
-
 
 class RequestShare(Base):
     __tablename__ = "request_shares"
@@ -94,7 +127,6 @@ class RequestShare(Base):
     can_edit = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
     request = relationship("Request", back_populates="shared_with")
     user = relationship("User", foreign_keys=[shared_with_user_id], back_populates="shared_requests")
 
@@ -103,7 +135,6 @@ class RequestShare(Base):
     )
 
 # ------------------ Comment Model ------------------
-
 class RequestComment(Base):
     __tablename__ = "request_comments"
     
@@ -115,7 +146,6 @@ class RequestComment(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships
     request = relationship("Request", back_populates="comments")
     user = relationship("User", back_populates="request_comments")
     replies = relationship("RequestComment", backref=backref("parent", remote_side=[id]))
@@ -129,7 +159,6 @@ class RequestCommentVote(Base):
     vote_type = Column(Integer, nullable=False)  # 1 for upvote, -1 for downvote
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
     user = relationship("User")
     comment = relationship("RequestComment", back_populates="votes")
 
@@ -137,8 +166,7 @@ class RequestCommentVote(Base):
         UniqueConstraint('user_id', 'comment_id', name='unique_request_comment_vote'),
     )
 
-# ------------------ Conversation and ConversationMessage Models ------------------
-
+# ------------------ Conversation Models ------------------
 class Conversation(Base, TimestampMixin):
     __tablename__ = "conversations"
 
@@ -146,9 +174,9 @@ class Conversation(Base, TimestampMixin):
     request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False, index=True)
     starter_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     recipient_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(String(50), nullable=False, default="active")
+    status = Column(String(50), nullable=False, default="active")  # active, negotiating, agreed, completed
+    agreed_amount = Column(Integer, nullable=True)  # New field
     
-    # Relationships
     request = relationship("Request", back_populates="conversations")
     starter = relationship("User", foreign_keys=[starter_user_id])
     recipient = relationship("User", foreign_keys=[recipient_user_id])
@@ -163,23 +191,5 @@ class ConversationMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-    # Relationships
     conversation = relationship("Conversation", back_populates="messages")
     user = relationship("User")
-
-
-# ------------------ CommandRequest Model ------------------
-
-class CommandRequest(Base):
-    __tablename__ = "command_requests"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    description = Column(String, nullable=True)
-    commands = Column(PG_ARRAY(String), nullable=False)
-    tags = Column(PG_ARRAY(String), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    # Relationships
-    owner = relationship("User", back_populates="command_requests")
