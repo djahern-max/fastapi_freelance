@@ -12,11 +12,13 @@ router = APIRouter(
 @router.post("/register", response_model=schemas.UserOut)
 def register_user(
     user: schemas.UserCreate, 
-    developer_profile: Optional[schemas.DeveloperProfileCreate] = None,
-    client_profile: Optional[schemas.ClientProfileCreate] = None,
     db: Session = Depends(database.get_db)
 ):
-    """Register a new user with optional profile information"""
+    """Register a new user with basic information. Profiles can be added later."""
+    # Debug logging
+    print(f"Received user data: {user.model_dump()}")
+    print(f"User type: {user.user_type}, type: {type(user.user_type)}")
+
     # Check if username already exists
     existing_user = db.query(models.User).filter(
         models.User.username == user.username
@@ -39,52 +41,32 @@ def register_user(
             detail="Email already registered"
         )
     
-    # Validate profile data based on user type
-    if user.user_type == models.UserType.developer and not developer_profile:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Developer profile information is required for developer registration"
-        )
-    elif user.user_type == models.UserType.client and not client_profile:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Client profile information is required for client registration"
-        )
-    
     # Create new user with hashed password
-    hashed_password = utils.hash_password(user.password)
-    new_user = models.User(
-        username=user.username,
-        email=user.email,
-        full_name=user.full_name,
-        password=hashed_password,
-        user_type=user.user_type.lower(),  # Ensure lowercase for consistency
-        is_active=True
-    )
-    
-    # Save user to database
-    db.add(new_user)
-    db.flush()  # Flush to get the user ID without committing
-
-    # Create corresponding profile based on user type
-    if user.user_type == models.UserType.developer and developer_profile:
-        new_profile = models.DeveloperProfile(
-            user_id=new_user.id,
-            **developer_profile.model_dump()
+    try:
+        hashed_password = utils.hash_password(user.password)
+        new_user = models.User(
+            username=user.username,
+            email=user.email,
+            full_name=user.full_name,
+            password=hashed_password,
+            user_type=user.user_type.lower(),
+            is_active=True
         )
-        db.add(new_profile)
-    elif user.user_type == models.UserType.client and client_profile:
-        new_profile = models.ClientProfile(
-            user_id=new_user.id,
-            **client_profile.model_dump()
+        
+        # Save user to database
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        return new_user
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error during registration: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during registration. Please try again."
         )
-        db.add(new_profile)
-
-    # Commit all changes
-    db.commit()
-    db.refresh(new_user)
-
-    return new_user
 
 @router.get("/users/{id}", response_model=schemas.UserOut)
 def get_user(id: int, db: Session = Depends(database.get_db)):
