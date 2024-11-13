@@ -24,10 +24,17 @@ def get_projects(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    print(f"Fetching projects for user: {current_user.id}")
-    projects = crud.crud_project.get_projects_by_user(db=db, user_id=current_user.id)
-    print(f"Found projects: {projects}")
-    return projects
+    try:
+        print(f"Fetching projects for user: {current_user.id}")
+        projects = crud.crud_project.get_projects_by_user(db=db, user_id=current_user.id)
+        print(f"Found projects: {projects}")
+        return projects
+    except Exception as e:
+        print(f"Error fetching projects for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch projects: {str(e)}"
+        )
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
@@ -62,3 +69,4 @@ def get_project(
         )
     
     return project
+
