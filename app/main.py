@@ -7,6 +7,7 @@ from app.routers import register, login, video_upload, display_videos, projects,
 from app.routers import request as requests_router
 from fastapi.routing import APIRoute
 import logging
+from fastapi.responses import JSONResponse
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -105,3 +106,10 @@ async def log_requests(request, call_next):
     response = await call_next(request)
     logger.info(f"Response: {response.status_code}")
     return response
+
+@app.get("/api-test")
+async def api_test():
+    return JSONResponse(
+        content={"status": "ok", "message": "API endpoint working"},
+        headers={"Content-Type": "application/json"}
+    )

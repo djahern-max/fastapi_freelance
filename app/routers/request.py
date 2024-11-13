@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.crud import crud_request, crud_user
@@ -6,6 +6,7 @@ from app import schemas, models
 from app.models import UserType
 from ..database import get_db
 from ..oauth2 import get_current_user, get_optional_user
+
 
 router = APIRouter(prefix="/requests", tags=["Requests"])
 
@@ -54,6 +55,7 @@ def create_request(
 
 @router.get("/", response_model=List[schemas.SimpleRequestOut])
 def get_requests(
+    request: Request,  # Add this
     project_id: Optional[int] = None,
     include_shared: bool = True,
     skip: int = Query(0, ge=0),
@@ -63,24 +65,41 @@ def get_requests(
 ):
     """Retrieve all requests for the current user."""
     from fastapi.responses import JSONResponse
+    import logging
+
+    logger = logging.getLogger(__name__)
     
+    # Log incoming request details
+    logger.info(f"Get requests - Headers: {dict(request.headers)}")
+    logger.info(f"Get requests - User type: {current_user.user_type}")
+
     if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can access their requests")
     
-    requests = crud_request.get_requests_by_user(
-        db=db,
-        user_id=current_user.id,
-        project_id=project_id,
-        include_shared=include_shared,
-        skip=skip,
-        limit=limit
-    )
-    
-    # Return with explicit JSON content type
-    return JSONResponse(
-        content=[request.dict() for request in requests],
-        headers={"Content-Type": "application/json"}
-    )
+    try:
+        requests = crud_request.get_requests_by_user(
+            db=db,
+            user_id=current_user.id,
+            project_id=project_id,
+            include_shared=include_shared,
+            skip=skip,
+            limit=limit
+        )
+        
+        # Convert to list of dicts and force JSON response
+        response_data = [request.dict() for request in requests]
+        logger.info(f"Returning {len(response_data)} requests")
+        
+        return JSONResponse(
+            content=response_data,
+            headers={
+                "Content-Type": "application/json",
+                "X-Content-Type-Options": "nosniff"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in get_requests: {str(e)}")
+        raise
 
 @router.get("/{request_id}", response_model=schemas.RequestOut)
 def read_request(
