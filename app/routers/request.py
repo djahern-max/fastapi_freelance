@@ -6,6 +6,7 @@ from app import schemas, models
 from app.models import UserType
 from ..database import get_db
 from ..oauth2 import get_current_user, get_optional_user
+from fastapi.encoders import jsonable_encoder
 
 
 router = APIRouter(prefix="/requests", tags=["Requests"])
@@ -53,9 +54,11 @@ def create_request(
         raise HTTPException(status_code=403, detail="Only clients can create requests")
     return crud_request.create_request(db=db, request=request, user_id=current_user.id)
 
+
+
 @router.get("/", response_model=List[schemas.SimpleRequestOut])
 def get_requests(
-    request: Request,  # Add this
+    request: Request,
     project_id: Optional[int] = None,
     include_shared: bool = True,
     skip: int = Query(0, ge=0),
@@ -63,20 +66,17 @@ def get_requests(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Retrieve all requests for the current user."""
-    from fastapi.responses import JSONResponse
     import logging
 
     logger = logging.getLogger(__name__)
-    
-    # Log incoming request details
     logger.info(f"Get requests - Headers: {dict(request.headers)}")
     logger.info(f"Get requests - User type: {current_user.user_type}")
 
     if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can access their requests")
-    
+
     try:
+        # Fetch requests from the database
         requests = crud_request.get_requests_by_user(
             db=db,
             user_id=current_user.id,
@@ -86,20 +86,15 @@ def get_requests(
             limit=limit
         )
         
-        # Convert to list of dicts and force JSON response
-        response_data = [request.dict() for request in requests]
+        # Convert ORM results to Pydantic models
+        response_data = [schemas.SimpleRequestOut.from_orm(request) for request in requests]
         logger.info(f"Returning {len(response_data)} requests")
-        
-        return JSONResponse(
-            content=response_data,
-            headers={
-                "Content-Type": "application/json",
-                "X-Content-Type-Options": "nosniff"
-            }
-        )
+
+        return response_data
     except Exception as e:
         logger.error(f"Error in get_requests: {str(e)}")
         raise
+
 
 @router.get("/{request_id}", response_model=schemas.RequestOut)
 def read_request(
