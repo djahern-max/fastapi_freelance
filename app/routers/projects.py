@@ -21,11 +21,13 @@ def create_project(
 
 @router.get("/", response_model=list[schemas.ProjectOut])
 def get_projects(
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # User type check is now handled in the crud function
-    return crud.crud_project.get_projects_by_user(db=db, user_id=current_user.id)
+    print(f"Fetching projects for user: {current_user.id}")
+    projects = crud.crud_project.get_projects_by_user(db=db, user_id=current_user.id)
+    print(f"Found projects: {projects}")
+    return projects
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
