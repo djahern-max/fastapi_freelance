@@ -62,29 +62,25 @@ def get_requests(
     current_user: models.User = Depends(get_current_user)
 ):
     """Retrieve all requests for the current user."""
-    # Add debugging
-    print(f"GET /requests - User Type: {current_user.user_type}")
-    print(f"GET /requests - User ID: {current_user.id}")
-
-    # Check user type case-sensitivity
-    if current_user.user_type.lower() != UserType.client.lower():
-        print(f"User type mismatch: {current_user.user_type} vs {UserType.client}")
+    from fastapi.responses import JSONResponse
+    
+    if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can access their requests")
     
-    try:
-        requests = crud_request.get_requests_by_user(
-            db=db,
-            user_id=current_user.id,
-            project_id=project_id,
-            include_shared=include_shared,
-            skip=skip,
-            limit=limit
-        )
-        print(f"Found {len(requests)} requests")
-        return requests
-    except Exception as e:
-        print(f"Error in get_requests: {str(e)}")
-        raise
+    requests = crud_request.get_requests_by_user(
+        db=db,
+        user_id=current_user.id,
+        project_id=project_id,
+        include_shared=include_shared,
+        skip=skip,
+        limit=limit
+    )
+    
+    # Return with explicit JSON content type
+    return JSONResponse(
+        content=[request.dict() for request in requests],
+        headers={"Content-Type": "application/json"}
+    )
 
 @router.get("/{request_id}", response_model=schemas.RequestOut)
 def read_request(
