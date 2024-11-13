@@ -28,7 +28,7 @@ def get_public_requests(
     db: Session = Depends(get_db),
     current_user: Optional[models.User] = Depends(get_optional_user)
 ):
-    """Get all public requests, optionally filtering for developer-specific results."""
+    """Get all public requests optionally filtering for developer-specific results."""
     try:
         developer_id = current_user.id if current_user and current_user.user_type == UserType.developer else None
         requests = crud_request.get_public_requests(db=db, skip=skip, limit=limit, developer_id=developer_id)
@@ -62,16 +62,29 @@ def get_requests(
     current_user: models.User = Depends(get_current_user)
 ):
     """Retrieve all requests for the current user."""
-    if current_user.user_type != UserType.client:
+    # Add debugging
+    print(f"GET /requests - User Type: {current_user.user_type}")
+    print(f"GET /requests - User ID: {current_user.id}")
+
+    # Check user type case-sensitivity
+    if current_user.user_type.lower() != UserType.client.lower():
+        print(f"User type mismatch: {current_user.user_type} vs {UserType.client}")
         raise HTTPException(status_code=403, detail="Only clients can access their requests")
-    return crud_request.get_requests_by_user(
-        db=db,
-        user_id=current_user.id,
-        project_id=project_id,
-        include_shared=include_shared,
-        skip=skip,
-        limit=limit
-    )
+    
+    try:
+        requests = crud_request.get_requests_by_user(
+            db=db,
+            user_id=current_user.id,
+            project_id=project_id,
+            include_shared=include_shared,
+            skip=skip,
+            limit=limit
+        )
+        print(f"Found {len(requests)} requests")
+        return requests
+    except Exception as e:
+        print(f"Error in get_requests: {str(e)}")
+        raise
 
 @router.get("/{request_id}", response_model=schemas.RequestOut)
 def read_request(
