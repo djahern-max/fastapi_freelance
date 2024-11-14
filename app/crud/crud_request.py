@@ -46,7 +46,8 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
         user_id=user_id,
         is_public=request.is_public,
         contains_sensitive_data=check_sensitive_content(request.content),
-        status="open"
+        status="open",
+        estimated_budget=request.estimated_budget
     )
     db.add(db_request)
     db.commit()
