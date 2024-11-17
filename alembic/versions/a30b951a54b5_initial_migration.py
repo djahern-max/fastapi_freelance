@@ -1,8 +1,8 @@
-"""Initial migration
+"""initial migration
 
-Revision ID: 70d283a6f825
+Revision ID: a30b951a54b5
 Revises: 
-Create Date: 2024-11-11 18:06:38.674676
+Create Date: 2024-11-17 05:26:07.560649
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '70d283a6f825'
+revision: str = 'a30b951a54b5'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -42,7 +42,7 @@ def upgrade() -> None:
     sa.Column('company_size', sa.String(), nullable=True),
     sa.Column('website', sa.String(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')
     )
@@ -57,7 +57,7 @@ def upgrade() -> None:
     sa.Column('portfolio_url', sa.String(), nullable=True),
     sa.Column('bio', sa.Text(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')
     )
@@ -67,7 +67,7 @@ def upgrade() -> None:
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('description', sa.String(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_projects_id'), 'projects', ['id'], unique=False)
@@ -82,7 +82,7 @@ def upgrade() -> None:
     sa.Column('parent_project_id', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['parent_project_id'], ['videos.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_videos_id'), 'videos', ['id'], unique=False)
@@ -96,20 +96,41 @@ def upgrade() -> None:
     sa.Column('is_public', sa.Boolean(), nullable=True),
     sa.Column('contains_sensitive_data', sa.Boolean(), nullable=True),
     sa.Column('status', sa.String(), nullable=True),
-    sa.Column('estimated_budget', sa.Integer(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.Column('estimated_budget', sa.Float(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_requests_id'), 'requests', ['id'], unique=False)
+    op.create_table('agreements',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('request_id', sa.Integer(), nullable=False),
+    sa.Column('price', sa.Float(), nullable=False),
+    sa.Column('terms', sa.String(), nullable=False),
+    sa.Column('developer_id', sa.Integer(), nullable=False),
+    sa.Column('client_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('proposed_by', sa.Integer(), nullable=False),
+    sa.Column('proposed_at', sa.DateTime(), nullable=False),
+    sa.Column('proposed_changes', sa.String(), nullable=True),
+    sa.Column('agreement_date', sa.DateTime(), nullable=True),
+    sa.Column('negotiation_history', sa.JSON(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['client_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['proposed_by'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_agreements_id'), 'agreements', ['id'], unique=False)
     op.create_table('conversations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('request_id', sa.Integer(), nullable=False),
     sa.Column('starter_user_id', sa.Integer(), nullable=False),
     sa.Column('recipient_user_id', sa.Integer(), nullable=False),
-    sa.Column('status', sa.String(length=50), nullable=False),
+    sa.Column('status', sa.Enum('active', 'negotiating', 'agreed', 'completed', name='conversationstatus'), nullable=False),
     sa.Column('agreed_amount', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['recipient_user_id'], ['users.id'], ondelete='CASCADE'),
@@ -187,6 +208,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_conversations_recipient_user_id'), table_name='conversations')
     op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
     op.drop_table('conversations')
+    op.drop_index(op.f('ix_agreements_id'), table_name='agreements')
+    op.drop_table('agreements')
     op.drop_index(op.f('ix_requests_id'), table_name='requests')
     op.drop_table('requests')
     op.drop_index(op.f('ix_videos_title'), table_name='videos')
