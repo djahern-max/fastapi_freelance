@@ -19,7 +19,6 @@ import logging
 from fastapi.responses import JSONResponse, PlainTextResponse
 import datetime
 
-from app.routers import api_router
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -68,9 +67,6 @@ def log_router_routes(router, prefix=""):
     for route in router.routes:
         if isinstance(route, APIRoute):
             logger.info(f"{', '.join(route.methods)} {prefix}{route.path}")
-
-
-app.include_router(api_router, prefix="/api")
 
 
 # Register routers and log their routes
