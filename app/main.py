@@ -12,6 +12,7 @@ from app.routers import (
     comments,
     conversations,
     profile,
+    agreements,
 )
 from app.routers import request as requests_router
 from fastapi.routing import APIRoute
@@ -80,6 +81,7 @@ routers_with_prefixes = [
     (comments.router, ""),
     (conversations.router, ""),
     (profile.router, ""),
+    (agreements.router, ""),
 ]
 
 for router, prefix in routers_with_prefixes:
