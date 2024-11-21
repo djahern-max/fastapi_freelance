@@ -26,6 +26,54 @@ def get_profile(
     return current_user
 
 
+@router.get("/developer", response_model=schemas.DeveloperProfileOut)
+def get_developer_profile(
+    current_user: models.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    """Get developer profile"""
+    if current_user.user_type != models.UserType.developer:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only developers can access developer profiles",
+        )
+
+    profile = (
+        db.query(models.DeveloperProfile)
+        .filter(models.DeveloperProfile.user_id == current_user.id)
+        .first()
+    )
+
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    return profile
+
+
+@router.get("/client", response_model=schemas.ClientProfileOut)
+def get_client_profile(
+    current_user: models.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    """Get client profile"""
+    if current_user.user_type != models.UserType.client:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients can access client profiles",
+        )
+
+    profile = (
+        db.query(models.ClientProfile)
+        .filter(models.ClientProfile.user_id == current_user.id)
+        .first()
+    )
+
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    return profile
+
+
 @router.post(
     "/developer", response_model=schemas.DeveloperProfileOut, status_code=status.HTTP_201_CREATED
 )
