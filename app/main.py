@@ -16,14 +16,7 @@ from app.routers import (
 )
 from app.routers import request as requests_router
 from fastapi.routing import APIRoute
-import logging
 from fastapi.responses import JSONResponse, PlainTextResponse
-import datetime
-
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -32,11 +25,6 @@ load_dotenv()
 # Initialize FastAPI app with lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Log all routes at startup
-    logger.info("Available routes:")
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            logger.info(f"{', '.join(route.methods)} {route.path}")
     yield
 
 
@@ -62,15 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Function to print routes from a router
-def log_router_routes(router, prefix=""):
-    for route in router.routes:
-        if isinstance(route, APIRoute):
-            logger.info(f"{', '.join(route.methods)} {prefix}{route.path}")
-
-
-# Register routers and log their routes
+# Register routers without logging
 routers_with_prefixes = [
     (register.router, "/auth"),
     (login.router, "/auth"),
@@ -86,8 +66,6 @@ routers_with_prefixes = [
 
 for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
-    logger.info(f"\nRoutes for {router.__class__.__name__}:")
-    log_router_routes(router, prefix)
 
 
 @app.get("/debug")
@@ -119,34 +97,17 @@ async def get_routes():
                     "tags": route.tags,
                 }
             )
-
-    # Sort routes by path for better readability
     routes.sort(key=lambda x: x["path"])
-
-    logger.info("Current routes:")
-    for route in routes:
-        logger.info(f"{', '.join(route['methods'])} {route['path']}")
-
     return {"routes": routes}
 
 
-@app.get("/routes-text")
-async def get_routes_text():
-    routes = []
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            routes.append(f"{', '.join(route.methods)} {route.path}")
-    sorted_routes = sorted(routes)
-    return PlainTextResponse("\n".join(sorted_routes))
-
-
-# Add a middleware to log all requests
-@app.middleware("http")
-async def log_requests(request, call_next):
-    logger.info(f"Request: {request.method} {request.url.path}")
-    response = await call_next(request)
-    logger.info(f"Response: {response.status_code}")
-    return response
+# @app.get("/routes-text")
+# async def get_routes_text():
+#     routes = []
+#     for route in app.routes:
+#         if isinstance(route, APIRoute):
+#             routes.append(f"{', '.join(route.methods)} {route.path}")
+#     return PlainTextContent("\n".join(sorted(routes)))
 
 
 @app.get("/api-test")
