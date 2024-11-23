@@ -181,6 +181,7 @@ class RequestShare(Base):
     )
     can_edit = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    viewed_at = Column(DateTime(timezone=True), nullable=True)  # New column
 
     request = relationship("Request", back_populates="shared_with")
     user = relationship(

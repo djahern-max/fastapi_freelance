@@ -296,19 +296,42 @@ class RequestShare(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SharedUserInfo(BaseModel):
+    user: UserBasic
+    can_edit: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RequestShareResponse(BaseModel):
     id: int
     request_id: int
     shared_with_user_id: int
     can_edit: bool
     created_at: datetime
+    viewed_at: Optional[datetime] = None
+    is_new: bool = True  # Computed field
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class SharedUserInfo(BaseModel):
-    user: UserBasic
-    can_edit: bool
+class SharedRequestOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    project_id: Optional[int]
+    user_id: int
+    owner_username: str
+    is_public: bool
+    status: str
+    estimated_budget: Optional[float]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    contains_sensitive_data: bool
+    shared_with_info: List[dict] = []
+    is_new: bool
+    share_id: int
+    share_date: datetime  # Add this field
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -322,10 +345,8 @@ class RequestOut(RequestBase):
     is_public: bool
     contains_sensitive_data: bool
     shared_with: Optional[List[SharedUserInfo]] = []
-    current_agreement: Optional["Agreement"] = None  # Using string literal
-    current_proposal: Optional["Agreement"] = None  # Using string literal
-
-    model_config = ConfigDict(from_attributes=True)
+    current_agreement: Optional["Agreement"] = None
+    current_proposal: Optional["Agreement"] = None
 
     model_config = ConfigDict(from_attributes=True)
 
