@@ -276,9 +276,9 @@ class SimpleRequestOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     contains_sensitive_data: bool
-    shared_with: List[RequestShareInfo]
+    shared_with: List[RequestShareInfo] = Field(alias="shared_with_info")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class RequestCreate(RequestBase):
