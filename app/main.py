@@ -116,3 +116,25 @@ async def api_test():
         content={"status": "ok", "message": "API endpoint working"},
         headers={"Content-Type": "application/json"},
     )
+
+
+@app.get("/routes-description", response_class=PlainTextResponse)
+async def get_routes_description():
+    """
+    Returns a human-readable description of all the routes in the application.
+    """
+    routes = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            methods = ", ".join(route.methods)
+            route_description = (
+                f"Path: {route.path}\n"
+                f"Methods: {methods}\n"
+                f"Name: {route.name}\n"
+                f"Tags: {', '.join(route.tags) if route.tags else 'None'}\n"
+                f"Endpoint: {route.endpoint.__name__ if route.endpoint else 'None'}\n"
+            )
+            routes.append(route_description)
+
+    # Join all routes' descriptions into a single plain text response
+    return "\n".join(routes)

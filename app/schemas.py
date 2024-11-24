@@ -139,18 +139,30 @@ class Token(BaseModel):
 
 
 # ------------------ Video Schemas ------------------
+
+
+# Add VideoType enum
+class VideoType(str, Enum):
+    project_overview = "project_overview"
+    solution_demo = "solution_demo"
+    progress_update = "progress_update"
+
+
+# Update VideoCreate schema
 class VideoCreate(BaseModel):
     title: str
     description: Optional[str] = None
     file_path: str
     thumbnail_path: Optional[str] = None
-    is_project: bool = False
-    parent_project_id: Optional[int] = None
+    project_id: Optional[int] = None
+    request_id: Optional[int] = None
+    video_type: VideoType = VideoType.solution_demo
     user_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
 
+# Update VideoResponse schema to use updated VideoCreate
 class VideoResponse(BaseModel):
     user_videos: List[VideoCreate]
     other_videos: List[VideoCreate]
@@ -158,15 +170,23 @@ class VideoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class VideoInfo(BaseModel):
-    filename: str
-    size: int
-    last_modified: datetime
-    url: str
+# Add new VideoOut schema for complete video information
+class VideoOut(BaseModel):
+    id: int
+    title: str
+    description: Optional[str]
+    file_path: str
+    thumbnail_path: Optional[str]
+    upload_date: datetime
+    project_id: Optional[int]
+    request_id: Optional[int]
+    user_id: int
+    video_type: VideoType
 
     model_config = ConfigDict(from_attributes=True)
 
 
+# Update SpacesVideoInfo schema
 class SpacesVideoInfo(BaseModel):
     filename: str
     size: int
@@ -175,6 +195,9 @@ class SpacesVideoInfo(BaseModel):
     thumbnail_path: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
+    video_type: VideoType = VideoType.solution_demo
+    project_id: Optional[int] = None
+    request_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -196,6 +219,7 @@ class ProjectUpdate(ProjectBase):
 class ProjectOut(ProjectBase):
     id: int
     user_id: int
+    videos: List[VideoOut] = []  # Add this line
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -347,6 +371,7 @@ class RequestOut(RequestBase):
     shared_with: Optional[List[SharedUserInfo]] = []
     current_agreement: Optional["Agreement"] = None
     current_proposal: Optional["Agreement"] = None
+    videos: List[VideoOut] = []  # Add this line
 
     model_config = ConfigDict(from_attributes=True)
 

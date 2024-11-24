@@ -1,8 +1,8 @@
-"""initial migration
+"""Initial migration
 
-Revision ID: a30b951a54b5
+Revision ID: 825cc439506c
 Revises: 
-Create Date: 2024-11-17 05:26:07.560649
+Create Date: 2024-11-24 11:13:41.991234
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a30b951a54b5'
+revision: str = '825cc439506c'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -71,22 +71,6 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_projects_id'), 'projects', ['id'], unique=False)
-    op.create_table('videos',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('title', sa.String(), nullable=True),
-    sa.Column('description', sa.String(), nullable=True),
-    sa.Column('file_path', sa.String(), nullable=False),
-    sa.Column('thumbnail_path', sa.String(), nullable=True),
-    sa.Column('upload_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('is_project', sa.Boolean(), nullable=True),
-    sa.Column('parent_project_id', sa.Integer(), nullable=True),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['parent_project_id'], ['videos.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_videos_id'), 'videos', ['id'], unique=False)
-    op.create_index(op.f('ix_videos_title'), 'videos', ['title'], unique=False)
     op.create_table('requests',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(), nullable=False),
@@ -162,12 +146,31 @@ def upgrade() -> None:
     sa.Column('shared_with_user_id', sa.Integer(), nullable=False),
     sa.Column('can_edit', sa.Boolean(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('viewed_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['shared_with_user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('request_id', 'shared_with_user_id', name='unique_request_share')
     )
     op.create_index(op.f('ix_request_shares_id'), 'request_shares', ['id'], unique=False)
+    op.create_table('videos',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('title', sa.String(), nullable=True),
+    sa.Column('description', sa.String(), nullable=True),
+    sa.Column('file_path', sa.String(), nullable=False),
+    sa.Column('thumbnail_path', sa.String(), nullable=True),
+    sa.Column('upload_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('project_id', sa.Integer(), nullable=True),
+    sa.Column('request_id', sa.Integer(), nullable=True),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('video_type', sa.Enum('project_overview', 'solution_demo', 'progress_update', name='videotype'), nullable=False),
+    sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_videos_id'), 'videos', ['id'], unique=False)
+    op.create_index(op.f('ix_videos_title'), 'videos', ['title'], unique=False)
     op.create_table('conversation_messages',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('conversation_id', sa.Integer(), nullable=False),
@@ -199,6 +202,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_conversation_messages_id'), table_name='conversation_messages')
     op.drop_index(op.f('ix_conversation_messages_conversation_id'), table_name='conversation_messages')
     op.drop_table('conversation_messages')
+    op.drop_index(op.f('ix_videos_title'), table_name='videos')
+    op.drop_index(op.f('ix_videos_id'), table_name='videos')
+    op.drop_table('videos')
     op.drop_index(op.f('ix_request_shares_id'), table_name='request_shares')
     op.drop_table('request_shares')
     op.drop_index(op.f('ix_request_comments_id'), table_name='request_comments')
@@ -212,9 +218,6 @@ def downgrade() -> None:
     op.drop_table('agreements')
     op.drop_index(op.f('ix_requests_id'), table_name='requests')
     op.drop_table('requests')
-    op.drop_index(op.f('ix_videos_title'), table_name='videos')
-    op.drop_index(op.f('ix_videos_id'), table_name='videos')
-    op.drop_table('videos')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
     op.drop_index(op.f('ix_developer_profiles_id'), table_name='developer_profiles')

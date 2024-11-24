@@ -38,6 +38,12 @@ class ConversationStatus(str, enum.Enum):
     completed = "completed"
 
 
+class VideoType(str, enum.Enum):
+    project_overview = "project_overview"
+    solution_demo = "solution_demo"
+    progress_update = "progress_update"
+
+
 # ------------------ User Model ------------------
 class User(Base):
     __tablename__ = "users"
@@ -113,11 +119,14 @@ class Video(Base):
     file_path = Column(String, nullable=False)
     thumbnail_path = Column(String, nullable=True)
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
-    is_project = Column(Boolean, default=False)
-    parent_project_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    request_id = Column(Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-
+    video_type = Column(SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo)
+    # Relationships
     user = relationship("User", back_populates="videos")
+    project = relationship("Project", back_populates="videos")
+    request = relationship("Request", back_populates="videos")
 
 
 # ------------------ Project Model ------------------
@@ -131,6 +140,7 @@ class Project(Base):
 
     user = relationship("User", back_populates="projects")
     requests = relationship("Request", back_populates="project", cascade="all, delete-orphan")
+    videos = relationship("Video", back_populates="project")
 
 
 # ------------------ Request and RequestShare Models ------------------
@@ -148,6 +158,9 @@ class Request(Base):
     estimated_budget = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
+
+    # Add videos relationship
+    videos = relationship("Video", back_populates="request")
 
     # Relationships
     agreements = relationship("Agreement", back_populates="request", cascade="all, delete-orphan")
