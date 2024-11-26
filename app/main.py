@@ -13,8 +13,9 @@ from app.routers import (
     conversations,
     profile,
     agreements,
+    public_profile,
+    request as requests_router,
 )
-from app.routers import request as requests_router
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
 
@@ -22,7 +23,6 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 load_dotenv()
 
 
-# Initialize FastAPI app with lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -50,7 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers without logging
+# Register routers with their prefixes
 routers_with_prefixes = [
     (register.router, "/auth"),
     (login.router, "/auth"),
@@ -62,8 +62,10 @@ routers_with_prefixes = [
     (conversations.router, ""),
     (profile.router, ""),
     (agreements.router, ""),
+    (public_profile.router, ""),
 ]
 
+# Include all routers
 for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
 

@@ -1,8 +1,9 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, HttpUrl
 from datetime import datetime
-from typing import Optional, List, ForwardRef
+from typing import Optional, List, Dict, Any
 from enum import Enum
 import enum
+import re
 
 
 # ------------------ Enums ------------------
@@ -70,13 +71,43 @@ class UserBase(BaseModel):
 
 
 # ------------------ Profile Schemas ------------------
+# First define the nested models
+class SocialLink(BaseModel):
+    platform: str
+    url: str
+
+
+class Achievement(BaseModel):
+    title: str
+    date: datetime
+    description: Optional[str] = None
+    url: Optional[str] = None
+
+
+# Then modify the profile models to use Dict instead of the custom types for now
 class DeveloperProfileCreate(BaseModel):
-    skills: Optional[str] = None
-    experience_years: Optional[int] = None
-    hourly_rate: Optional[int] = None
+    skills: str
+    experience_years: int = Field(ge=0)
+    hourly_rate: Optional[int] = Field(None, ge=0)
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     bio: Optional[str] = None
+    is_public: bool = False
+    profile_image_url: Optional[str] = None
+    social_links: Optional[List[Dict[str, str]]] = None
+    achievements: Optional[List[Dict[str, Any]]] = None
+
+    @field_validator("github_url", "portfolio_url")
+    @classmethod
+    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        url_pattern = re.compile(
+            r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+        )
+        if not url_pattern.match(v):
+            raise ValueError("Invalid URL format")
+        return v
 
 
 class ClientProfileCreate(BaseModel):
@@ -86,13 +117,29 @@ class ClientProfileCreate(BaseModel):
     website: Optional[str] = None
 
 
-class DeveloperProfileUpdate(BaseModel):
+class DeveloperProfileUpdate(DeveloperProfileCreate):
     skills: Optional[str] = None
-    experience_years: Optional[int] = None
-    hourly_rate: Optional[int] = None
+    experience_years: Optional[int] = Field(None, ge=0)
+
+
+class DeveloperProfilePublic(BaseModel):
+    id: int
+    user_id: int
+    skills: str
+    experience_years: int
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     bio: Optional[str] = None
+    profile_image_url: Optional[str] = None
+    featured_projects: Optional[List[Dict[str, Any]]] = None
+    achievements: Optional[List[Dict[str, Any]]] = None
+    rating: Optional[float] = Field(None, ge=0, le=5)
+    total_projects: int = 0
+    success_rate: float = Field(0.0, ge=0, le=100)
+    created_at: datetime
+    social_links: Optional[List[Dict[str, str]]] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClientProfileUpdate(BaseModel):

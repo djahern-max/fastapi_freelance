@@ -1,8 +1,8 @@
-"""Initial migration
+"""initial migration with public profiles
 
-Revision ID: 825cc439506c
+Revision ID: 93153a399fa8
 Revises: 
-Create Date: 2024-11-24 11:13:41.991234
+Create Date: 2024-11-26 14:56:21.741331
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '825cc439506c'
+revision: str = '93153a399fa8'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -57,6 +57,14 @@ def upgrade() -> None:
     sa.Column('portfolio_url', sa.String(), nullable=True),
     sa.Column('bio', sa.Text(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('is_public', sa.Boolean(), nullable=True),
+    sa.Column('profile_image_url', sa.String(), nullable=True),
+    sa.Column('featured_projects', sa.JSON(), nullable=True),
+    sa.Column('social_links', sa.JSON(), nullable=True),
+    sa.Column('achievements', sa.JSON(), nullable=True),
+    sa.Column('rating', sa.Float(), nullable=True),
+    sa.Column('total_projects', sa.Integer(), nullable=True),
+    sa.Column('success_rate', sa.Float(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')
