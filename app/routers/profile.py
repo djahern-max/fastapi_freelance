@@ -89,7 +89,6 @@ def create_developer_profile(
             detail="Only developers can create developer profiles",
         )
 
-    # Check if a profile already exists
     existing_profile = (
         db.query(models.DeveloperProfile)
         .filter(models.DeveloperProfile.user_id == current_user.id)
@@ -100,7 +99,13 @@ def create_developer_profile(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists"
         )
 
-    profile = models.DeveloperProfile(user_id=current_user.id, **profile_data.dict())
+    # Initialize with default values for new fields
+    profile_data_dict = profile_data.model_dump()
+    profile_data_dict.update(
+        {"user_id": current_user.id, "rating": None, "total_projects": 0, "success_rate": 0.0}
+    )
+
+    profile = models.DeveloperProfile(**profile_data_dict)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -162,7 +167,8 @@ def update_developer_profile(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    for key, value in profile_update.model_dump(exclude_unset=True).items():
+    update_data = profile_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         setattr(profile, key, value)
 
     db.commit()

@@ -86,22 +86,19 @@ class DeveloperProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     skills = Column(String)
     experience_years = Column(Integer)
-    hourly_rate = Column(Integer, nullable=True)
-    github_url = Column(String, nullable=True)  # Ensure these are String type
-    portfolio_url = Column(String, nullable=True)
     bio = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
-    # New fields
+    # Profile visibility and display
     is_public = Column(Boolean, default=False)
     profile_image_url = Column(String, nullable=True)
-    featured_projects = Column(JSON, nullable=True)  # Store list of highlighted projects
-    social_links = Column(JSON, nullable=True)  # Store additional social media links
-    achievements = Column(JSON, nullable=True)  # Store list of achievements/certifications
+
+    # Success metrics
     rating = Column(Float, nullable=True)  # Average rating from clients
-    total_projects = Column(Integer, default=0)  # Number of completed projects
+    total_projects = Column(Integer, default=0)
     success_rate = Column(Float, default=0.0)  # Percentage of successful projects
 
+    # Relationship
     user = relationship("User", back_populates="developer_profile")
 
 

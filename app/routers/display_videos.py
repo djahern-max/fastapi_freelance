@@ -13,18 +13,18 @@ from dotenv import load_dotenv
 import uuid
 from sqlalchemy.sql import text
 
-load_dotenv() 
+load_dotenv()
 
 # Initialize the logger
 logger = logging.getLogger(__name__)
 
 # Load environment variables
-SPACES_NAME = os.getenv('SPACES_NAME')
-SPACES_REGION = os.getenv('SPACES_REGION')
+SPACES_NAME = os.getenv("SPACES_NAME")
+SPACES_REGION = os.getenv("SPACES_REGION")
 SPACES_ENDPOINT = f"https://{SPACES_REGION}.digitaloceanspaces.com"
-SPACES_BUCKET = os.getenv('SPACES_BUCKET')
-SPACES_KEY = os.getenv('SPACES_KEY')
-SPACES_SECRET = os.getenv('SPACES_SECRET')
+SPACES_BUCKET = os.getenv("SPACES_BUCKET")
+SPACES_KEY = os.getenv("SPACES_KEY")
+SPACES_SECRET = os.getenv("SPACES_SECRET")
 
 ##This updated Mo FO!!!!!!!!!
 
@@ -34,17 +34,17 @@ print(f"SPACES_BUCKET: {SPACES_BUCKET}")
 print(f"SPACES_KEY: {SPACES_KEY}")
 print(f"SPACES_SECRET: {SPACES_SECRET}")
 
-router = APIRouter(
-    prefix="/video_display",
-    tags=["Videos"]
-)
+router = APIRouter(prefix="/video_display", tags=["Videos"])
 
 # Initialize the boto3 client
-s3 = boto3.client('s3',
-                  region_name=SPACES_REGION,
-                  endpoint_url=SPACES_ENDPOINT,
-                  aws_access_key_id=SPACES_KEY,
-                  aws_secret_access_key=SPACES_SECRET)
+s3 = boto3.client(
+    "s3",
+    region_name=SPACES_REGION,
+    endpoint_url=SPACES_ENDPOINT,
+    aws_access_key_id=SPACES_KEY,
+    aws_secret_access_key=SPACES_SECRET,
+)
+
 
 def get_video_by_id(video_id: int, db: Session):
     video = db.query(models.Video).filter(models.Video.id == video_id).first()
@@ -52,41 +52,53 @@ def get_video_by_id(video_id: int, db: Session):
         raise HTTPException(status_code=404, detail="Video not found")
     return video
 
+
+# Remove the current_user dependency
 @router.get("/", response_model=schemas.VideoResponse)
-def display_videos(
-    db: Session = Depends(database.get_db), 
-    current_user: models.User = Depends(oauth2.get_current_user)
-):
+def display_videos(db: Session = Depends(database.get_db)):  # Remove current_user parameter
     try:
-        # Fetch videos for the logged-in user
-        user_videos = db.query(models.Video).filter(models.Video.user_id == current_user.id).all()
-        
-        # Fetch videos from other users
-        other_videos = db.query(models.Video).filter(models.Video.user_id != current_user.id).all()
+        # Just fetch all videos
+        all_videos = db.query(models.Video).all()
 
-        # Log the video data
-        logger.info(f"User videos: {[{v.id, v.title} for v in user_videos]}")
-        logger.info(f"Other videos: {[{v.id, v.title} for v in other_videos]}")
-
-        return schemas.VideoResponse(user_videos=user_videos, other_videos=other_videos)
-
+        return schemas.VideoResponse(
+            user_videos=[], other_videos=all_videos  # Return all videos as public
+        )
     except Exception as e:
         logger.error(f"Error retrieving videos: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
+# Add a new endpoint for authenticated users to get their videos
+@router.get("/my-videos", response_model=schemas.VideoResponse)
+def get_user_videos(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    try:
+        user_videos = db.query(models.Video).filter(models.Video.user_id == current_user.id).all()
+        other_videos = db.query(models.Video).filter(models.Video.user_id != current_user.id).all()
+        return schemas.VideoResponse(user_videos=user_videos, other_videos=other_videos)
+    except Exception as e:
+        logger.error(f"Error retrieving user videos: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/spaces", response_model=List[schemas.SpacesVideoInfo])
-async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_current_user), db: Session = Depends(database.get_db)):
+async def list_spaces_videos(
+    current_user: schemas.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(database.get_db),
+):
     try:
         # List all objects in the bucket
         response = s3.list_objects_v2(Bucket=SPACES_BUCKET)
-        
+
         videos = {}
         thumbnails = {}
         base_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com"
-        
-        if 'Contents' in response:
-            for item in response['Contents']:
-                filename = item['Key']
+
+        if "Contents" in response:
+            for item in response["Contents"]:
+                filename = item["Key"]
                 file_name, file_extension = os.path.splitext(filename)
 
                 # Extract the UUID from the filename
@@ -95,36 +107,40 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
                 except ValueError:
                     continue  # Skip this file if it's not a valid UUID
 
-                if file_extension.lower() in ['.mp4', '.avi', '.mov']:  # Video formats
+                if file_extension.lower() in [".mp4", ".avi", ".mov"]:  # Video formats
                     videos[file_name] = {
-                        'filename': filename,
-                        'size': item['Size'],
-                        'last_modified': item['LastModified'],
-                        'url': f"{base_url}/{filename}",
-                        'thumbnail_path': None,  # To be matched later
-                        'title': None,  # To be retrieved from DB
-                        'description': None  # To be retrieved from DB
+                        "filename": filename,
+                        "size": item["Size"],
+                        "last_modified": item["LastModified"],
+                        "url": f"{base_url}/{filename}",
+                        "thumbnail_path": None,  # To be matched later
+                        "title": None,  # To be retrieved from DB
+                        "description": None,  # To be retrieved from DB
                     }
-                elif file_extension.lower() in ['.webp', '.jpg', '.png']:  # Thumbnail formats
+                elif file_extension.lower() in [".webp", ".jpg", ".png"]:  # Thumbnail formats
                     thumbnails[file_name] = f"{base_url}/{filename}"
 
         # Match videos with their metadata from the database
         for video_uuid, video_info in videos.items():
             # Fetch metadata using the UUID from the video file name
-            query = text("SELECT title, description, thumbnail_path FROM videos WHERE file_path LIKE :pattern")
+            query = text(
+                "SELECT title, description, thumbnail_path FROM videos WHERE file_path LIKE :pattern"
+            )
             result = db.execute(query, {"pattern": f"%{video_uuid}%"}).fetchone()
 
             # Update video info with metadata if available
             if result:
-                video_info['title'] = result.title
-                video_info['description'] = result.description
+                video_info["title"] = result.title
+                video_info["description"] = result.description
                 # If the database contains a thumbnail path, use it; otherwise, we'll assign one later
                 if result.thumbnail_path:
-                    video_info['thumbnail_path'] = result.thumbnail_path
+                    video_info["thumbnail_path"] = result.thumbnail_path
 
             # Match the video with a thumbnail from Spaces if not already set
-            if not video_info['thumbnail_path']:
-                video_info['thumbnail_path'] = thumbnails.get(video_uuid, "URL_TO_DEFAULT_THUMBNAIL")
+            if not video_info["thumbnail_path"]:
+                video_info["thumbnail_path"] = thumbnails.get(
+                    video_uuid, "URL_TO_DEFAULT_THUMBNAIL"
+                )
 
         return list(videos.values())
 
@@ -134,13 +150,15 @@ async def list_spaces_videos(current_user: schemas.User = Depends(oauth2.get_cur
 
 
 @router.get("/stream/{video_id}")
-async def stream_video(request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)):
+async def stream_video(
+    request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)
+):
     logger.info(f"Attempting to stream video with ID: {video_id}")
     try:
         video = get_video_by_id(video_id, db)
         logger.info(f"Video found: {video.title}, File path: {video.file_path}")
 
-        is_spaces_video = video.file_path.startswith('https://')
+        is_spaces_video = video.file_path.startswith("https://")
 
         if is_spaces_video:
             # Streaming from Digital Ocean Spaces
@@ -149,11 +167,11 @@ async def stream_video(request: Request, video_id: int = Path(...), db: Session 
                     async with session.get(video.file_path) as response:
                         if response.status != 200:
                             raise HTTPException(status_code=404, detail="Video file not found")
-                        
+
                         headers = {
-                            'Content-Type': response.headers.get('Content-Type', 'video/mp4'),
-                            'Content-Length': response.headers.get('Content-Length', ''),
-                            'Accept-Ranges': 'bytes',
+                            "Content-Type": response.headers.get("Content-Type", "video/mp4"),
+                            "Content-Length": response.headers.get("Content-Length", ""),
+                            "Accept-Ranges": "bytes",
                         }
 
                         return StreamingResponse(
@@ -163,7 +181,9 @@ async def stream_video(request: Request, video_id: int = Path(...), db: Session 
                         )
             except aiohttp.ClientError as e:
                 logger.error(f"Error streaming from Spaces: {str(e)}")
-                raise HTTPException(status_code=500, detail="Error streaming video from cloud storage")
+                raise HTTPException(
+                    status_code=500, detail="Error streaming video from cloud storage"
+                )
         else:
             # Local file streaming (unchanged)
             if not os.path.exists(video.file_path):
@@ -172,27 +192,27 @@ async def stream_video(request: Request, video_id: int = Path(...), db: Session 
 
             file_size = os.path.getsize(video.file_path)
             logger.info(f"Video file size: {file_size} bytes")
-            
-            range_header = request.headers.get('Range')
+
+            range_header = request.headers.get("Range")
 
             start = 0
             end = file_size - 1
 
             if range_header:
-                range_data = range_header.replace('bytes=', '').split('-')
+                range_data = range_header.replace("bytes=", "").split("-")
                 start = int(range_data[0])
                 end = int(range_data[1]) if range_data[1] else file_size - 1
 
             chunk_size = 1024 * 1024  # 1MB chunks
             headers = {
-                'Content-Range': f'bytes {start}-{end}/{file_size}',
-                'Accept-Ranges': 'bytes',
-                'Content-Length': str(end - start + 1),
-                'Content-Type': 'video/mp4',
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(end - start + 1),
+                "Content-Type": "video/mp4",
             }
 
             async def stream_generator():
-                async with aiofiles.open(video.file_path, mode='rb') as video_file:
+                async with aiofiles.open(video.file_path, mode="rb") as video_file:
                     await video_file.seek(start)
                     remaining = end - start + 1
                     while remaining:

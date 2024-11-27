@@ -23,17 +23,10 @@ router = APIRouter(prefix="/requests", tags=["Requests"])
 
 @router.get("/public", response_model=List[schemas.RequestOut])
 def get_public_requests(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, le=100),
-    db: Session = Depends(get_db),
-    current_user: Optional[models.User] = Depends(get_optional_user),
+    skip: int = Query(0, ge=0), limit: int = Query(100, le=100), db: Session = Depends(get_db)
 ):
-    """Get all public requests optionally filtering for developer-specific results."""
+    """Get public requests - no authentication required"""
     try:
-        logger.info("Fetching public requests")
-        logger.info(f"Current user: {current_user.id if current_user else 'None'}")
-
-        # Get public requests
         requests = (
             db.query(models.Request)
             .filter(models.Request.is_public == True)
@@ -43,7 +36,6 @@ def get_public_requests(
             .all()
         )
 
-        # Get usernames for each request
         result = []
         for request in requests:
             owner = db.query(models.User).filter(models.User.id == request.user_id).first()
@@ -64,19 +56,9 @@ def get_public_requests(
             }
             result.append(request_dict)
 
-        logger.info(f"Found {len(result)} public requests")
         return result
-
-    except SQLAlchemyError as e:
-        logger.error(f"Database error in get_public_requests: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error occurred"
-        )
     except Exception as e:
-        logger.error(f"Unexpected error in get_public_requests: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/shared-with-me", response_model=List[schemas.SharedRequestOut])

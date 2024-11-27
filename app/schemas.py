@@ -88,26 +88,8 @@ class Achievement(BaseModel):
 class DeveloperProfileCreate(BaseModel):
     skills: str
     experience_years: int = Field(ge=0)
-    hourly_rate: Optional[int] = Field(None, ge=0)
-    github_url: Optional[str] = None
-    portfolio_url: Optional[str] = None
     bio: Optional[str] = None
     is_public: bool = False
-    profile_image_url: Optional[str] = None
-    social_links: Optional[List[Dict[str, str]]] = None
-    achievements: Optional[List[Dict[str, Any]]] = None
-
-    @field_validator("github_url", "portfolio_url")
-    @classmethod
-    def validate_url(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        url_pattern = re.compile(
-            r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
-        )
-        if not url_pattern.match(v):
-            raise ValueError("Invalid URL format")
-        return v
 
 
 class ClientProfileCreate(BaseModel):
@@ -117,9 +99,12 @@ class ClientProfileCreate(BaseModel):
     website: Optional[str] = None
 
 
-class DeveloperProfileUpdate(DeveloperProfileCreate):
+class DeveloperProfileUpdate(BaseModel):
     skills: Optional[str] = None
     experience_years: Optional[int] = Field(None, ge=0)
+    bio: Optional[str] = None
+    is_public: Optional[bool] = None
+    profile_image_url: Optional[str] = None
 
 
 class DeveloperProfilePublic(BaseModel):
@@ -127,17 +112,12 @@ class DeveloperProfilePublic(BaseModel):
     user_id: int
     skills: str
     experience_years: int
-    github_url: Optional[str] = None
-    portfolio_url: Optional[str] = None
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
-    featured_projects: Optional[List[Dict[str, Any]]] = None
-    achievements: Optional[List[Dict[str, Any]]] = None
     rating: Optional[float] = Field(None, ge=0, le=5)
-    total_projects: int = 0
-    success_rate: float = Field(0.0, ge=0, le=100)
+    total_projects: int
+    success_rate: float
     created_at: datetime
-    social_links: Optional[List[Dict[str, str]]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -154,10 +134,12 @@ class DeveloperProfileOut(BaseModel):
     user_id: int
     skills: str
     experience_years: int
-    hourly_rate: Optional[int]
-    github_url: Optional[str]
-    portfolio_url: Optional[str]
-    bio: Optional[str]
+    bio: Optional[str] = None
+    is_public: bool
+    profile_image_url: Optional[str] = None
+    rating: Optional[float] = None
+    total_projects: int
+    success_rate: float
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
