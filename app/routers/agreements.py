@@ -5,8 +5,11 @@ from app import database, models, schemas
 from app.database import get_db
 from app.oauth2 import get_current_user
 from datetime import datetime
+import logging
 
 router = APIRouter(prefix="/agreements", tags=["Agreements"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=schemas.Agreement)
@@ -58,15 +61,30 @@ def get_agreement_by_request(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    logger.info(f"Attempting to fetch agreement for request_id: {request_id}")
+
+    # First verify the request exists
+    request = db.query(models.Request).filter(models.Request.id == request_id).first()
+    if not request:
+        logger.error(f"Request {request_id} not found")
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    logger.info(f"Found request {request_id}. Checking for agreement...")
+
     agreement = db.query(models.Agreement).filter(models.Agreement.request_id == request_id).first()
 
     if not agreement:
-        raise HTTPException(status_code=404, detail="Agreement not found")
+        logger.info(f"No agreement found for request {request_id}")
+        raise HTTPException(status_code=404, detail="No agreement exists for this request yet")
+
+    logger.info(f"Found agreement {agreement.id}. Verifying permissions...")
 
     # Verify user has permission to view agreement
     if current_user.id not in [agreement.developer_id, agreement.client_id]:
+        logger.error(f"User {current_user.id} not authorized to view agreement {agreement.id}")
         raise HTTPException(status_code=403, detail="Not authorized to view this agreement")
 
+    logger.info(f"Authorization confirmed. Returning agreement {agreement.id}")
     return agreement
 
 

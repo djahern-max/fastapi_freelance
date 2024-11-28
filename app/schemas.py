@@ -254,13 +254,6 @@ class ProjectOut(ProjectBase):
 
 
 # ------------------ Agreement Schemas ------------------
-class NegotiationHistoryEntry(BaseModel):
-    action: str
-    user_id: int
-    timestamp: datetime
-    price: Optional[float] = None
-    terms: Optional[str] = None
-    changes: Optional[str] = None
 
 
 class AgreementBase(BaseModel):
@@ -282,13 +275,22 @@ class AgreementCreate(AgreementBase):
     pass
 
 
+class NegotiationHistoryEntry(BaseModel):
+    action: str  # 'proposal', 'acceptance', 'counter'
+    user_id: int
+    timestamp: datetime
+    price: float
+    terms: str
+    changes: Optional[str] = None
+
+
 class Agreement(AgreementBase):
     id: int
-    status: str
+    status: str  # 'proposed', 'accepted', 'countered'
     proposed_by: int
     proposed_at: datetime
     agreement_date: Optional[datetime]
-    negotiation_history: List[dict]
+    negotiation_history: List[NegotiationHistoryEntry]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

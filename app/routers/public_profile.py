@@ -53,29 +53,23 @@ def get_public_developer_profile(user_id: int, db: Session = Depends(database.ge
     return profile
 
 
-@router.patch("/developer/visibility", response_model=schemas.DeveloperProfilePublic)
-def update_profile_visibility(
-    make_public: bool = Body(..., embed=True),  # Changed this line
-    current_user: models.User = Depends(oauth2.get_current_user),
+@router.patch("/{id}", response_model=schemas.ConversationOut)
+def update_conversation_status(
+    id: int,
+    status: schemas.ConversationStatus,
     db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    """Update the public visibility of a developer profile"""
-    if current_user.user_type != models.UserType.developer:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only developers can update profile visibility",
-        )
+    conversation = db.query(models.Conversation).filter(models.Conversation.id == id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
-    profile = (
-        db.query(models.DeveloperProfile)
-        .filter(models.DeveloperProfile.user_id == current_user.id)
-        .first()
-    )
+    # Check if user is part of the conversation
+    if current_user.id not in [conversation.starter_user_id, conversation.recipient_user_id]:
+        raise HTTPException(status_code=403, detail="Not authorized to update this conversation")
 
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-
-    profile.is_public = make_public
+    conversation.status = status
     db.commit()
-    db.refresh(profile)
-    return profile
+    db.refresh(conversation)
+
+    return conversation
