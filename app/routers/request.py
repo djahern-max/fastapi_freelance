@@ -10,6 +10,8 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy.sql import func
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+from datetime import datetime
+from sqlalchemy import and_
 
 
 logging.basicConfig(level=logging.INFO)
@@ -217,10 +219,34 @@ def read_request(
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    if request.user_id != current_user.id and not request.is_public:
-        shares = crud_request.get_request_shares(db=db, request_id=request_id)
-        if not any(share.shared_with_user_id == current_user.id for share in shares):
-            raise HTTPException(status_code=403, detail="Not authorized to access this request")
+    # If user is owner or request is public, allow access
+    if request.user_id == current_user.id or request.is_public:
+        return request
+
+    # Check if request is shared with the user
+    is_shared = crud_request.is_request_shared_with_user(
+        db=db, request_id=request_id, user_id=current_user.id
+    )
+
+    if not is_shared:
+        raise HTTPException(status_code=403, detail="Not authorized to access this request")
+
+    # Mark the share as viewed if it hasn't been viewed yet
+    share = (
+        db.query(models.RequestShare)
+        .filter(
+            and_(
+                models.RequestShare.request_id == request_id,
+                models.RequestShare.shared_with_user_id == current_user.id,
+                models.RequestShare.viewed_at.is_(None),
+            )
+        )
+        .first()
+    )
+
+    if share:
+        share.viewed_at = datetime.utcnow()
+        db.commit()
 
     return request
 

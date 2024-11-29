@@ -295,3 +295,51 @@ def toggle_request_privacy(db: Session, request_id: int, user_id: int, is_public
     db.commit()
     db.refresh(request)
     return request
+
+
+# Add these at the bottom of your crud_request.py file
+
+
+def get_request_shares(db: Session, request_id: int):
+    """
+    Get all share information for a specific request, including user details.
+    Returns a list of users who have access to the request.
+    """
+    shares = (
+        db.query(models.RequestShare, models.User)
+        .join(models.User, models.RequestShare.shared_with_user_id == models.User.id)
+        .filter(models.RequestShare.request_id == request_id)
+        .all()
+    )
+
+    result = []
+    for share, user in shares:
+        result.append(
+            {
+                "share_id": share.id,
+                "user_id": user.id,
+                "username": user.username,
+                "can_edit": share.can_edit if hasattr(share, "can_edit") else False,
+                "viewed_at": share.viewed_at,
+                "created_at": share.created_at,
+            }
+        )
+
+    return result
+
+
+def is_request_shared_with_user(db: Session, request_id: int, user_id: int) -> bool:
+    """
+    Check if a request is shared with a specific user.
+    """
+    share = (
+        db.query(models.RequestShare)
+        .filter(
+            and_(
+                models.RequestShare.request_id == request_id,
+                models.RequestShare.shared_with_user_id == user_id,
+            )
+        )
+        .first()
+    )
+    return bool(share)
