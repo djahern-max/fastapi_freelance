@@ -514,3 +514,7 @@ class ConversationWithMessages(BaseModel):
 # Update forward references
 RequestOut.model_rebuild()
 RequestCommentResponse.model_rebuild()
+
+
+class ConversationUpdate(BaseModel):
+    status: str
