@@ -20,6 +20,22 @@ class ConversationStatus(str, Enum):
 
 
 # ------------------ User Schemas ------------------
+
+
+# ------------------ User Schemas ------------------
+class UserBase(BaseModel):
+    id: int
+    username: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserBasicInfo(UserBase):
+    full_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
@@ -37,11 +53,8 @@ class UserLogin(BaseModel):
     password: str
 
 
-class UserOut(BaseModel):
-    id: int
-    username: str
+class UserOut(UserBasicInfo):
     email: str
-    full_name: str
     is_active: bool
     user_type: UserType
     created_at: datetime
@@ -58,16 +71,9 @@ class User(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserBasic(BaseModel):
-    id: int
-    username: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserBase(BaseModel):
-    id: int
-    username: str
+# Used for simple user references in other schemas
+class UserBasic(UserBase):
+    pass
 
 
 # ------------------ Profile Schemas ------------------
@@ -110,6 +116,7 @@ class DeveloperProfileUpdate(BaseModel):
 class DeveloperProfilePublic(BaseModel):
     id: int
     user_id: int
+    user: UserBasic  # Add this line to include user information
     skills: str
     experience_years: int
     bio: Optional[str] = None

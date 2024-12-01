@@ -9,6 +9,7 @@ from ..database import get_db
 from ..models import User, DeveloperProfile
 import logging
 from ..oauth2 import get_current_user
+from sqlalchemy.orm import joinedload
 
 
 # Initialize logger
@@ -381,3 +382,22 @@ async def upload_profile_image(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await file.seek(0)
+
+
+@router.get("/developers/public", response_model=list[schemas.DeveloperProfilePublic])
+def get_public_developers(db: Session = Depends(database.get_db)):
+    """Get all public developer profiles with their user information"""
+    try:
+        developers = (
+            db.query(models.DeveloperProfile)
+            .join(models.User)  # Join with the User table
+            .filter(models.DeveloperProfile.is_public == True)
+            .options(joinedload(models.DeveloperProfile.user))  # Fixed joinedload syntax
+            .all()
+        )
+        return developers
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching public developers: {str(e)}",
+        )
