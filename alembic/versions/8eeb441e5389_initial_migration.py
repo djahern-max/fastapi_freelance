@@ -1,8 +1,8 @@
-"""Initial migration
+"""initial_migration
 
-Revision ID: 753c876446dd
+Revision ID: 8eeb441e5389
 Revises: 
-Create Date: 2024-11-27 20:48:38.442407
+Create Date: 2024-12-03 19:00:17.137094
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '753c876446dd'
+revision: str = '8eeb441e5389'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -64,6 +64,18 @@ def upgrade() -> None:
     sa.UniqueConstraint('user_id')
     )
     op.create_index(op.f('ix_developer_profiles_id'), 'developer_profiles', ['id'], unique=False)
+    op.create_table('feedbacks',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('rating', sa.Integer(), nullable=True),
+    sa.Column('comment', sa.String(), nullable=True),
+    sa.Column('location', sa.String(), nullable=True),
+    sa.Column('target_id', sa.String(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_feedbacks_id'), 'feedbacks', ['id'], unique=False)
     op.create_table('projects',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
@@ -222,6 +234,8 @@ def downgrade() -> None:
     op.drop_table('requests')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
+    op.drop_index(op.f('ix_feedbacks_id'), table_name='feedbacks')
+    op.drop_table('feedbacks')
     op.drop_index(op.f('ix_developer_profiles_id'), table_name='developer_profiles')
     op.drop_table('developer_profiles')
     op.drop_index(op.f('ix_client_profiles_id'), table_name='client_profiles')

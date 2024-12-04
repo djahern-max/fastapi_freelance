@@ -15,6 +15,7 @@ from app.routers import (
     agreements,
     public_profile,
     request as requests_router,
+    feedback,
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -63,6 +64,7 @@ routers_with_prefixes = [
     (profile.router, ""),
     (agreements.router, ""),
     (public_profile.router, ""),
+    (feedback.router, ""),
 ]
 
 # Include all routers

@@ -316,3 +316,15 @@ class Agreement(Base):
     developer = relationship("User", foreign_keys=[developer_id])
     client = relationship("User", foreign_keys=[client_id])
     proposer = relationship("User", foreign_keys=[proposed_by])
+
+
+class Feedback(Base):
+    __tablename__ = "feedbacks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    rating = Column(Integer)
+    comment = Column(String)
+    location = Column(String)  # Where in the app the feedback was given
+    target_id = Column(String, nullable=True)  # ID of the specific item being rated
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

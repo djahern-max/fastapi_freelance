@@ -525,3 +525,26 @@ RequestCommentResponse.model_rebuild()
 
 class ConversationUpdate(BaseModel):
     status: str
+
+
+# ------------------ Feedback Section ------------------
+
+
+class FeedbackCreate(BaseModel):
+    rating: int
+    comment: str
+    location: str
+    target_id: Optional[str] = None
+
+
+class FeedbackResponse(BaseModel):
+    id: int
+    user_id: int
+    rating: int
+    comment: str
+    location: str
+    target_id: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
