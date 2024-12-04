@@ -67,7 +67,7 @@ routers_with_prefixes = [
     (feedback.router, ""),
 ]
 
-# Include all routers
+# Include all routers in this code
 for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
 
