@@ -322,7 +322,8 @@ class Feedback(Base):
     __tablename__ = "feedbacks"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String, nullable=True)  # Optional name for anonymous users
+    email = Column(String, nullable=True)  # Optional email for anonymous users
     rating = Column(Integer)
     comment = Column(String)
     location = Column(String)  # Where in the app the feedback was given

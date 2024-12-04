@@ -8,12 +8,9 @@ router = APIRouter(prefix="/feedback", tags=["Feedback"])
 
 
 @router.post("/", response_model=schemas.FeedbackResponse)
-def create_feedback(
-    feedback: schemas.FeedbackCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
-):
-    new_feedback = models.Feedback(**feedback.dict(), user_id=current_user.id)
+def create_feedback(feedback: schemas.FeedbackCreate, db: Session = Depends(get_db)):
+    # Create feedback without user_id since we removed it from the model
+    new_feedback = models.Feedback(**feedback.dict())  # Remove user_id=None
     db.add(new_feedback)
     db.commit()
     db.refresh(new_feedback)

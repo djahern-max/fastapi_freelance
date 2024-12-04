@@ -530,21 +530,36 @@ class ConversationUpdate(BaseModel):
 # ------------------ Feedback Section ------------------
 
 
+# In schemas.py
 class FeedbackCreate(BaseModel):
     rating: int
     comment: str
     location: str
     target_id: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+    @field_validator("rating")
+    def rating_must_be_valid(cls, v):
+        if not 1 <= v <= 5:
+            raise ValueError("Rating must be between 1 and 5")
+        return v
+
+    @field_validator("email")
+    def validate_email(cls, v):
+        if v is not None and not re.match(r"[^@]+@[^@]+\.[^@]+", v):
+            raise ValueError("Invalid email format")
+        return v
 
 
 class FeedbackResponse(BaseModel):
     id: int
-    user_id: int
+    name: Optional[str]
+    email: Optional[str]
     rating: int
     comment: str
     location: str
     target_id: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
