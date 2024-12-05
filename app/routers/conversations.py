@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from .. import models, schemas, database, oauth2
 from sqlalchemy import or_
+from ..middleware import require_active_subscription
+
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
@@ -12,7 +14,7 @@ router = APIRouter(prefix="/conversations", tags=["Conversations"])
 def create_conversation(
     conversation: schemas.ConversationCreate,
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
+    current_user: models.User = Depends(require_active_subscription),
 ):
     # Get the request and its owner
     request = (

@@ -563,3 +563,25 @@ class FeedbackResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------ Subscription Section ------------------
+
+
+class SubscriptionBase(BaseModel):
+    stripe_subscription_id: str
+    stripe_customer_id: str
+    status: str
+    current_period_end: datetime
+
+
+class SubscriptionCreate(SubscriptionBase):
+    user_id: int
+
+
+class SubscriptionOut(SubscriptionBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)

@@ -76,6 +76,9 @@ class User(Base):
     client_profile = relationship(
         "ClientProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    subscription = relationship(
+        "Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 # ------------------ Profile Models ------------------
@@ -294,6 +297,8 @@ class ConversationMessage(Base):
 
 
 # ------------------ Agreement Model ------------------
+
+
 class Agreement(Base):
     __tablename__ = "agreements"
 
@@ -329,3 +334,26 @@ class Feedback(Base):
     location = Column(String)  # Where in the app the feedback was given
     target_id = Column(String, nullable=True)  # ID of the specific item being rated
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ------------------ Subscription Model ------------------
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    stripe_subscription_id = Column(String, unique=True, nullable=False)
+    stripe_customer_id = Column(String, unique=True, nullable=False)
+    status = Column(String, nullable=False)  # active, canceled, past_due
+    current_period_end = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="subscription")
+
+
+# Add to User model
+subscription = relationship("Subscription", back_populates="user", uselist=False)
+user = relationship("User", back_populates="subscription")
