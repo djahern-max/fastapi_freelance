@@ -80,6 +80,8 @@ class User(Base):
         "Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
 
+    stripe_customer_id = Column(String, nullable=True)
+
 
 # ------------------ Profile Models ------------------
 class DeveloperProfile(Base):

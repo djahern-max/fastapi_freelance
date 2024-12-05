@@ -1,27 +1,30 @@
 # middleware.py
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.oauth2 import get_current_user
-from app import models
 from datetime import datetime, timezone
+from . import database, oauth2, models
 
 
 async def require_active_subscription(
-    db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(database.get_db),
 ):
-    # Skip check for non-developers
     if current_user.user_type != models.UserType.developer:
         return current_user
 
     subscription = (
-        db.query(models.Subscription).filter(models.Subscription.user_id == current_user.id).first()
+        db.query(models.Subscription)
+        .filter(
+            models.Subscription.user_id == current_user.id, models.Subscription.status == "active"
+        )
+        .first()
     )
 
-    if not subscription or subscription.status != "active":
+    if not subscription:
         raise HTTPException(status_code=403, detail="Active subscription required")
 
-    if subscription.current_period_end < datetime.now(timezone.utc):
-        raise HTTPException(status_code=403, detail="Subscription has expired")
+    current_time = datetime.now(timezone.utc)
+    if subscription.current_period_end.replace(tzinfo=timezone.utc) < current_time:
+        raise HTTPException(status_code=403, detail="Subscription expired")
 
     return current_user
