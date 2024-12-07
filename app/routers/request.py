@@ -215,9 +215,14 @@ def read_request(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get a specific request."""
+    logger.info(f"Fetching request {request_id} for user {current_user.id}")
+
     request = crud_request.get_request_by_id(db=db, request_id=request_id)
     if not request:
+        logger.error(f"Request {request_id} not found")
         raise HTTPException(status_code=404, detail="Request not found")
+
+    logger.info(f"Request found. Owner: {request.user_id}, Current user: {current_user.id}")
 
     # If user is owner or request is public, allow access
     if request.user_id == current_user.id or request.is_public:
@@ -229,24 +234,8 @@ def read_request(
     )
 
     if not is_shared:
+        logger.error(f"User {current_user.id} not authorized to access request {request_id}")
         raise HTTPException(status_code=403, detail="Not authorized to access this request")
-
-    # Mark the share as viewed if it hasn't been viewed yet
-    share = (
-        db.query(models.RequestShare)
-        .filter(
-            and_(
-                models.RequestShare.request_id == request_id,
-                models.RequestShare.shared_with_user_id == current_user.id,
-                models.RequestShare.viewed_at.is_(None),
-            )
-        )
-        .first()
-    )
-
-    if share:
-        share.viewed_at = datetime.utcnow()
-        db.commit()
 
     return request
 

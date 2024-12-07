@@ -152,7 +152,19 @@ def get_public_requests(
 
 def get_request_by_id(db: Session, request_id: int):
     """Retrieve a specific request by its ID."""
-    return db.query(models.Request).filter(models.Request.id == request_id).first()
+    request = (
+        db.query(models.Request)
+        .join(models.User, models.Request.user_id == models.User.id)  # Join with User table
+        .filter(models.Request.id == request_id)
+        .first()
+    )
+
+    if request:
+        # Add the owner's username to the request object
+        owner = db.query(models.User).filter(models.User.id == request.user_id).first()
+        setattr(request, "owner_username", owner.username if owner else "Unknown")
+
+    return request
 
 
 def update_request(
