@@ -7,9 +7,16 @@ import re
 
 
 # ------------------ Enums ------------------
-class UserType(str, enum.Enum):
+class UserType(str, Enum):
     client = "client"
     developer = "developer"
+
+
+class RequestStatus(str, Enum):
+    open = "open"
+    in_progress = "in_progress"
+    completed = "completed"
+    cancelled = "cancelled"
 
 
 class ConversationStatus(str, Enum):
@@ -19,7 +26,22 @@ class ConversationStatus(str, Enum):
     completed = "completed"
 
 
-# ------------------ User Schemas ------------------
+class VideoType(str, Enum):
+    project_overview = "project_overview"
+    solution_demo = "solution_demo"
+    progress_update = "progress_update"
+
+
+class RequestPriority(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class RequestVisibility(str, Enum):
+    private = "private"
+    shared = "shared"
+    public = "public"
 
 
 # ------------------ User Schemas ------------------
@@ -240,6 +262,8 @@ class SpacesVideoInfo(BaseModel):
 
 # ------------------ Project Schemas ------------------
 class ProjectBase(BaseModel):
+    """Simplified project schema - just basic grouping info"""
+
     name: str
     description: Optional[str] = None
 
@@ -249,13 +273,22 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectUpdate(ProjectBase):
-    pass
+    is_active: Optional[bool] = None
 
 
 class ProjectOut(ProjectBase):
     id: int
     user_id: int
-    videos: List[VideoOut] = []  # Add this line
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    request_count: Optional[int] = None  # New field to show number of requests in project
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectWithRequests(ProjectOut):
+    requests: List["RequestOut"] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -312,9 +345,9 @@ class AgreementAccept(BaseModel):
 class RequestBase(BaseModel):
     title: str
     content: str
-    project_id: Optional[int] = None
-    is_public: bool = False
     estimated_budget: Optional[float] = None
+    is_public: bool = False
+    contains_sensitive_data: bool = False
 
 
 class RequestShareInfo(BaseModel):
@@ -344,11 +377,26 @@ class SimpleRequestOut(BaseModel):
 
 
 class RequestCreate(RequestBase):
-    pass
+    """Schema for creating a new request - project_id is optional"""
+
+    project_id: Optional[int] = None
 
 
-class RequestUpdate(RequestBase):
-    pass
+class RequestUpdate(BaseModel):
+    """Schema for updating a request - all fields optional"""
+
+    title: Optional[str] = None
+    content: Optional[str] = None
+    project_id: Optional[int] = None
+    estimated_budget: Optional[float] = None
+    is_public: Optional[bool] = None
+    contains_sensitive_data: Optional[bool] = None
+
+
+class RequestInProject(BaseModel):
+    """Schema for adding/removing a request to/from a project"""
+
+    project_id: Optional[int] = None
 
 
 class RequestShare(BaseModel):
@@ -401,17 +449,24 @@ class SharedRequestOut(BaseModel):
 class RequestOut(RequestBase):
     id: int
     user_id: int
-    status: str
+    status: RequestStatus
+    project_id: Optional[int] = None
+    added_to_project_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: Optional[datetime]
-    is_public: bool
-    contains_sensitive_data: bool
-    shared_with: Optional[List[SharedUserInfo]] = []
-    current_agreement: Optional["Agreement"] = None
-    current_proposal: Optional["Agreement"] = None
-    videos: List[VideoOut] = []  # Add this line
+    updated_at: Optional[datetime] = None
+    owner_username: str
+    shared_with_info: List[dict] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+    @field_validator("owner_username", mode="before")
+    @classmethod
+    def get_owner_username(cls, v, values):
+        if hasattr(v, "username"):
+            return v.username
+        return v
 
 
 class RequestShareWithUsername(BaseModel):
@@ -435,6 +490,59 @@ class PublicRequestOut(BaseModel):
     estimated_budget: Optional[int]
     created_at: datetime
     updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RequestProjectAction(BaseModel):
+    """Track project grouping actions"""
+
+    action: str  # "added_to_project" or "removed_from_project"
+    project_id: Optional[int]
+    timestamp: datetime
+
+
+# ------------------ Response Schemas for Request-Centric Operations ------------------
+class RequestActionResponse(BaseModel):
+    """Generic response for request actions"""
+
+    success: bool
+    message: str
+    request_id: int
+    action: str  # e.g., "added_to_project", "removed_from_project", "status_updated"
+
+
+class RequestWithDetails(RequestOut):
+    """Extended request information including related data"""
+
+    current_agreement: Optional["Agreement"] = None
+    current_proposal: Optional["Agreement"] = None
+    conversations: List["ConversationOut"] = []
+    comments: List["RequestCommentResponse"] = []  # Changed from CommentOut
+    project: Optional[ProjectBase] = None  # Basic project info if request is in a project
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------ Dashboard Schemas ------------------
+class DashboardStats(BaseModel):
+    """New schema for dashboard statistics"""
+
+    total_requests: int
+    open_requests: int
+    in_progress_requests: int
+    completed_requests: int
+    total_projects: int
+    active_projects: int
+
+
+class RequestDashboard(BaseModel):
+    """New schema for request-centric dashboard view"""
+
+    recent_requests: List[RequestOut]
+    active_conversations: List["ConversationOut"]
+    shared_with_me: List["SharedRequestOut"]
+    public_requests: List[RequestOut]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -521,6 +629,7 @@ class ConversationWithMessages(BaseModel):
 # Update forward references
 RequestOut.model_rebuild()
 RequestCommentResponse.model_rebuild()
+ProjectWithRequests.model_rebuild()
 
 
 class ConversationUpdate(BaseModel):

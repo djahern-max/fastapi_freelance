@@ -23,12 +23,20 @@ from .database import Base
 # ------------------ Mixin ------------------
 class TimestampMixin:
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
 
 
 # ------------------ Enums ------------------
 class UserType(str, enum.Enum):
     client = "client"
     developer = "developer"
+
+
+class RequestStatus(str, enum.Enum):
+    open = "open"
+    in_progress = "in_progress"
+    completed = "completed"
+    cancelled = "cancelled"
 
 
 class ConversationStatus(str, enum.Enum):
@@ -56,6 +64,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     user_type = Column(SQLAlchemyEnum(UserType), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    stripe_customer_id = Column(String, nullable=True)
 
     # Relationships
     videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")
@@ -79,8 +88,6 @@ class User(Base):
     subscription = relationship(
         "Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-
-    stripe_customer_id = Column(String, nullable=True)
 
 
 # ------------------ Profile Models ------------------
@@ -142,51 +149,59 @@ class Video(Base):
 
 
 # ------------------ Project Model ------------------
-class Project(Base):
+class Project(Base, TimestampMixin):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    description = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
+    # Project metadata
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
     user = relationship("User", back_populates="projects")
-    requests = relationship("Request", back_populates="project", cascade="all, delete-orphan")
+    requests = relationship("Request", back_populates="project")
     videos = relationship("Video", back_populates="project")
 
 
 # ------------------ Request and RequestShare Models ------------------
-class Request(Base):
+class Request(Base, TimestampMixin):
     __tablename__ = "requests"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    content = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(SQLAlchemyEnum(RequestStatus), default=RequestStatus.open, nullable=False)
+
+    # Optional project grouping
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    added_to_project_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Visibility and sharing
     is_public = Column(Boolean, default=False)
     contains_sensitive_data = Column(Boolean, default=False)
-    status = Column(String, default="open")
-    estimated_budget = Column(Float, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow)
 
-    # Add videos relationship
-    videos = relationship("Video", back_populates="request")
+    # Business details
+    estimated_budget = Column(Float, nullable=True)
+    agreed_amount = Column(Float, nullable=True)
 
     # Relationships
-    agreements = relationship("Agreement", back_populates="request", cascade="all, delete-orphan")
     user = relationship("User", back_populates="requests")
     project = relationship("Project", back_populates="requests")
     shared_with = relationship(
         "RequestShare", back_populates="request", cascade="all, delete-orphan"
     )
-    comments = relationship(
-        "RequestComment", back_populates="request", cascade="all, delete-orphan"
-    )
     conversations = relationship(
         "Conversation", back_populates="request", cascade="all, delete-orphan"
     )
+    comments = relationship(
+        "RequestComment", back_populates="request", cascade="all, delete-orphan"
+    )
+    agreements = relationship("Agreement", back_populates="request", cascade="all, delete-orphan")
+    videos = relationship("Video", back_populates="request")
 
     # Methods to handle agreement states
     def get_current_agreement(self):
@@ -205,13 +220,12 @@ class RequestShare(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     can_edit = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    viewed_at = Column(DateTime(timezone=True), nullable=True)  # New column
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    viewed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
+    # Relationships
     request = relationship("Request", back_populates="shared_with")
-    user = relationship(
-        "User", foreign_keys=[shared_with_user_id], back_populates="shared_requests"
-    )
+    user = relationship("User", foreign_keys=[shared_with_user_id])
 
     __table_args__ = (
         UniqueConstraint("request_id", "shared_with_user_id", name="unique_request_share"),
@@ -264,22 +278,18 @@ class Conversation(Base, TimestampMixin):
     request_id = Column(
         Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    starter_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    recipient_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    starter_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    recipient_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     status = Column(
         SQLAlchemyEnum(ConversationStatus), nullable=False, default=ConversationStatus.active
     )
-    agreed_amount = Column(Integer, nullable=True)
 
+    # Relationships
     request = relationship("Request", back_populates="conversations")
     starter = relationship("User", foreign_keys=[starter_user_id])
     recipient = relationship("User", foreign_keys=[recipient_user_id])
     messages = relationship(
-        "ConversationMessage", back_populates="conversation", cascade="all, delete"
+        "ConversationMessage", back_populates="conversation", cascade="all, delete-orphan"
     )
 
 
@@ -301,22 +311,21 @@ class ConversationMessage(Base):
 # ------------------ Agreement Model ------------------
 
 
-class Agreement(Base):
+class Agreement(Base, TimestampMixin):
     __tablename__ = "agreements"
 
     id = Column(Integer, primary_key=True, index=True)
     request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
-    price = Column(Float, nullable=False)
-    terms = Column(String, nullable=False)
     developer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     client_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    status = Column(String, nullable=False)
+    price = Column(Float, nullable=False)
+    terms = Column(Text, nullable=False)
+    status = Column(String, nullable=False)  # 'proposed', 'accepted', 'completed'
+
+    # Negotiation tracking
     proposed_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    proposed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    proposed_changes = Column(String, nullable=True)
-    agreement_date = Column(DateTime, nullable=True)
-    negotiation_history = Column(JSON, nullable=False, default=lambda: [])
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    proposed_changes = Column(Text, nullable=True)
+    negotiation_history = Column(JSON, nullable=False, default=list)
 
     # Relationships
     request = relationship("Request", back_populates="agreements")

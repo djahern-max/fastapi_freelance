@@ -368,3 +368,31 @@ def update_request_privacy(
     return crud_request.toggle_request_privacy(
         db=db, request_id=request_id, user_id=current_user.id, is_public=is_public
     )
+
+
+@router.post("/{request_id}/project", response_model=schemas.RequestOut)
+def add_to_project(
+    request_id: int,
+    project: schemas.RequestInProject,  # Expect project_id in request body
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Add a request to a project."""
+    return crud_request.add_request_to_project(
+        db=db,
+        request_id=request_id,
+        project_id=project.project_id,  # Access project_id from the body
+        user_id=current_user.id,
+    )
+
+
+@router.delete("/{request_id}/project", response_model=schemas.RequestOut)
+def remove_from_project(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Remove a request from its project."""
+    return crud_request.remove_request_from_project(
+        db=db, request_id=request_id, user_id=current_user.id
+    )

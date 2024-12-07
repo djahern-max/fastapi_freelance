@@ -1,10 +1,16 @@
 from sqlalchemy.orm import joinedload, Session
 from sqlalchemy import and_, or_
-from typing import Optional, List
+from typing import Optional
 from fastapi import HTTPException, status
 import re
 from app import models, schemas
-from app.schemas import RequestShareInfo
+from sqlalchemy.orm import joinedload, contains_eager
+from typing import Optional
+from app import models, schemas
+from sqlalchemy.orm import joinedload, contains_eager
+from sqlalchemy import and_
+from fastapi import HTTPException, status
+from datetime import datetime
 
 # ------------------ Utility Functions ------------------
 
@@ -44,17 +50,7 @@ def has_edit_permission(db: Session, request: models.Request, user_id: int) -> b
 
 
 def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
-    """Create a new request, ensuring only clients can create requests."""
     user = db.query(models.User).filter(models.User.id == user_id).first()
-    if user.user_type != models.UserType.client:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can create requests"
-        )
-
-    if request.is_public and check_sensitive_content(request.content):
-        raise HTTPException(
-            status_code=400, detail="Cannot create public request with sensitive data"
-        )
 
     db_request = models.Request(
         title=request.title,
@@ -62,19 +58,17 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
         project_id=request.project_id,
         user_id=user_id,
         is_public=request.is_public,
-        contains_sensitive_data=check_sensitive_content(request.content),
-        status="open",
+        contains_sensitive_data=request.contains_sensitive_data,
         estimated_budget=request.estimated_budget,
     )
+
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
+
+    # Add the owner_username to the response
+    setattr(db_request, "owner_username", user.username)
     return db_request
-
-
-from sqlalchemy.orm import joinedload, contains_eager
-from typing import Optional, List
-from app import models, schemas
 
 
 def get_requests_by_user(
@@ -343,3 +337,47 @@ def is_request_shared_with_user(db: Session, request_id: int, user_id: int) -> b
         .first()
     )
     return bool(share)
+
+
+def add_request_to_project(db: Session, request_id: int, project_id: int, user_id: int):
+    # Get the request and verify ownership
+    request = db.query(models.Request).filter(models.Request.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if request.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this request")
+
+    # Get the project and verify ownership
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to add to this project")
+
+    # Get the owner's username
+    owner = db.query(models.User).filter(models.User.id == request.user_id).first()
+
+    # Update the request
+    request.project_id = project_id
+    request.added_to_project_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(request)
+
+    # Add owner_username to the response
+    setattr(request, "owner_username", owner.username)
+
+    return request
+
+
+def remove_request_from_project(db: Session, request_id: int, user_id: int):
+    """Remove a request from its project."""
+    request = get_request_by_id(db, request_id)
+    if not request or request.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this request")
+
+    request.project_id = None
+    request.added_to_project_at = None
+    db.commit()
+    db.refresh(request)
+    return request
