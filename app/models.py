@@ -321,13 +321,14 @@ class Agreement(Base, TimestampMixin):
     price = Column(Float, nullable=False)
     terms = Column(Text, nullable=False)
     status = Column(String, nullable=False)  # 'proposed', 'accepted', 'completed'
-
-    # Negotiation tracking
     proposed_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     proposed_changes = Column(Text, nullable=True)
     negotiation_history = Column(JSON, nullable=False, default=list)
+    # Add these two fields
+    proposed_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    agreement_date = Column(TIMESTAMP(timezone=True), nullable=True)
 
-    # Relationships
+    # Relationships remain the same
     request = relationship("Request", back_populates="agreements")
     developer = relationship("User", foreign_keys=[developer_id])
     client = relationship("User", foreign_keys=[client_id])

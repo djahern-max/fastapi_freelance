@@ -326,10 +326,10 @@ class NegotiationHistoryEntry(BaseModel):
 
 class Agreement(AgreementBase):
     id: int
-    status: str  # 'proposed', 'accepted', 'countered'
+    status: str  # 'proposed', 'accepted', 'completed'
     proposed_by: int
     proposed_at: datetime
-    agreement_date: Optional[datetime]
+    agreement_date: Optional[datetime] = None
     negotiation_history: List[NegotiationHistoryEntry]
     created_at: datetime
 

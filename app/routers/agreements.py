@@ -18,6 +18,9 @@ def create_agreement(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    # Add logging to track the issue
+    logger.info(f"Creating agreement: {agreement}")
+
     # Verify the request exists
     request = db.query(models.Request).filter(models.Request.id == agreement.request_id).first()
     if not request:
@@ -32,25 +35,26 @@ def create_agreement(
         "terms": agreement.terms,
     }
 
-    # Create agreement
-    new_agreement = models.Agreement(
-        request_id=agreement.request_id,
-        price=agreement.price,
-        terms=agreement.terms,
-        developer_id=agreement.developer_id,
-        client_id=agreement.client_id,
-        status="proposed",
-        proposed_by=current_user.id,
-        proposed_at=datetime.utcnow(),
-        negotiation_history=[initial_history],
-    )
-
     try:
+        # Create agreement
+        new_agreement = models.Agreement(
+            request_id=agreement.request_id,
+            price=agreement.price,
+            terms=agreement.terms,
+            developer_id=agreement.developer_id,
+            client_id=agreement.client_id,
+            status="proposed",
+            proposed_by=current_user.id,
+            negotiation_history=[initial_history],
+        )
+
+        logger.info(f"Created agreement object: {new_agreement}")
         db.add(new_agreement)
         db.commit()
         db.refresh(new_agreement)
         return new_agreement
     except Exception as e:
+        logger.error(f"Error creating agreement: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
