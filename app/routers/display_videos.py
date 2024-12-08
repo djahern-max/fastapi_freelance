@@ -55,14 +55,16 @@ def get_video_by_id(video_id: int, db: Session):
 
 # Remove the current_user dependency
 @router.get("/", response_model=schemas.VideoResponse)
-def display_videos(db: Session = Depends(database.get_db)):  # Remove current_user parameter
+def display_videos(db: Session = Depends(database.get_db)):
     try:
-        # Just fetch all videos
+        logger.info("Fetching all videos")
         all_videos = db.query(models.Video).all()
+        logger.info(f"Found {len(all_videos)} videos")
 
-        return schemas.VideoResponse(
-            user_videos=[], other_videos=all_videos  # Return all videos as public
-        )
+        response = schemas.VideoResponse(user_videos=[], other_videos=all_videos)
+        logger.info(f"Returning response with {len(response.other_videos)} videos")
+        return response
+
     except Exception as e:
         logger.error(f"Error retrieving videos: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
