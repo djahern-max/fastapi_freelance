@@ -376,6 +376,25 @@ class SimpleRequestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class RequestOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    estimated_budget: Optional[float] = None
+    is_public: bool
+    contains_sensitive_data: bool
+    user_id: int
+    status: RequestStatus
+    project_id: Optional[int] = None
+    added_to_project_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    owner_username: str
+    shared_with_info: List[dict] = []
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
 class RequestCreate(RequestBase):
     """Schema for creating a new request - project_id is optional"""
 
