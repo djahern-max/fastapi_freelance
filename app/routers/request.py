@@ -277,10 +277,31 @@ def get_request_shares(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get all users that a request is shared with."""
-    request = crud_request.get_request_by_id(db=db, request_id=request_id)
-    if not request or request.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to view shares")
-    return crud_request.get_request_shares(db=db, request_id=request_id)
+    try:
+        # First verify the request exists and belongs to the current user
+        request = crud_request.get_request_by_id(db=db, request_id=request_id)
+        if not request or request.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view shares")
+
+        # Query the shared users
+        shared_users = (
+            db.query(models.User)
+            .join(models.RequestShare, models.RequestShare.shared_with_user_id == models.User.id)
+            .filter(models.RequestShare.request_id == request_id)
+            .all()
+        )
+
+        # Convert to UserBasic schema
+        return [schemas.UserBasic(id=user.id, username=user.username) for user in shared_users]
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_request_shares: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Internal server error while fetching shared users"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in get_request_shares: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{request_id}/share", response_model=schemas.RequestShareResponse)

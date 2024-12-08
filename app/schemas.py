@@ -58,6 +58,14 @@ class UserBasicInfo(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserBasic(BaseModel):
+    id: int
+    username: str
+
+    class Config:
+        from_orm = True
+
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
