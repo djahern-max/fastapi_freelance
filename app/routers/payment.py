@@ -25,27 +25,35 @@ async def create_subscription(
     db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     try:
-        print(f"Creating subscription for user: {current_user.id}")  # Debug print
+        # First, check if user already has an active subscription
+        existing_subscription = (
+            db.query(models.Subscription)
+            .filter(
+                models.Subscription.user_id == current_user.id,
+                models.Subscription.status == "active",
+            )
+            .first()
+        )
+
+        if existing_subscription:
+            raise HTTPException(status_code=400, detail="User already has an active subscription")
+
+        print(f"Creating subscription for user: {current_user.id}")
         session = stripe.checkout.Session.create(
             customer=current_user.stripe_customer_id,
             payment_method_types=["card"],
-            line_items=[
-                {
-                    "price": SUBSCRIPTION_PRICE_ID,
-                    "quantity": 1,
-                }
-            ],
+            line_items=[{"price": SUBSCRIPTION_PRICE_ID, "quantity": 1}],
             mode="subscription",
             success_url=f"{os.getenv('FRONTEND_URL')}/subscription/success",
             cancel_url=f"{os.getenv('FRONTEND_URL')}/subscription/cancel",
-            metadata={"user_id": current_user.id},
+            metadata={"user_id": str(current_user.id)},
             billing_address_collection="required",
             allow_promotion_codes=True,
         )
-        print(f"Checkout session created: {session.id}")  # Debug print
+        print(f"Checkout session created: {session.id}")
         return JSONResponse(content={"url": session.url})
     except stripe.error.StripeError as e:
-        print(f"Stripe error: {str(e)}")  # Debug print
+        print(f"Stripe error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -58,43 +66,54 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
         )
 
+        print(f"Received webhook event: {event['type']}")
+
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-            user_id = session["metadata"]["user_id"]
 
-            # Check for existing subscription
-            existing_subscription = (
-                db.query(models.Subscription)
-                .filter(
-                    models.Subscription.user_id == user_id, models.Subscription.status == "active"
-                )
-                .first()
-            )
+            # Retrieve the subscription details
+            subscription_id = session.get("subscription")
+            if subscription_id:
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                customer_id = session["customer"]
+                user_id = int(session["metadata"]["user_id"])
 
-            if existing_subscription:
-                # Update existing subscription
-                existing_subscription.stripe_subscription_id = session["subscription"]
-                existing_subscription.current_period_end = datetime.now(timezone.utc) + timedelta(
-                    days=30
-                )
-                existing_subscription.updated_at = datetime.now(timezone.utc)
-            else:
-                # Create new subscription
-                db_subscription = models.Subscription(
-                    user_id=user_id,
-                    stripe_subscription_id=session["subscription"],
-                    stripe_customer_id=session["customer"],
-                    status="active",
-                    current_period_end=datetime.now(timezone.utc) + timedelta(days=30),
-                )
-                db.add(db_subscription)
+                # Get current period end from subscription
+                current_period_end = datetime.fromtimestamp(
+                    subscription.current_period_end
+                ).replace(tzinfo=timezone("UTC"))
 
-            try:
-                db.commit()
-            except SQLAlchemyError as e:
-                db.rollback()
-                logger.error(f"Database error processing subscription: {str(e)}")
-                raise HTTPException(status_code=500, detail="Error processing subscription")
+                # Check for existing subscription
+                existing_subscription = (
+                    db.query(models.Subscription)
+                    .filter(models.Subscription.user_id == user_id)
+                    .first()
+                )
+
+                if existing_subscription:
+                    # Update existing subscription
+                    existing_subscription.stripe_subscription_id = subscription_id
+                    existing_subscription.status = "active"
+                    existing_subscription.current_period_end = current_period_end
+                    existing_subscription.updated_at = datetime.now(timezone("UTC"))
+                else:
+                    # Create new subscription
+                    db_subscription = models.Subscription(
+                        user_id=user_id,
+                        stripe_subscription_id=subscription_id,
+                        stripe_customer_id=customer_id,
+                        status="active",
+                        current_period_end=current_period_end,
+                    )
+                    db.add(db_subscription)
+
+                try:
+                    db.commit()
+                    print(f"Successfully processed subscription for user {user_id}")
+                except SQLAlchemyError as e:
+                    db.rollback()
+                    logger.error(f"Database error processing subscription: {str(e)}")
+                    raise HTTPException(status_code=500, detail="Error processing subscription")
 
         return {"status": "success"}
     except stripe.error.SignatureVerificationError as e:
@@ -109,11 +128,31 @@ async def get_subscription_status(
     db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     subscription = (
-        db.query(models.Subscription).filter(models.Subscription.user_id == current_user.id).first()
+        db.query(models.Subscription)
+        .filter(models.Subscription.user_id == current_user.id)
+        .order_by(models.Subscription.created_at.desc())
+        .first()
     )
-    print(f"Checking subscription status for user {current_user.id}: {subscription}")  # Debug print
+    print(f"Checking subscription status for user {current_user.id}: {subscription}")
 
     if not subscription:
         return {"status": "none"}
 
-    return {"status": subscription.status, "current_period_end": subscription.current_period_end}
+    # Make both datetimes timezone-aware for comparison
+    current_time = datetime.now(timezone("UTC"))
+    subscription_end = subscription.current_period_end
+
+    # Ensure subscription_end is timezone-aware
+    if subscription_end.tzinfo is None:
+        subscription_end = subscription_end.replace(tzinfo=timezone("UTC"))
+
+    if subscription_end < current_time:
+        subscription.status = "expired"
+        try:
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error updating subscription status: {str(e)}")
+        return {"status": "expired"}
+
+    return {"status": subscription.status, "current_period_end": subscription_end}

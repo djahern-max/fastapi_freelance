@@ -21,16 +21,50 @@ def create_project(db: Session, project: schemas.ProjectCreate, user_id: int):
     return db_project
 
 
-def get_projects_by_user(db: Session, user_id: int) -> List[models.Project]:
-    # Check user type
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if user.user_type != models.UserType.client:  # Changed from CLIENT to client
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can access projects"
-        )
+# In crud_project.py
 
+
+def get_projects_by_user(db: Session, user_id: int) -> List[models.Project]:
     try:
-        return db.query(models.Project).filter(models.Project.user_id == user_id).all()
+        # Get projects with related requests and their conversations
+        projects = db.query(models.Project).filter(models.Project.user_id == user_id).all()
+
+        for project in projects:
+            # Get all requests for this project
+            requests = (
+                db.query(models.Request).filter(models.Request.project_id == project.id).all()
+            )
+
+            # Get all conversations for the project's requests
+            conversation_counts = (
+                db.query(models.Conversation)
+                .filter(models.Conversation.request_id.in_([r.id for r in requests]))
+                .all()
+            )
+
+            # Add computed fields to project
+            project.request_stats = {
+                "total": len(requests),
+                "open": len([r for r in requests if r.status == "open"]),
+                "completed": len([r for r in requests if r.status == "completed"]),
+                "total_budget": sum(r.estimated_budget or 0 for r in requests),
+                "agreed_amount": sum(r.agreed_amount or 0 for r in requests),
+            }
+
+            project.conversation_stats = {
+                "total": len(conversation_counts),
+                "active": len([c for c in conversation_counts if c.status == "active"]),
+                "negotiating": len([c for c in conversation_counts if c.status == "negotiating"]),
+                "agreed": len([c for c in conversation_counts if c.status == "agreed"]),
+            }
+
+            # Get last activity timestamp
+            activity_dates = [project.updated_at or project.created_at]
+            activity_dates.extend(r.updated_at or r.created_at for r in requests)
+            activity_dates.extend(c.updated_at or c.created_at for c in conversation_counts)
+            project.last_activity = max(d for d in activity_dates if d is not None)
+
+        return projects
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

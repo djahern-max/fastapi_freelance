@@ -284,13 +284,30 @@ class ProjectUpdate(ProjectBase):
     is_active: Optional[bool] = None
 
 
+class ProjectStats(BaseModel):
+    total: int
+    open: int
+    completed: int
+    total_budget: float
+    agreed_amount: float
+
+
+class ConversationStats(BaseModel):
+    total: int
+    active: int
+    negotiating: int
+    agreed: int
+
+
 class ProjectOut(ProjectBase):
     id: int
     user_id: int
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    request_count: Optional[int] = None  # New field to show number of requests in project
+    request_stats: ProjectStats
+    conversation_stats: ConversationStats
+    last_activity: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
