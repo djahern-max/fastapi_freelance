@@ -7,6 +7,12 @@ import stripe
 from datetime import datetime, timedelta
 import os
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+from pytz import timezone
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -45,47 +51,56 @@ async def create_subscription(
 
 @router.post("/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    print("Webhook received")  # Debug print
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-    print(
-        f"Webhook signature: {sig_header[:10]}..."
-    )  # Debug print - showing first 10 chars for security
-
     try:
+        payload = await request.body()
+        sig_header = request.headers.get("stripe-signature")
         event = stripe.Webhook.construct_event(
             payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
         )
-        print(f"Event type received: {event['type']}")  # Debug print
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-            print(
-                f"Processing completed session. User ID: {session['metadata'].get('user_id')}"
-            )  # Debug print
+            user_id = session["metadata"]["user_id"]
 
-            # Verify the subscription data
-            print(f"Subscription ID: {session.get('subscription')}")
-            print(f"Customer ID: {session.get('customer')}")
-
-            db_subscription = models.Subscription(
-                user_id=session["metadata"]["user_id"],
-                stripe_subscription_id=session["subscription"],
-                stripe_customer_id=session["customer"],
-                status="active",
-                current_period_end=datetime.now() + timedelta(days=30),
+            # Check for existing subscription
+            existing_subscription = (
+                db.query(models.Subscription)
+                .filter(
+                    models.Subscription.user_id == user_id, models.Subscription.status == "active"
+                )
+                .first()
             )
-            print("Creating subscription record in database")  # Debug print
-            db.add(db_subscription)
-            db.commit()
-            print("Subscription successfully saved to database")  # Debug print
+
+            if existing_subscription:
+                # Update existing subscription
+                existing_subscription.stripe_subscription_id = session["subscription"]
+                existing_subscription.current_period_end = datetime.now(timezone.utc) + timedelta(
+                    days=30
+                )
+                existing_subscription.updated_at = datetime.now(timezone.utc)
+            else:
+                # Create new subscription
+                db_subscription = models.Subscription(
+                    user_id=user_id,
+                    stripe_subscription_id=session["subscription"],
+                    stripe_customer_id=session["customer"],
+                    status="active",
+                    current_period_end=datetime.now(timezone.utc) + timedelta(days=30),
+                )
+                db.add(db_subscription)
+
+            try:
+                db.commit()
+            except SQLAlchemyError as e:
+                db.rollback()
+                logger.error(f"Database error processing subscription: {str(e)}")
+                raise HTTPException(status_code=500, detail="Error processing subscription")
 
         return {"status": "success"}
     except stripe.error.SignatureVerificationError as e:
-        print(f"Signature verification error: {str(e)}")  # Debug print
         raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
-        print(f"Webhook error: {str(e)}")  # Debug print
+        logger.error(f"Webhook error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
