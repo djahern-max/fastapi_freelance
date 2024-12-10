@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from app import database, models, schemas
+from app import models, schemas
 from app.database import get_db
 from app.oauth2 import get_current_user
 from datetime import datetime
 import logging
+
+from fastapi import Query
 
 router = APIRouter(prefix="/agreements", tags=["Agreements"])
 
@@ -130,3 +132,32 @@ def accept_agreement(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/statuses", response_model=List[schemas.AgreementStatus])
+def get_agreement_statuses(
+    request_ids: str = Query(..., description="Comma-separated list of request IDs"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Retrieve agreement statuses for a list of request IDs.
+    """
+    # Convert comma-separated string to list of integers
+    request_id_list = [int(id) for id in request_ids.split(",")]
+
+    logger.info(f"Fetching agreement statuses for request_ids: {request_id_list}")
+
+    # Query agreements for the provided request IDs
+    agreements = (
+        db.query(models.Agreement).filter(models.Agreement.request_id.in_(request_id_list)).all()
+    )
+
+    logger.info(f"Found {len(agreements)} agreements")
+
+    # Map agreement statuses to request IDs
+    agreement_statuses = [
+        {"request_id": agreement.request_id, "status": agreement.status} for agreement in agreements
+    ]
+
+    return agreement_statuses

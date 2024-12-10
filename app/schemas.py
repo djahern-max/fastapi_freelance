@@ -366,6 +366,11 @@ class AgreementAccept(BaseModel):
     accepted_at: datetime
 
 
+class AgreementStatus(BaseModel):
+    request_id: int
+    status: str
+
+
 # ------------------ Request Schemas ------------------
 class RequestBase(BaseModel):
     title: str
