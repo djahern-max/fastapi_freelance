@@ -15,8 +15,42 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    # User type check is now handled in the crud function
-    return crud.crud_project.create_project(db=db, project=project, user_id=current_user.id)
+    try:
+        # Create the project first
+        db_project = crud.crud_project.create_project(
+            db=db, project=project, user_id=current_user.id
+        )
+
+        # Initialize the stats with default values
+        default_stats = {
+            "request_stats": {
+                "total": 0,
+                "open": 0,
+                "completed": 0,
+                "total_budget": 0.0,
+                "agreed_amount": 0.0,
+            },
+            "conversation_stats": {"total": 0, "active": 0, "negotiating": 0, "agreed": 0},
+        }
+
+        # Construct the response
+        response_data = {
+            "id": db_project.id,
+            "name": db_project.name,
+            "description": db_project.description,
+            "user_id": db_project.user_id,
+            "is_active": db_project.is_active,
+            "created_at": db_project.created_at,
+            "updated_at": db_project.updated_at,
+            "request_stats": default_stats["request_stats"],
+            "conversation_stats": default_stats["conversation_stats"],
+            "last_activity": db_project.created_at,
+        }
+
+        return response_data
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/", response_model=list[schemas.ProjectOut])

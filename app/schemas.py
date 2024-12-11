@@ -276,8 +276,9 @@ class ProjectBase(BaseModel):
     description: Optional[str] = None
 
 
-class ProjectCreate(ProjectBase):
-    pass
+class ProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
 
 
 class ProjectUpdate(ProjectBase):
