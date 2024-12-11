@@ -300,17 +300,17 @@ class ConversationStats(BaseModel):
     agreed: int
 
 
-class ProjectOut(ProjectBase):
+class ProjectOut(BaseModel):
     id: int
+    name: str
+    description: Optional[str]  # Make this optional if it can be null
     user_id: int
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    request_stats: ProjectStats
-    conversation_stats: ConversationStats
-    last_activity: datetime
+    updated_at: Optional[datetime]  # Make this optional if it's nullable in the DB
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True
 
 
 class ProjectWithRequests(ProjectOut):
