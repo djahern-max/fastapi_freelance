@@ -160,3 +160,17 @@ async def get_routes_description():
 
     # Join all routes' descriptions into a single plain text response
     return "\n".join(routes)
+
+
+@app.get("/routes-simple", response_class=PlainTextResponse)
+async def get_routes_simple():
+    """
+    Returns a concise list of all routes with their paths and methods.
+    """
+    routes = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            methods = ", ".join(route.methods)
+            routes.append(f"{methods}: {route.path}")
+
+    return "\n".join(routes)
