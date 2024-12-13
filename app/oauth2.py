@@ -12,7 +12,8 @@ from jose.exceptions import ExpiredSignatureError
 
 logger = logging.getLogger(__name__)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+# Define oauth2_scheme once, with auto_error=False for optional authentication
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
@@ -39,8 +40,7 @@ def verify_access_token(token: str, credentials_exception):
         raise credentials_exception
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), 
-                    db: Session = Depends(database.get_db)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -59,11 +59,17 @@ def get_current_user(token: str = Depends(oauth2_scheme),
     except Exception as e:
         raise credentials_exception
 
-def get_optional_user(token: str = Depends(oauth2_scheme),
-                     db: Session = Depends(database.get_db)):
+
+async def get_optional_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)
+):
     if not token:
         return None
+
     try:
-        return get_current_user(token, db)
-    except HTTPException:
+        # Use verify_access_token to maintain consistency with get_current_user
+        token_data = verify_access_token(token, HTTPException(status_code=401))
+        user = db.query(models.User).filter(models.User.id == token_data.id).first()
+        return user
+    except:
         return None
