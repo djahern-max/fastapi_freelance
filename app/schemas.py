@@ -248,6 +248,8 @@ class VideoOut(BaseModel):
     request_id: Optional[int]
     user_id: int
     video_type: VideoType
+    likes: int = 0
+    liked_by_user: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -742,5 +744,18 @@ class SubscriptionOut(SubscriptionBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Vote(BaseModel):
+    video_id: int
+    dir: int = Field(..., description="1 to like, 0 to unlike")
+
+    @field_validator("dir")
+    def validate_direction(cls, v):
+        if v not in [0, 1]:
+            raise ValueError("Direction must be 0 or 1")
+        return v
 
     model_config = ConfigDict(from_attributes=True)

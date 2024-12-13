@@ -12,6 +12,8 @@ from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 import uuid
 from sqlalchemy.sql import text
+from sqlalchemy import func, case
+from typing import Optional
 
 load_dotenv()
 
@@ -55,16 +57,46 @@ def get_video_by_id(video_id: int, db: Session):
 
 # Remove the current_user dependency
 @router.get("/", response_model=schemas.VideoResponse)
-def display_videos(db: Session = Depends(database.get_db)):
+def display_videos(
+    db: Session = Depends(database.get_db),
+    current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
+):
     try:
-        logger.info("Fetching all videos")
-        all_videos = db.query(models.Video).all()
-        logger.info(f"Found {len(all_videos)} videos")
+        query = db.query(models.Video)
 
-        response = schemas.VideoResponse(user_videos=[], other_videos=all_videos)
-        logger.info(f"Returning response with {len(response.other_videos)} videos")
-        return response
+        # Add vote count and user vote status
+        if current_user:
+            query = (
+                query.outerjoin(models.Vote, models.Vote.video_id == models.Video.id)
+                .add_columns(
+                    func.count(models.Vote.user_id).label("likes"),
+                    func.count(case([(models.Vote.user_id == current_user.id, 1)])).label(
+                        "liked_by_user"
+                    ),
+                )
+                .group_by(models.Video.id)
+            )
+        else:
+            query = (
+                query.outerjoin(models.Vote, models.Vote.video_id == models.Video.id)
+                .add_columns(func.count(models.Vote.user_id).label("likes"))
+                .group_by(models.Video.id)
+            )
 
+        videos = query.all()
+
+        # Process results
+        processed_videos = []
+        for video_result in videos:
+            video_dict = video_result[0].__dict__
+            video_dict["likes"] = video_result.likes
+            if current_user:
+                video_dict["liked_by_user"] = bool(video_result.liked_by_user)
+            processed_videos.append(video_dict)
+
+        return schemas.VideoResponse(
+            user_videos=[], other_videos=processed_videos  # Add user filtering if needed
+        )
     except Exception as e:
         logger.error(f"Error retrieving videos: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")

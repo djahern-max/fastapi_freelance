@@ -369,3 +369,18 @@ class Subscription(Base):
 # Add to User model
 subscription = relationship("Subscription", back_populates="user", uselist=False)
 user = relationship("User", back_populates="subscription")
+
+
+class Vote(Base):
+    __tablename__ = "votes"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User")
+    video = relationship("Video", back_populates="votes")
+
+    # Add to Video model:
+    votes = relationship("Vote", back_populates="video", cascade="all, delete")
