@@ -142,10 +142,14 @@ class Video(Base):
     request_id = Column(Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     video_type = Column(SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo)
+
     # Relationships
     user = relationship("User", back_populates="videos")
     project = relationship("Project", back_populates="videos")
     request = relationship("Request", back_populates="videos")
+    votes = relationship(
+        "Vote", back_populates="video", cascade="all, delete-orphan"
+    )  # Add this line
 
 
 # ------------------ Project Model ------------------
@@ -381,6 +385,3 @@ class Vote(Base):
     # Relationships
     user = relationship("User")
     video = relationship("Video", back_populates="votes")
-
-    # Add to Video model:
-    votes = relationship("Vote", back_populates="video", cascade="all, delete")

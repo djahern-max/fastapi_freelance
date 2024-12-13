@@ -55,51 +55,68 @@ def get_video_by_id(video_id: int, db: Session):
     return video
 
 
-# Remove the current_user dependency
 @router.get("/", response_model=schemas.VideoResponse)
 def display_videos(
     db: Session = Depends(database.get_db),
-    current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
+    current_user: Optional[models.User] = Depends(oauth2.get_optional_user),
 ):
     try:
-        query = db.query(models.Video)
+        logger.info("Starting video retrieval")
 
-        # Add vote count and user vote status
-        if current_user:
-            query = (
-                query.outerjoin(models.Vote, models.Vote.video_id == models.Video.id)
-                .add_columns(
-                    func.count(models.Vote.user_id).label("likes"),
-                    func.count(case([(models.Vote.user_id == current_user.id, 1)])).label(
-                        "liked_by_user"
-                    ),
-                )
-                .group_by(models.Video.id)
-            )
-        else:
-            query = (
-                query.outerjoin(models.Vote, models.Vote.video_id == models.Video.id)
-                .add_columns(func.count(models.Vote.user_id).label("likes"))
-                .group_by(models.Video.id)
-            )
+        # Get all videos
+        videos = db.query(models.Video).all()
+        logger.info(f"Found {len(videos)} videos")
 
-        videos = query.all()
-
-        # Process results
+        # Process videos
         processed_videos = []
-        for video_result in videos:
-            video_dict = video_result[0].__dict__
-            video_dict["likes"] = video_result.likes
-            if current_user:
-                video_dict["liked_by_user"] = bool(video_result.liked_by_user)
-            processed_videos.append(video_dict)
+        for video in videos:
+            try:
+                # Count likes
+                likes_count = db.query(models.Vote).filter(models.Vote.video_id == video.id).count()
+
+                # Check if current user liked the video
+                liked = False
+                if current_user:
+                    liked = (
+                        db.query(models.Vote)
+                        .filter(
+                            models.Vote.video_id == video.id, models.Vote.user_id == current_user.id
+                        )
+                        .first()
+                        is not None
+                    )
+
+                # Create VideoOut object
+                video_out = schemas.VideoOut(
+                    id=video.id,
+                    title=video.title,
+                    description=video.description,
+                    file_path=video.file_path,
+                    thumbnail_path=video.thumbnail_path,
+                    upload_date=video.upload_date,
+                    project_id=video.project_id,
+                    request_id=video.request_id,
+                    user_id=video.user_id,
+                    video_type=video.video_type,
+                    likes=likes_count,
+                    liked_by_user=liked,
+                )
+                processed_videos.append(video_out)
+
+            except Exception as video_error:
+                logger.error(f"Error processing video {video.id}: {str(video_error)}")
+                continue
+
+        logger.info(f"Successfully processed {len(processed_videos)} videos")
 
         return schemas.VideoResponse(
-            user_videos=[], other_videos=processed_videos  # Add user filtering if needed
+            user_videos=[], other_videos=processed_videos  # Or filter for user's videos if needed
         )
+
     except Exception as e:
-        logger.error(f"Error retrieving videos: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error in display_videos: {str(e)}")
+        logger.exception("Full traceback:")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Add a new endpoint for authenticated users to get their videos

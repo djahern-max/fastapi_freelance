@@ -207,15 +207,14 @@ class Token(BaseModel):
 # ------------------ Video Schemas ------------------
 
 
-# Add VideoType enum
 class VideoType(str, Enum):
     project_overview = "project_overview"
     solution_demo = "solution_demo"
     progress_update = "progress_update"
 
 
-# Update VideoCreate schema
-class VideoCreate(BaseModel):
+# Base schema with common fields
+class VideoBase(BaseModel):
     title: str
     description: Optional[str] = None
     file_path: str
@@ -223,38 +222,45 @@ class VideoCreate(BaseModel):
     project_id: Optional[int] = None
     request_id: Optional[int] = None
     video_type: VideoType = VideoType.solution_demo
-    user_id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# Update VideoResponse schema to use updated VideoCreate
-class VideoResponse(BaseModel):
-    user_videos: List[VideoCreate]
-    other_videos: List[VideoCreate]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# Add new VideoOut schema for complete video information
-class VideoOut(BaseModel):
-    id: int
-    title: str
-    description: Optional[str]
-    file_path: str
-    thumbnail_path: Optional[str]
-    upload_date: datetime
-    project_id: Optional[int]
-    request_id: Optional[int]
-    user_id: int
-    video_type: VideoType
     likes: int = 0
     liked_by_user: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# Update SpacesVideoInfo schema
+# Schema for creating videos
+class VideoCreate(VideoBase):
+    user_id: int
+
+
+# Schema for updating videos
+class VideoUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    project_id: Optional[int] = None
+    request_id: Optional[int] = None
+    video_type: Optional[VideoType] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Complete video information for responses
+class VideoOut(VideoBase):
+    id: int
+    user_id: int
+    upload_date: datetime
+
+
+# Schema for returning lists of videos
+class VideoResponse(BaseModel):
+    user_videos: List[VideoOut]
+    other_videos: List[VideoOut]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Schema for video with metadata from cloud storage
 class SpacesVideoInfo(BaseModel):
     filename: str
     size: int
@@ -264,6 +270,25 @@ class SpacesVideoInfo(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     video_type: VideoType = VideoType.solution_demo
+    project_id: Optional[int] = None
+    request_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Schema for video vote operations
+class VideoVote(BaseModel):
+    video_id: int
+    dir: int  # 1 for like, 0 for unlike
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Schema for video search/filter parameters
+class VideoFilter(BaseModel):
+    search: Optional[str] = None
+    video_type: Optional[VideoType] = None
+    user_id: Optional[int] = None
     project_id: Optional[int] = None
     request_id: Optional[int] = None
 
