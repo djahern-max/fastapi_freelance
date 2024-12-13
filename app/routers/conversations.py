@@ -219,3 +219,45 @@ def update_conversation(
     db.refresh(conversation)
 
     return conversation
+
+
+@router.post("/from-video/", response_model=schemas.ConversationOut)
+def create_conversation_from_video(
+    conversation_data: schemas.ConversationFromVideo,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    # Get the video and its owner
+    video = db.query(models.Video).filter(models.Video.id == conversation_data.video_id).first()
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Verify the current user is a client
+    if current_user.user_type != models.UserType.client:
+        raise HTTPException(status_code=403, detail="Only clients can initiate video conversations")
+
+    # Create a request for this video conversation
+    request = models.Request(
+        title=conversation_data.title,
+        content=conversation_data.content,
+        user_id=current_user.id,
+        is_public=True,
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+
+    # Create the conversation
+    new_conversation = models.Conversation(
+        request_id=request.id,
+        starter_user_id=current_user.id,
+        recipient_user_id=video.user_id,
+        status="active",
+    )
+
+    db.add(new_conversation)
+    db.commit()
+    db.refresh(new_conversation)
+
+    return new_conversation

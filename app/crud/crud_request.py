@@ -359,3 +359,28 @@ def remove_request_from_project(db: Session, request_id: int, user_id: int):
     db.commit()
     db.refresh(request)
     return request
+
+
+def is_request_shared_with_user(db: Session, request_id: int, user_id: int) -> bool:
+    """
+    Check if a request is shared with a specific user.
+
+    Args:
+        db (Session): Database session
+        request_id (int): ID of the request to check
+        user_id (int): ID of the user to check
+
+    Returns:
+        bool: True if the request is shared with the user, False otherwise
+    """
+    share = (
+        db.query(models.RequestShare)
+        .filter(
+            and_(
+                models.RequestShare.request_id == request_id,
+                models.RequestShare.shared_with_user_id == user_id,
+            )
+        )
+        .first()
+    )
+    return share is not None

@@ -713,6 +713,13 @@ class ConversationUpdate(BaseModel):
     status: str
 
 
+class ConversationFromVideo(BaseModel):
+    video_id: int
+    title: str
+    content: str
+    user_id: int
+
+
 # ------------------ Feedback Section ------------------
 
 
