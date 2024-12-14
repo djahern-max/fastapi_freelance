@@ -457,6 +457,10 @@ class RequestCreate(RequestBase):
     """Schema for creating a new request - project_id is optional"""
 
     project_id: Optional[int] = None
+    developer_id: Optional[int] = None  # Add this field
+    video_id: Optional[int] = None  # Add this field
+
+    project_id: Optional[int] = None
 
 
 class RequestUpdate(BaseModel):

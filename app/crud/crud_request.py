@@ -67,6 +67,21 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
     db.commit()
     db.refresh(db_request)
 
+    # If developer_id is provided, automatically create a share
+    if hasattr(request, "developer_id") and request.developer_id:
+        db_share = models.RequestShare(
+            request_id=db_request.id, shared_with_user_id=request.developer_id, can_edit=False
+        )
+        db.add(db_share)
+        db.commit()
+
+    # Add the video relationship if video_id is provided
+    if hasattr(request, "video_id") and request.video_id:
+        video = db.query(models.Video).filter(models.Video.id == request.video_id).first()
+        if video:
+            video.request_id = db_request.id
+            db.commit()
+
     # Add the owner_username to the response
     setattr(db_request, "owner_username", user.username)
     return db_request
