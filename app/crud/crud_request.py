@@ -1,7 +1,7 @@
 from sqlalchemy.orm import joinedload, Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from typing import Optional
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 import re
 from app import models, schemas
 from sqlalchemy.orm import joinedload, contains_eager
@@ -9,9 +9,16 @@ from typing import Optional
 from app import models, schemas
 from sqlalchemy.orm import joinedload, contains_eager
 from sqlalchemy import and_
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from datetime import datetime
 from typing import List, Optional
+from app.models import Request
+from app.schemas import RequestUpdate
+from sqlalchemy.orm import joinedload, contains_eager
+from sqlalchemy import and_
+from fastapi import HTTPException
+from datetime import datetime
+from app.models import Request, User
 
 # ------------------ Utility Functions ------------------
 
@@ -183,46 +190,66 @@ def get_request_by_id(db: Session, request_id: int):
     return request
 
 
-def update_request(
-    db: Session, request_id: int, request_update: schemas.RequestUpdate, user_id: int
-):
-    """Update an existing request, ensuring edit permissions and checking for sensitive content."""
-    db_request = db.query(models.Request).filter(models.Request.id == request_id).first()
-    if not db_request:
+def update_request(db: Session, request_id: int, request_update: RequestUpdate, user_id: int):
+    """Update a request with partial data."""
+    print(f"Starting update for request {request_id}")
+
+    # Get the existing request
+    request = db.query(Request).filter(Request.id == request_id, Request.user_id == user_id).first()
+
+    if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    if not has_edit_permission(db, db_request, user_id):
-        raise HTTPException(status_code=403, detail="Not authorized to edit this request")
+    # Get the owner info
+    owner = db.query(User).filter(User.id == request.user_id).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Request owner not found")
 
-    contains_sensitive = check_sensitive_content(request_update.content)
-    if request_update.is_public and contains_sensitive:
-        raise HTTPException(
-            status_code=400, detail="Cannot make request public as it contains sensitive data"
-        )
+    # Convert update data to dict, excluding None values
+    update_data = request_update.model_dump(exclude_unset=True, exclude_none=True)
+    print(f"Update data received: {update_data}")
 
-    for key, value in request_update.dict(exclude_unset=True).items():
-        setattr(db_request, key, value)
+    # Handle status update specifically
+    if "status" in update_data:
+        print(f"Updating status from {request.status} to {update_data['status']}")
+        request.status = update_data["status"]
 
-    db_request.contains_sensitive_data = contains_sensitive
-    db.commit()
-    db.refresh(db_request)
-    return db_request
+    # Handle other fields
+    for field, value in update_data.items():
+        if field != "status":  # Skip status as we handled it above
+            if field == "content" and value is not None:
+                request.contains_sensitive_data = check_sensitive_content(value)
+            setattr(request, field, value)
 
+    try:
+        db.commit()
+        print("Database commit successful")
+        db.refresh(request)
 
-def delete_request(db: Session, request_id: int, user_id: int):
-    """Delete a request, ensuring only the owner can delete it."""
-    db_request = db.query(models.Request).filter(models.Request.id == request_id).first()
-    if not db_request:
-        raise HTTPException(status_code=404, detail="Request not found")
+        # Create response with required fields
+        response_dict = {
+            "id": request.id,
+            "title": request.title,
+            "content": request.content,
+            "user_id": request.user_id,
+            "status": request.status,
+            "project_id": request.project_id,
+            "is_public": request.is_public,
+            "contains_sensitive_data": request.contains_sensitive_data,
+            "estimated_budget": request.estimated_budget,
+            "created_at": request.created_at,
+            "updated_at": request.updated_at,
+            "owner_username": owner.username,
+            "shared_with_info": [],
+        }
 
-    if db_request.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this request")
+        print(f"Final response: {response_dict}")
+        return response_dict
 
-    db.query(models.RequestShare).filter(models.RequestShare.request_id == request_id).delete()
-    db.delete(db_request)
-    db.commit()
-
-    return {"message": "Request deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error during update: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ------------------ Sharing Functionality ------------------

@@ -464,14 +464,18 @@ class RequestCreate(RequestBase):
 
 
 class RequestUpdate(BaseModel):
-    """Schema for updating a request - all fields optional"""
-
     title: Optional[str] = None
     content: Optional[str] = None
     project_id: Optional[int] = None
     estimated_budget: Optional[float] = None
     is_public: Optional[bool] = None
     contains_sensitive_data: Optional[bool] = None
+    status: Optional[RequestStatus] = None
+
+    model_config = {
+        "from_attributes": True,
+        "use_enum_values": True,  # This ensures enum values are used directly
+    }
 
 
 class RequestInProject(BaseModel):

@@ -247,12 +247,15 @@ def update_request(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Update a request, ensuring only clients have update permissions."""
+    """Update a request."""
+    print(f"Updating request {request_id} with data: {request}")  # Add this
     if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can update requests")
-    return crud_request.update_request(
+    result = crud_request.update_request(
         db=db, request_id=request_id, request_update=request, user_id=current_user.id
     )
+    print(f"Update result: {result}")  # Add this
+    return result
 
 
 @router.delete("/{request_id}", status_code=status.HTTP_200_OK)
