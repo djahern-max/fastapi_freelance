@@ -72,10 +72,17 @@ class UserCreate(BaseModel):
     full_name: str
     password: str
     user_type: UserType
+    terms_accepted: bool = Field(..., description="Must accept terms of agreement")
 
     @field_validator("user_type", mode="before")
     def user_type_to_lower(cls, v):
         return v.lower() if isinstance(v, str) else v
+
+    @field_validator("terms_accepted")
+    def terms_must_be_accepted(cls, v):
+        if not v:
+            raise ValueError("You must accept the terms of agreement to register.")
+        return v
 
 
 class UserLogin(BaseModel):

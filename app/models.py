@@ -63,6 +63,7 @@ class User(Base):
     password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     user_type = Column(SQLAlchemyEnum(UserType), nullable=False)
+    terms_accepted = Column(Boolean, nullable=False, default=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     stripe_customer_id = Column(String, nullable=True)
 
