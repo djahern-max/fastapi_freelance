@@ -10,6 +10,7 @@ from ..models import User, DeveloperProfile
 import logging
 from ..oauth2 import get_current_user
 from sqlalchemy.orm import joinedload
+from fastapi.responses import JSONResponse
 
 
 # Initialize logger
@@ -84,9 +85,9 @@ def get_developer_profile(
 ):
     """Get developer profile"""
     if current_user.user_type != models.UserType.developer:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only developers can access developer profiles",
+            content={"message": "Only developers can access developer profiles."},
         )
 
     profile = (
@@ -96,7 +97,13 @@ def get_developer_profile(
     )
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "message": "Developer profile not found. Please create a profile to get started.",
+                "profile": None,
+            },
+        )
 
     return profile
 
@@ -108,9 +115,9 @@ def get_client_profile(
 ):
     """Get client profile"""
     if current_user.user_type != models.UserType.client:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only clients can access client profiles",
+            content={"message": "Only clients can access client profiles."},
         )
 
     profile = (
@@ -120,7 +127,13 @@ def get_client_profile(
     )
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "message": "Client profile not found. Please create a profile to get started.",
+                "profile": None,
+            },
+        )
 
     return profile
 
