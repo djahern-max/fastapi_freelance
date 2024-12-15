@@ -296,6 +296,9 @@ class Conversation(Base, TimestampMixin):
     messages = relationship(
         "ConversationMessage", back_populates="conversation", cascade="all, delete-orphan"
     )
+    content_links = relationship(
+        "ConversationContentLink", back_populates="conversation", cascade="all, delete-orphan"
+    )
 
 
 class ConversationMessage(Base):
@@ -311,6 +314,32 @@ class ConversationMessage(Base):
 
     conversation = relationship("Conversation", back_populates="messages")
     user = relationship("User")
+    content_links = relationship(
+        "ConversationContentLink", back_populates="message", cascade="all, delete-orphan"
+    )
+
+
+class ConversationContentLink(Base):
+    __tablename__ = "conversation_content_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    message_id = Column(
+        Integer, ForeignKey("conversation_messages.id", ondelete="CASCADE"), nullable=False
+    )
+    content_type = Column(String, nullable=False)  # 'video' or 'profile'
+    content_id = Column(Integer, nullable=False)  # video_id or user_id
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="content_links")
+    message = relationship("ConversationMessage", back_populates="content_links")
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "content_type", "content_id", name="unique_content_link"),
+    )
 
 
 # ------------------ Agreement Model ------------------

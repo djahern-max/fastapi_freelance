@@ -10,6 +10,9 @@ from ..middleware import require_active_subscription
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 
+# In routers/conversations.py
+
+
 @router.post("/", response_model=schemas.ConversationOut)
 def create_conversation(
     conversation: schemas.ConversationCreate,
@@ -27,14 +30,14 @@ def create_conversation(
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    # Verify user roles - Changed to lowercase
-    if current_user.user_type == models.UserType.client:  # Changed from CLIENT
+    # Verify user roles
+    if current_user.user_type == models.UserType.client:
         if request.user_id == current_user.id:
             raise HTTPException(status_code=400, detail="You cannot respond to your own request")
         raise HTTPException(status_code=403, detail="Only developers can initiate conversations")
 
-    if current_user.user_type == models.UserType.developer:  # Changed from DEVELOPER
-        if request.user.user_type != models.UserType.client:  # Changed from CLIENT
+    if current_user.user_type == models.UserType.developer:
+        if request.user.user_type != models.UserType.client:
             raise HTTPException(status_code=400, detail="Can only respond to client requests")
 
     # Check if conversation already exists
@@ -62,6 +65,51 @@ def create_conversation(
     db.add(new_conversation)
     db.commit()
     db.refresh(new_conversation)
+
+    # If there's an initial message, create it
+    if conversation.initial_message:
+        initial_message = models.ConversationMessage(
+            conversation_id=new_conversation.id,
+            user_id=current_user.id,
+            content=conversation.initial_message,
+        )
+        db.add(initial_message)
+
+        # Create video links if any
+        if conversation.video_ids:
+            # Verify all videos belong to the user
+            videos = (
+                db.query(models.Video)
+                .filter(
+                    models.Video.id.in_(conversation.video_ids),
+                    models.Video.user_id == current_user.id,
+                )
+                .all()
+            )
+
+            if len(videos) != len(conversation.video_ids):
+                raise HTTPException(
+                    status_code=400, detail="One or more videos not found or not owned by user"
+                )
+
+            for video_id in conversation.video_ids:
+                video_link = models.ConversationVideoLink(
+                    conversation_id=new_conversation.id,
+                    message_id=initial_message.id,
+                    video_id=video_id,
+                )
+                db.add(video_link)
+
+        # Add profile link if requested
+        if conversation.include_profile:
+            profile_link = models.ConversationProfileLink(
+                conversation_id=new_conversation.id,
+                message_id=initial_message.id,
+                user_id=current_user.id,
+            )
+            db.add(profile_link)
+
+        db.commit()
 
     return new_conversation
 

@@ -671,6 +671,9 @@ class RequestCommentResponse(RequestCommentBase):
 # ------------------ Conversation Schemas ------------------
 class ConversationCreate(BaseModel):
     request_id: int
+    initial_message: Optional[str] = None
+    video_ids: Optional[List[int]] = []
+    include_profile: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -688,6 +691,18 @@ class ConversationOut(BaseModel):
 
 class ConversationMessageCreate(BaseModel):
     content: str
+    video_ids: Optional[List[int]] = []
+    include_profile: Optional[bool] = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationContentLink(BaseModel):
+    id: int
+    type: str  # 'video' or 'profile'
+    content_id: int
+    title: Optional[str] = None  # For videos
+    url: Optional[str] = None  # For profile/video URLs
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -698,6 +713,23 @@ class ConversationMessageOut(BaseModel):
     user_id: int
     content: str
     created_at: datetime
+    linked_content: List[ConversationContentLink] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationWithMessages(BaseModel):
+    id: int
+    request_id: int
+    starter_user_id: int
+    recipient_user_id: int
+    starter_username: str
+    recipient_username: str
+    status: ConversationStatus
+    agreed_amount: Optional[int] = None
+    created_at: datetime
+    messages: List[ConversationMessageOut]
+    request_title: str
 
     model_config = ConfigDict(from_attributes=True)
 
