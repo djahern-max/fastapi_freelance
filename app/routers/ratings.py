@@ -21,15 +21,9 @@ async def rate_developer(
     developer_id: int,
     rating_data: DeveloperRatingCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
-    # Verify the current user is a client
-    client = db.query(ClientProfile).filter(ClientProfile.user_id == current_user.id).first()
-    if not client:
-        raise HTTPException(status_code=403, detail="Only clients can rate developers")
-
-    # Create or update rating
-    rating = rating_crud.create_or_update_rating(db, developer_id, client.id, rating_data)
+    # Create or update rating without user authentication check
+    rating = rating_crud.create_or_update_rating(db, developer_id, None, rating_data)
 
     # Get updated stats
     stats = rating_crud.get_developer_rating_stats(db, developer_id)

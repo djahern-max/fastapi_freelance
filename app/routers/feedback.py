@@ -18,12 +18,7 @@ def create_feedback(feedback: schemas.FeedbackCreate, db: Session = Depends(get_
 
 
 @router.get("/", response_model=List[schemas.FeedbackResponse])
-def get_feedback(
-    db: Session = Depends(get_db), current_user: models.User = Depends(oauth2.get_current_user)
-):
-    # Only allow admin users to view all feedback
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized to view feedback")
-
+def get_feedback(db: Session = Depends(get_db)):
+    # Removed the 'current_user' dependency and admin check
     feedback = db.query(models.Feedback).all()
     return feedback

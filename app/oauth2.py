@@ -9,6 +9,9 @@ from . import schemas, database, models
 from .config import settings
 from typing import Optional
 from jose.exceptions import ExpiredSignatureError
+from sqlalchemy.exc import SQLAlchemyError
+from jose import jwt, JWTError
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,25 +54,48 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
 
     try:
+        # Decode the token to get user data
         token_data = verify_access_token(token, credentials_exception)
+
+        # Use token_data.id instead of token_data.sub
         user = db.query(models.User).filter(models.User.id == token_data.id).first()
+
         if user is None:
             raise credentials_exception
+
+        # Debugging to confirm the user object and its fields
+        print(user.__dict__)  # Ensure 'user_type' is present
+
         return user
-    except Exception as e:
+    except SQLAlchemyError as db_error:
+        print(f"Database error: {db_error}")
+        raise HTTPException(status_code=500, detail="A database error occurred.")
+    except JWTError:
         raise credentials_exception
 
 
-async def get_optional_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)
+def get_optional_user(
+    token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(database.get_db)
 ):
     if not token:
-        return None
+        return None  # No token provided, return None
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
     try:
-        # Use verify_access_token to maintain consistency with get_current_user
-        token_data = verify_access_token(token, HTTPException(status_code=401))
-        user = db.query(models.User).filter(models.User.id == token_data.id).first()
+        # Use the local verify_access_token function
+        token_data = verify_access_token(token, credentials_exception)
+        user_id: int = token_data.id  # Use token_data.id instead of payload.get("sub")
+
+        if not user_id:
+            return None
+
+        user = db.query(models.User).filter(models.User.id == user_id).first()
         return user
-    except:
-        return None
+
+    except JWTError:
+        return None  # Invalid token, return None
