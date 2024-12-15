@@ -18,6 +18,7 @@ from app.routers import (
     feedback,
     payment,
     vote,
+    ratings,
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -85,6 +86,7 @@ routers_with_prefixes = [
     (feedback.router, ""),
     (payment.router, ""),
     (vote.router, ""),
+    (ratings.router, ""),
 ]
 
 # Include all routers in this code

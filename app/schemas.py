@@ -113,6 +113,49 @@ class UserBasic(UserBase):
     pass
 
 
+# ------------------ Developer Rating ------------------
+
+
+# Add these schemas for handling developer ratings
+class DeveloperRatingBase(BaseModel):
+    stars: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = None
+
+
+class DeveloperRatingCreate(BaseModel):
+    stars: int
+    comment: Optional[str] = None
+
+
+class DeveloperRatingUpdate(BaseModel):
+    stars: Optional[int] = Field(None, ge=1, le=5)
+    comment: Optional[str] = None
+
+
+class DeveloperRatingOut(BaseModel):
+    id: int
+    developer_id: int
+    client_id: int
+    stars: int
+    comment: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DeveloperRatingStats(BaseModel):
+    average_rating: float
+    total_ratings: int
+    rating_distribution: Dict[int, int]
+
+
+class RatingResponse(BaseModel):
+    success: bool
+    average_rating: float
+    total_ratings: int
+    message: str
+
+
 # ------------------ Profile Schemas ------------------
 # First define the nested models
 class SocialLink(BaseModel):
@@ -187,6 +230,8 @@ class DeveloperProfileOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+    ratings: Optional[List[DeveloperRatingOut]] = None
+    average_rating: Optional[float] = Field(None, ge=0, le=5)
 
 
 class ClientProfileOut(BaseModel):
@@ -212,12 +257,6 @@ class Token(BaseModel):
 
 
 # ------------------ Video Schemas ------------------
-
-
-class VideoType(str, Enum):
-    project_overview = "project_overview"
-    solution_demo = "solution_demo"
-    progress_update = "progress_update"
 
 
 # Base schema with common fields
@@ -459,6 +498,13 @@ class RequestOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
+    @field_validator("owner_username", mode="before")
+    @classmethod
+    def get_owner_username(cls, v, values):
+        if hasattr(v, "username"):
+            return v.username
+        return v
+
 
 class RequestCreate(RequestBase):
     """Schema for creating a new request - project_id is optional"""
@@ -536,29 +582,6 @@ class SharedRequestOut(BaseModel):
     share_date: datetime  # Add this field
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class RequestOut(RequestBase):
-    id: int
-    user_id: int
-    status: RequestStatus
-    project_id: Optional[int] = None
-    added_to_project_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    owner_username: str
-    shared_with_info: List[dict] = []
-
-    class Config:
-        from_attributes = True
-        populate_by_name = True
-
-    @field_validator("owner_username", mode="before")
-    @classmethod
-    def get_owner_username(cls, v, values):
-        if hasattr(v, "username"):
-            return v.username
-        return v
 
 
 class RequestShareWithUsername(BaseModel):
@@ -714,22 +737,6 @@ class ConversationMessageOut(BaseModel):
     content: str
     created_at: datetime
     linked_content: List[ConversationContentLink] = []
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ConversationWithMessages(BaseModel):
-    id: int
-    request_id: int
-    starter_user_id: int
-    recipient_user_id: int
-    starter_username: str
-    recipient_username: str
-    status: ConversationStatus
-    agreed_amount: Optional[int] = None
-    created_at: datetime
-    messages: List[ConversationMessageOut]
-    request_title: str
 
     model_config = ConfigDict(from_attributes=True)
 

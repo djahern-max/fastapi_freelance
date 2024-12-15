@@ -11,6 +11,8 @@ from sqlalchemy import (
     UniqueConstraint,
     Float,
     JSON,
+    text,
+    CheckConstraint,
 )
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
@@ -114,6 +116,8 @@ class DeveloperProfile(Base):
     # Relationship
     user = relationship("User", back_populates="developer_profile")
 
+    ratings = relationship("DeveloperRating", back_populates="developer")
+
 
 class ClientProfile(Base):
     __tablename__ = "client_profiles"
@@ -127,6 +131,7 @@ class ClientProfile(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
     user = relationship("User", back_populates="client_profile")
+    given_ratings = relationship("DeveloperRating", back_populates="client")
 
 
 # ------------------ Video Model ------------------
@@ -397,12 +402,8 @@ class Subscription(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
 
+    # Add to User model
     user = relationship("User", back_populates="subscription")
-
-
-# Add to User model
-subscription = relationship("Subscription", back_populates="user", uselist=False)
-user = relationship("User", back_populates="subscription")
 
 
 class Vote(Base):
@@ -415,3 +416,33 @@ class Vote(Base):
     # Relationships
     user = relationship("User")
     video = relationship("Video", back_populates="votes")
+
+
+# ------------------ Developer Rating System ------------------
+
+
+class DeveloperRating(Base):
+    __tablename__ = "developer_ratings"
+
+    id = Column(Integer, primary_key=True, nullable=False)
+    developer_id = Column(
+        Integer, ForeignKey("developer_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_id = Column(
+        Integer, ForeignKey("client_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stars = Column(Integer, nullable=False)
+    comment = Column(Text, nullable=True)  # Optional comment with the rating
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    # Relationships
+    developer = relationship("DeveloperProfile", back_populates="ratings")
+    client = relationship("ClientProfile", back_populates="given_ratings")
+
+    __table_args__ = (
+        # Ensure a client can only rate a developer once
+        UniqueConstraint("developer_id", "client_id", name="unique_developer_client_rating"),
+        # Ensure rating is between 1 and 5
+        CheckConstraint("stars >= 1 AND stars <= 5", name="stars_range_check"),
+    )
