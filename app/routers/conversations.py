@@ -66,18 +66,19 @@ def create_conversation(
     db.commit()
     db.refresh(new_conversation)
 
-    # If there's an initial message, create it
+    # If there's an initial message, create it with any linked content
     if conversation.initial_message:
-        initial_message = models.ConversationMessage(
+        message = models.ConversationMessage(
             conversation_id=new_conversation.id,
             user_id=current_user.id,
             content=conversation.initial_message,
         )
-        db.add(initial_message)
+        db.add(message)
+        db.flush()  # Get message ID without committing
 
-        # Create video links if any
+        # Add video links if any are provided
         if conversation.video_ids:
-            # Verify all videos belong to the user
+            # Verify videos belong to the user
             videos = (
                 db.query(models.Video)
                 .filter(
@@ -93,74 +94,28 @@ def create_conversation(
                 )
 
             for video_id in conversation.video_ids:
-                video_link = models.ConversationVideoLink(
+                content_link = models.ConversationContentLink(
                     conversation_id=new_conversation.id,
-                    message_id=initial_message.id,
-                    video_id=video_id,
+                    message_id=message.id,
+                    content_type="video",
+                    content_id=video_id,
                 )
-                db.add(video_link)
+                db.add(content_link)
 
         # Add profile link if requested
         if conversation.include_profile:
-            profile_link = models.ConversationProfileLink(
+            profile_link = models.ConversationContentLink(
                 conversation_id=new_conversation.id,
-                message_id=initial_message.id,
-                user_id=current_user.id,
+                message_id=message.id,
+                content_type="profile",
+                content_id=current_user.id,
             )
             db.add(profile_link)
 
         db.commit()
+        db.refresh(message)
 
     return new_conversation
-
-
-@router.get("/{id}", response_model=schemas.ConversationWithMessages)
-def get_conversation(
-    id: int,
-    db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
-):
-    conversation = db.query(models.Conversation).filter(models.Conversation.id == id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    # Check if user is part of the conversation
-    if current_user.id not in [conversation.starter_user_id, conversation.recipient_user_id]:
-        raise HTTPException(status_code=403, detail="Not authorized to view this conversation")
-
-    # Get user information
-    starter = db.query(models.User).filter(models.User.id == conversation.starter_user_id).first()
-    recipient = (
-        db.query(models.User).filter(models.User.id == conversation.recipient_user_id).first()
-    )
-
-    # Get request information
-    request = db.query(models.Request).filter(models.Request.id == conversation.request_id).first()
-
-    # Add all required information to the response
-    conversation_data = {
-        "id": conversation.id,
-        "request_id": conversation.request_id,
-        "starter_user_id": conversation.starter_user_id,
-        "recipient_user_id": conversation.recipient_user_id,
-        "starter_username": starter.username,
-        "recipient_username": recipient.username,
-        "status": conversation.status,
-        "created_at": conversation.created_at,  # Add this
-        "request_title": request.title if request else "Unknown Request",  # Add this
-        "messages": [
-            {
-                "id": msg.id,
-                "conversation_id": msg.conversation_id,
-                "user_id": msg.user_id,
-                "content": msg.content,
-                "created_at": msg.created_at,
-            }
-            for msg in conversation.messages
-        ],
-    }
-
-    return conversation_data
 
 
 @router.post("/{id}/messages", response_model=schemas.ConversationMessageOut)
@@ -170,23 +125,125 @@ def create_message(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    conversation = db.query(models.Conversation).filter(models.Conversation.id == id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    try:
+        print(f"Creating message for conversation {id}")  # Debug print
+        conversation = db.query(models.Conversation).filter(models.Conversation.id == id).first()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check if user is part of the conversation
-    if current_user.id not in [conversation.starter_user_id, conversation.recipient_user_id]:
-        raise HTTPException(status_code=403, detail="Not authorized to post in this conversation")
+        print(
+            f"User ID: {current_user.id}, Conversation starter: {conversation.starter_user_id}, recipient: {conversation.recipient_user_id}"
+        )  # Debug print
+        if current_user.id not in [conversation.starter_user_id, conversation.recipient_user_id]:
+            raise HTTPException(
+                status_code=403, detail="Not authorized to post in this conversation"
+            )
 
-    new_message = models.ConversationMessage(
-        conversation_id=id, user_id=current_user.id, content=message.content
-    )
+        new_message = models.ConversationMessage(
+            conversation_id=id, user_id=current_user.id, content=message.content
+        )
 
-    db.add(new_message)
-    db.commit()
-    db.refresh(new_message)
+        print("Adding new message")  # Debug print
+        db.add(new_message)
+        db.flush()
+        print(f"Created message with ID: {new_message.id}")  # Debug print
 
-    return new_message
+        # Add video links if any are provided
+        if message.video_ids:
+            print(f"Processing video IDs: {message.video_ids}")  # Debug print
+            videos = (
+                db.query(models.Video)
+                .filter(
+                    models.Video.id.in_(message.video_ids),
+                    models.Video.user_id == current_user.id,
+                )
+                .all()
+            )
+            print(f"Found videos: {[v.id for v in videos]}")  # Debug print
+
+            if len(videos) != len(message.video_ids):
+                raise HTTPException(
+                    status_code=400, detail="One or more videos not found or not owned by user"
+                )
+
+            for video in videos:
+                print(f"Adding link for video {video.id}")  # Debug print
+                content_link = models.ConversationContentLink(
+                    conversation_id=id,
+                    message_id=new_message.id,
+                    content_type="video",
+                    content_id=video.id,
+                )
+                db.add(content_link)
+
+        # Add profile link if requested
+        if message.include_profile:
+            print("Adding profile link")  # Debug print
+            profile_link = models.ConversationContentLink(
+                conversation_id=id,
+                message_id=new_message.id,
+                content_type="profile",
+                content_id=current_user.id,
+            )
+            db.add(profile_link)
+
+        print("Committing changes")  # Debug print
+        db.commit()
+
+        print("Fetching message with links")  # Debug print
+        message_with_links = (
+            db.query(models.ConversationMessage)
+            .filter(models.ConversationMessage.id == new_message.id)
+            .first()
+        )
+
+        # Build linked_content list
+        linked_content = []
+        print("Processing content links")  # Debug print
+        for link in message_with_links.content_links:
+            print(
+                f"Processing link type: {link.content_type}, id: {link.content_id}"
+            )  # Debug print
+            if link.content_type == "video":
+                video = db.query(models.Video).filter(models.Video.id == link.content_id).first()
+                if video:
+                    linked_content.append(
+                        {
+                            "id": link.id,
+                            "type": "video",
+                            "content_id": video.id,
+                            "title": video.title,
+                            "url": video.file_path,
+                        }
+                    )
+            elif link.content_type == "profile":
+                user = db.query(models.User).filter(models.User.id == link.content_id).first()
+                if user:
+                    linked_content.append(
+                        {
+                            "id": link.id,
+                            "type": "profile",
+                            "content_id": user.id,
+                            "title": user.username,
+                            "url": f"/profile/developer/{user.id}",
+                        }
+                    )
+
+        print("Preparing response")  # Debug print
+        response = {
+            "id": message_with_links.id,
+            "conversation_id": message_with_links.conversation_id,
+            "user_id": message_with_links.user_id,
+            "content": message_with_links.content,
+            "created_at": message_with_links.created_at,
+            "linked_content": linked_content,
+        }
+        print("Returning response")  # Debug print
+        return response
+
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")  # Debug print
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/user/list", response_model=List[schemas.ConversationWithMessages])
