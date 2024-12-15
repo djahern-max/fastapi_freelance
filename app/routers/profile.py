@@ -41,19 +41,40 @@ def get_profile(
     db: Session = Depends(database.get_db),
 ):
     """Get current user's profile"""
+    developer_profile = None
+    client_profile = None
+
+    # Convert ORM objects to Pydantic schemas
     if current_user.user_type == models.UserType.developer:
-        current_user.developer_profile = (
+        developer_profile_obj = (
             db.query(models.DeveloperProfile)
             .filter(models.DeveloperProfile.user_id == current_user.id)
             .first()
         )
+        if developer_profile_obj:
+            developer_profile = schemas.DeveloperProfileOut.model_validate(developer_profile_obj)
+
     elif current_user.user_type == models.UserType.client:
-        current_user.client_profile = (
+        client_profile_obj = (
             db.query(models.ClientProfile)
             .filter(models.ClientProfile.user_id == current_user.id)
             .first()
         )
-    return current_user
+        if client_profile_obj:
+            client_profile = schemas.ClientProfileOut.model_validate(client_profile_obj)
+
+    # Return current user with converted profiles
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_active": current_user.is_active,
+        "user_type": current_user.user_type,
+        "created_at": current_user.created_at,
+        "developer_profile": developer_profile,
+        "client_profile": client_profile,
+    }
 
 
 @router.get("/developer", response_model=schemas.DeveloperProfileOut)
