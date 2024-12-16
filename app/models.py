@@ -131,7 +131,6 @@ class ClientProfile(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
     user = relationship("User", back_populates="client_profile")
-    given_ratings = relationship("DeveloperRating", back_populates="client")
 
 
 # ------------------ Video Model ------------------
@@ -428,21 +427,21 @@ class DeveloperRating(Base):
     developer_id = Column(
         Integer, ForeignKey("developer_profiles.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    client_id = Column(
-        Integer, ForeignKey("client_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     stars = Column(Integer, nullable=False)
-    comment = Column(Text, nullable=True)  # Optional comment with the rating
+    comment = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
 
     # Relationships
     developer = relationship("DeveloperProfile", back_populates="ratings")
-    client = relationship("ClientProfile", back_populates="given_ratings")
+    user = relationship("User")  # Change this from "client" to "user"
 
     __table_args__ = (
-        # Ensure a client can only rate a developer once
-        UniqueConstraint("developer_id", "client_id", name="unique_developer_client_rating"),
+        # Ensure a user can only rate a developer once
+        UniqueConstraint("developer_id", "user_id", name="unique_developer_user_rating"),
         # Ensure rating is between 1 and 5
         CheckConstraint("stars >= 1 AND stars <= 5", name="stars_range_check"),
     )

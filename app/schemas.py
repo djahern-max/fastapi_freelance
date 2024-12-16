@@ -135,7 +135,7 @@ class DeveloperRatingUpdate(BaseModel):
 class DeveloperRatingOut(BaseModel):
     id: int
     developer_id: int
-    client_id: int
+    user_id: int  # Changed from client_id
     stars: int
     comment: Optional[str] = None
 

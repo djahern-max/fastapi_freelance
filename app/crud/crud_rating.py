@@ -1,16 +1,15 @@
-# app/crud/crud_rating.py
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException, status
 from typing import Optional
 
-from ..models import DeveloperProfile, ClientProfile, DeveloperRating
+from ..models import DeveloperProfile, DeveloperRating
 from ..schemas import DeveloperRatingCreate, DeveloperRatingOut, DeveloperRatingStats
 
 
 class RatingCRUD:
     def create_or_update_rating(
-        self, db: Session, developer_id: int, client_id: int, rating_data: DeveloperRatingCreate
+        self, db: Session, developer_id: int, user_id: int, rating_data: DeveloperRatingCreate
     ) -> DeveloperRatingOut:
         # Verify the developer exists
         developer = db.query(DeveloperProfile).filter(DeveloperProfile.id == developer_id).first()
@@ -21,20 +20,22 @@ class RatingCRUD:
         existing_rating = (
             db.query(DeveloperRating)
             .filter(
-                DeveloperRating.developer_id == developer_id, DeveloperRating.client_id == client_id
+                DeveloperRating.developer_id == developer_id, DeveloperRating.user_id == user_id
             )
             .first()
         )
 
         try:
             if existing_rating:
+                # Update existing rating
                 existing_rating.stars = rating_data.stars
                 existing_rating.comment = rating_data.comment
                 rating = existing_rating
             else:
+                # Create new rating
                 rating = DeveloperRating(
                     developer_id=developer_id,
-                    client_id=client_id,
+                    user_id=user_id,
                     stars=rating_data.stars,
                     comment=rating_data.comment,
                 )
@@ -82,12 +83,12 @@ class RatingCRUD:
         )
 
     def get_user_rating(
-        self, db: Session, developer_id: int, client_id: int
+        self, db: Session, developer_id: int, user_id: int
     ) -> Optional[DeveloperRatingOut]:
         rating = (
             db.query(DeveloperRating)
             .filter(
-                DeveloperRating.developer_id == developer_id, DeveloperRating.client_id == client_id
+                DeveloperRating.developer_id == developer_id, DeveloperRating.user_id == user_id
             )
             .first()
         )
