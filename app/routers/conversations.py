@@ -5,6 +5,7 @@ from typing import List
 from .. import models, schemas, database, oauth2
 from sqlalchemy import or_
 from ..middleware import require_active_subscription
+from ..database import get_db
 
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
@@ -366,3 +367,27 @@ def create_conversation_from_video(
     db.refresh(new_conversation)
 
     return new_conversation
+
+
+@router.get("/{conversation_id}", response_model=schemas.ConversationWithMessages)
+def get_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    conversation = (
+        db.query(models.Conversation)
+        .filter(
+            models.Conversation.id == conversation_id,
+            or_(
+                models.Conversation.starter_user_id == current_user.id,
+                models.Conversation.recipient_user_id == current_user.id,
+            ),
+        )
+        .first()
+    )
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    return conversation
