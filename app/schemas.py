@@ -845,3 +845,35 @@ class Vote(BaseModel):
         return v
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------ Snagged Ticket ------------------
+
+
+class SnaggedRequestOut(BaseModel):
+    id: int
+    request_id: int
+    developer_id: int
+    snagged_at: datetime
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class SnaggedRequestWithDetails(BaseModel):
+    id: int
+    request_id: int
+    developer_id: int
+    snagged_at: datetime
+    is_active: bool
+    request: dict = {
+        "id": int,
+        "title": str,
+        "content": str,
+        "status": str,
+        "estimated_budget": Optional[float],
+        "owner_username": str,
+    }
+
+    model_config = ConfigDict(from_attributes=True)

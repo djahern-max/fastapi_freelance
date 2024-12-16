@@ -445,3 +445,24 @@ class DeveloperRating(Base):
         # Ensure rating is between 1 and 5
         CheckConstraint("stars >= 1 AND stars <= 5", name="stars_range_check"),
     )
+
+
+# ------------------ Snagged Ticke Model ------------------
+
+
+class SnaggedRequest(Base):
+    __tablename__ = "snagged_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
+    developer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    snagged_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    is_active = Column(Boolean, default=True)  # For soft delete/hide functionality
+
+    # Relationships
+    request = relationship("Request", backref="snagged_by")
+    developer = relationship("User", backref="snagged_requests")
+
+    __table_args__ = (
+        UniqueConstraint("request_id", "developer_id", name="unique_snagged_request"),
+    )
