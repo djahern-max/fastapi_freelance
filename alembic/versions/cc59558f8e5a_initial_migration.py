@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: 6933dbae44e0
+Revision ID: cc59558f8e5a
 Revises: 
-Create Date: 2024-12-15 13:56:16.878491
+Create Date: 2024-12-16 11:50:12.360184
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '6933dbae44e0'
+revision: str = 'cc59558f8e5a'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -108,19 +108,19 @@ def upgrade() -> None:
     op.create_table('developer_ratings',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('developer_id', sa.Integer(), nullable=False),
-    sa.Column('client_id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('stars', sa.Integer(), nullable=False),
     sa.Column('comment', sa.Text(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
     sa.CheckConstraint('stars >= 1 AND stars <= 5', name='stars_range_check'),
-    sa.ForeignKeyConstraint(['client_id'], ['client_profiles.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['developer_id'], ['developer_profiles.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('developer_id', 'client_id', name='unique_developer_client_rating')
+    sa.UniqueConstraint('developer_id', 'user_id', name='unique_developer_user_rating')
     )
-    op.create_index(op.f('ix_developer_ratings_client_id'), 'developer_ratings', ['client_id'], unique=False)
     op.create_index(op.f('ix_developer_ratings_developer_id'), 'developer_ratings', ['developer_id'], unique=False)
+    op.create_index(op.f('ix_developer_ratings_user_id'), 'developer_ratings', ['user_id'], unique=False)
     op.create_table('requests',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(), nullable=False),
@@ -204,6 +204,18 @@ def upgrade() -> None:
     sa.UniqueConstraint('request_id', 'shared_with_user_id', name='unique_request_share')
     )
     op.create_index(op.f('ix_request_shares_id'), 'request_shares', ['id'], unique=False)
+    op.create_table('snagged_requests',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('request_id', sa.Integer(), nullable=False),
+    sa.Column('developer_id', sa.Integer(), nullable=False),
+    sa.Column('snagged_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('request_id', 'developer_id', name='unique_snagged_request')
+    )
+    op.create_index(op.f('ix_snagged_requests_id'), 'snagged_requests', ['id'], unique=False)
     op.create_table('videos',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(), nullable=True),
@@ -280,6 +292,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_videos_title'), table_name='videos')
     op.drop_index(op.f('ix_videos_id'), table_name='videos')
     op.drop_table('videos')
+    op.drop_index(op.f('ix_snagged_requests_id'), table_name='snagged_requests')
+    op.drop_table('snagged_requests')
     op.drop_index(op.f('ix_request_shares_id'), table_name='request_shares')
     op.drop_table('request_shares')
     op.drop_index(op.f('ix_request_comments_id'), table_name='request_comments')
@@ -291,8 +305,8 @@ def downgrade() -> None:
     op.drop_table('agreements')
     op.drop_index(op.f('ix_requests_id'), table_name='requests')
     op.drop_table('requests')
+    op.drop_index(op.f('ix_developer_ratings_user_id'), table_name='developer_ratings')
     op.drop_index(op.f('ix_developer_ratings_developer_id'), table_name='developer_ratings')
-    op.drop_index(op.f('ix_developer_ratings_client_id'), table_name='developer_ratings')
     op.drop_table('developer_ratings')
     op.drop_index(op.f('ix_subscriptions_id'), table_name='subscriptions')
     op.drop_table('subscriptions')
