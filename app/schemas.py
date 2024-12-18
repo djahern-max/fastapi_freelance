@@ -877,3 +877,12 @@ class SnaggedRequestWithDetails(BaseModel):
     }
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SnaggedRequestCreate(BaseModel):
+    request_id: int
+    message: str
+    profile_link: bool = False
+    video_ids: List[int] = []
+
+    model_config = ConfigDict(from_attributes=True)
