@@ -118,6 +118,13 @@ def create_snagged_request(
         if not request:
             raise HTTPException(status_code=404, detail="Request not found")
 
+        # Check if request is open
+        if request.status != models.RequestStatus.open:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only open requests can be snagged. Current status: {request.status}",
+            )
+
         # Check if already snagged
         existing_snag = (
             db.query(models.SnaggedRequest)
@@ -152,7 +159,7 @@ def create_snagged_request(
         db.add(message)
         db.flush()
 
-        # Quietly attempt to add profile link if requested
+        # Handle profile link
         if snag.profile_link:
             try:
                 profile_link = models.ConversationContentLink(
@@ -163,9 +170,9 @@ def create_snagged_request(
                 )
                 db.add(profile_link)
             except:
-                pass  # Silently continue if profile link fails
+                pass
 
-        # Quietly attempt to add any existing video links
+        # Handle video links
         if snag.video_ids:
             try:
                 existing_videos = (
@@ -185,7 +192,7 @@ def create_snagged_request(
                     )
                     db.add(video_link)
             except:
-                pass  # Silently continue if video links fail
+                pass
 
         db.commit()
 
