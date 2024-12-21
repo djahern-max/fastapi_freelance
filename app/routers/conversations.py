@@ -34,12 +34,18 @@ def create_conversation(
     # Verify user roles
     if current_user.user_type == models.UserType.client:
         if request.user_id == current_user.id:
-            raise HTTPException(status_code=400, detail="You cannot respond to your own request")
-        raise HTTPException(status_code=403, detail="Only developers can initiate conversations")
+            raise HTTPException(
+                status_code=400, detail="You cannot respond to your own request"
+            )
+        raise HTTPException(
+            status_code=403, detail="Only developers can initiate conversations"
+        )
 
     if current_user.user_type == models.UserType.developer:
         if request.user.user_type != models.UserType.client:
-            raise HTTPException(status_code=400, detail="Can only respond to client requests")
+            raise HTTPException(
+                status_code=400, detail="Can only respond to client requests"
+            )
 
     # Check if conversation already exists
     existing_conversation = (
@@ -91,7 +97,8 @@ def create_conversation(
 
             if len(videos) != len(conversation.video_ids):
                 raise HTTPException(
-                    status_code=400, detail="One or more videos not found or not owned by user"
+                    status_code=400,
+                    detail="One or more videos not found or not owned by user",
                 )
 
             for video_id in conversation.video_ids:
@@ -128,14 +135,19 @@ def create_message(
 ):
     try:
         print(f"Creating message for conversation {id}")  # Debug print
-        conversation = db.query(models.Conversation).filter(models.Conversation.id == id).first()
+        conversation = (
+            db.query(models.Conversation).filter(models.Conversation.id == id).first()
+        )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         print(
             f"User ID: {current_user.id}, Conversation starter: {conversation.starter_user_id}, recipient: {conversation.recipient_user_id}"
         )  # Debug print
-        if current_user.id not in [conversation.starter_user_id, conversation.recipient_user_id]:
+        if current_user.id not in [
+            conversation.starter_user_id,
+            conversation.recipient_user_id,
+        ]:
             raise HTTPException(
                 status_code=403, detail="Not authorized to post in this conversation"
             )
@@ -164,7 +176,8 @@ def create_message(
 
             if len(videos) != len(message.video_ids):
                 raise HTTPException(
-                    status_code=400, detail="One or more videos not found or not owned by user"
+                    status_code=400,
+                    detail="One or more videos not found or not owned by user",
                 )
 
             for video in videos:
@@ -206,7 +219,11 @@ def create_message(
                 f"Processing link type: {link.content_type}, id: {link.content_id}"
             )  # Debug print
             if link.content_type == "video":
-                video = db.query(models.Video).filter(models.Video.id == link.content_id).first()
+                video = (
+                    db.query(models.Video)
+                    .filter(models.Video.id == link.content_id)
+                    .first()
+                )
                 if video:
                     linked_content.append(
                         {
@@ -218,7 +235,11 @@ def create_message(
                         }
                     )
             elif link.content_type == "profile":
-                user = db.query(models.User).filter(models.User.id == link.content_id).first()
+                user = (
+                    db.query(models.User)
+                    .filter(models.User.id == link.content_id)
+                    .first()
+                )
                 if user:
                     linked_content.append(
                         {
@@ -249,7 +270,7 @@ def create_message(
 
 @router.get("/user/list", response_model=List[schemas.ConversationWithMessages])
 def list_user_conversations(
-    request_id: int = None,  # Make request_id optional
+    request_id: int = None,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
@@ -260,29 +281,86 @@ def list_user_conversations(
         )
     )
 
-    # If request_id is provided, filter conversations for that specific request
     if request_id:
         query = query.filter(models.Conversation.request_id == request_id)
 
     conversations = query.order_by(models.Conversation.created_at.desc()).all()
 
-    # Fetch request details and messages for each conversation
     result = []
     for conv in conversations:
-        # Get the request
-        request = db.query(models.Request).filter(models.Request.id == conv.request_id).first()
+        request = (
+            db.query(models.Request)
+            .filter(models.Request.id == conv.request_id)
+            .first()
+        )
+        messages = []
 
-        # Get all messages
-        messages = (
+        for msg in (
             db.query(models.ConversationMessage)
             .filter(models.ConversationMessage.conversation_id == conv.id)
-            .order_by(models.ConversationMessage.created_at)
             .all()
-        )
+        ):
+            # Get content links for this message
+            content_links = (
+                db.query(models.ConversationContentLink)
+                .filter(models.ConversationContentLink.message_id == msg.id)
+                .all()
+            )
 
-        # Get usernames
-        starter = db.query(models.User).filter(models.User.id == conv.starter_user_id).first()
-        recipient = db.query(models.User).filter(models.User.id == conv.recipient_user_id).first()
+            linked_content = []
+            for link in content_links:
+                if link.content_type == "video":
+                    video = (
+                        db.query(models.Video)
+                        .filter(models.Video.id == link.content_id)
+                        .first()
+                    )
+                    if video:
+                        linked_content.append(
+                            {
+                                "id": link.id,
+                                "type": "video",
+                                "content_id": video.id,
+                                "title": video.title,
+                                "url": video.file_path,
+                            }
+                        )
+                elif link.content_type == "profile":
+                    dev_profile = (
+                        db.query(models.DeveloperProfile)
+                        .filter(models.DeveloperProfile.user_id == link.content_id)
+                        .first()
+                    )
+                    if dev_profile:
+                        linked_content.append(
+                            {
+                                "id": link.id,
+                                "type": "profile",
+                                "content_id": dev_profile.user_id,
+                                "title": f"Developer Profile",
+                                "url": f"/profile/developer/{dev_profile.user_id}",
+                            }
+                        )
+
+            messages.append(
+                {
+                    "id": msg.id,
+                    "conversation_id": msg.conversation_id,
+                    "user_id": msg.user_id,
+                    "content": msg.content,
+                    "created_at": msg.created_at,
+                    "linked_content": linked_content,
+                }
+            )
+
+        starter = (
+            db.query(models.User).filter(models.User.id == conv.starter_user_id).first()
+        )
+        recipient = (
+            db.query(models.User)
+            .filter(models.User.id == conv.recipient_user_id)
+            .first()
+        )
 
         conv_data = {
             "id": conv.id,
@@ -309,14 +387,21 @@ def update_conversation(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     # Query for the conversation
-    conversation = db.query(models.Conversation).filter(models.Conversation.id == id).first()
+    conversation = (
+        db.query(models.Conversation).filter(models.Conversation.id == id).first()
+    )
 
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     # Check if user is part of the conversation
-    if current_user.id not in [conversation.starter_user_id, conversation.recipient_user_id]:
-        raise HTTPException(status_code=403, detail="Not authorized to update this conversation")
+    if current_user.id not in [
+        conversation.starter_user_id,
+        conversation.recipient_user_id,
+    ]:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this conversation"
+        )
 
     # Update the conversation status
     conversation.status = conversation_update.status
@@ -334,14 +419,20 @@ def create_conversation_from_video(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     # Get the video and its owner
-    video = db.query(models.Video).filter(models.Video.id == conversation_data.video_id).first()
+    video = (
+        db.query(models.Video)
+        .filter(models.Video.id == conversation_data.video_id)
+        .first()
+    )
 
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
     # Verify the current user is a client
     if current_user.user_type != models.UserType.client:
-        raise HTTPException(status_code=403, detail="Only clients can initiate video conversations")
+        raise HTTPException(
+            status_code=403, detail="Only clients can initiate video conversations"
+        )
 
     # Create a request for this video conversation
     request = models.Request(
