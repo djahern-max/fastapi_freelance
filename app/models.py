@@ -20,11 +20,14 @@ from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 import enum
 from datetime import datetime
 from .database import Base
+from sqlalchemy import Table
 
 
 # ------------------ Mixin ------------------
 class TimestampMixin:
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
 
 
@@ -66,13 +69,19 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     user_type = Column(SQLAlchemyEnum(UserType), nullable=False)
     terms_accepted = Column(Boolean, nullable=False, default=False)
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
     stripe_customer_id = Column(String, nullable=True)
 
     # Relationships
     videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")
-    requests = relationship("Request", back_populates="user", cascade="all, delete-orphan")
-    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
+    requests = relationship(
+        "Request", back_populates="user", cascade="all, delete-orphan"
+    )
+    projects = relationship(
+        "Project", back_populates="user", cascade="all, delete-orphan"
+    )
     shared_requests = relationship(
         "RequestShare",
         foreign_keys="[RequestShare.shared_with_user_id]",
@@ -83,13 +92,22 @@ class User(Base):
         "RequestComment", back_populates="user", cascade="all, delete-orphan"
     )
     developer_profile = relationship(
-        "DeveloperProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+        "DeveloperProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
     client_profile = relationship(
-        "ClientProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+        "ClientProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
     subscription = relationship(
-        "Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan"
+        "Subscription",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
 
@@ -102,7 +120,9 @@ class DeveloperProfile(Base):
     skills = Column(String)
     experience_years = Column(Integer)
     bio = Column(Text, nullable=True)
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # Profile visibility and display
     is_public = Column(Boolean, default=False)
@@ -128,7 +148,9 @@ class ClientProfile(Base):
     industry = Column(String, nullable=True)
     company_size = Column(String, nullable=True)
     website = Column(String, nullable=True)
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
 
     user = relationship("User", back_populates="client_profile")
 
@@ -143,10 +165,18 @@ class Video(Base):
     file_path = Column(String, nullable=False)
     thumbnail_path = Column(String, nullable=True)
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
-    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
-    request_id = Column(Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    video_type = Column(SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    video_type = Column(
+        SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo
+    )
 
     # Relationships
     user = relationship("User", back_populates="videos")
@@ -164,7 +194,9 @@ class Project(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Project metadata
     is_active = Column(Boolean, default=True)
@@ -182,11 +214,17 @@ class Request(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    status = Column(SQLAlchemyEnum(RequestStatus), default=RequestStatus.open, nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status = Column(
+        SQLAlchemyEnum(RequestStatus), default=RequestStatus.open, nullable=False
+    )
 
     # Optional project grouping
-    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
     added_to_project_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Visibility and sharing
@@ -209,7 +247,9 @@ class Request(Base, TimestampMixin):
     comments = relationship(
         "RequestComment", back_populates="request", cascade="all, delete-orphan"
     )
-    agreements = relationship("Agreement", back_populates="request", cascade="all, delete-orphan")
+    agreements = relationship(
+        "Agreement", back_populates="request", cascade="all, delete-orphan"
+    )
     videos = relationship("Video", back_populates="request")
 
     # Methods to handle agreement states
@@ -224,7 +264,9 @@ class RequestShare(Base):
     __tablename__ = "request_shares"
 
     id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False
+    )
     shared_with_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -237,7 +279,9 @@ class RequestShare(Base):
     user = relationship("User", foreign_keys=[shared_with_user_id])
 
     __table_args__ = (
-        UniqueConstraint("request_id", "shared_with_user_id", name="unique_request_share"),
+        UniqueConstraint(
+            "request_id", "shared_with_user_id", name="unique_request_share"
+        ),
     )
 
 
@@ -247,8 +291,12 @@ class RequestComment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     content = Column(String, nullable=False)
-    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     parent_id = Column(
         Integer, ForeignKey("request_comments.id", ondelete="CASCADE"), nullable=True
     )
@@ -257,14 +305,20 @@ class RequestComment(Base):
 
     request = relationship("Request", back_populates="comments")
     user = relationship("User", back_populates="request_comments")
-    replies = relationship("RequestComment", backref=backref("parent", remote_side=[id]))
-    votes = relationship("RequestCommentVote", back_populates="comment", cascade="all, delete")
+    replies = relationship(
+        "RequestComment", backref=backref("parent", remote_side=[id])
+    )
+    votes = relationship(
+        "RequestCommentVote", back_populates="comment", cascade="all, delete"
+    )
 
 
 class RequestCommentVote(Base):
     __tablename__ = "request_comment_votes"
 
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     comment_id = Column(
         Integer, ForeignKey("request_comments.id", ondelete="CASCADE"), primary_key=True
     )
@@ -285,12 +339,21 @@ class Conversation(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     request_id = Column(
-        Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    starter_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    recipient_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    starter_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    recipient_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     status = Column(
-        SQLAlchemyEnum(ConversationStatus), nullable=False, default=ConversationStatus.active
+        SQLAlchemyEnum(ConversationStatus),
+        nullable=False,
+        default=ConversationStatus.active,
     )
 
     # Relationships
@@ -298,10 +361,14 @@ class Conversation(Base, TimestampMixin):
     starter = relationship("User", foreign_keys=[starter_user_id])
     recipient = relationship("User", foreign_keys=[recipient_user_id])
     messages = relationship(
-        "ConversationMessage", back_populates="conversation", cascade="all, delete-orphan"
+        "ConversationMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
     )
     content_links = relationship(
-        "ConversationContentLink", back_populates="conversation", cascade="all, delete-orphan"
+        "ConversationContentLink",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
     )
 
 
@@ -310,16 +377,25 @@ class ConversationMessage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(
-        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     content = Column(Text, nullable=False)
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
 
     conversation = relationship("Conversation", back_populates="messages")
     user = relationship("User")
     content_links = relationship(
-        "ConversationContentLink", back_populates="message", cascade="all, delete-orphan"
+        "ConversationContentLink",
+        back_populates="message",
+        cascade="all, delete-orphan",
     )
 
 
@@ -331,18 +407,24 @@ class ConversationContentLink(Base):
         Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
     )
     message_id = Column(
-        Integer, ForeignKey("conversation_messages.id", ondelete="CASCADE"), nullable=False
+        Integer,
+        ForeignKey("conversation_messages.id", ondelete="CASCADE"),
+        nullable=False,
     )
     content_type = Column(String, nullable=False)  # 'video' or 'profile'
     content_id = Column(Integer, nullable=False)  # video_id or user_id
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # Relationships
     conversation = relationship("Conversation", back_populates="content_links")
     message = relationship("ConversationMessage", back_populates="content_links")
 
     __table_args__ = (
-        UniqueConstraint("message_id", "content_type", "content_id", name="unique_content_link"),
+        UniqueConstraint(
+            "message_id", "content_type", "content_id", name="unique_content_link"
+        ),
     )
 
 
@@ -353,17 +435,27 @@ class Agreement(Base, TimestampMixin):
     __tablename__ = "agreements"
 
     id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
-    developer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    client_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False
+    )
+    developer_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    client_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     price = Column(Float, nullable=False)
     terms = Column(Text, nullable=False)
     status = Column(String, nullable=False)  # 'proposed', 'accepted', 'completed'
-    proposed_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    proposed_by = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     proposed_changes = Column(Text, nullable=True)
     negotiation_history = Column(JSON, nullable=False, default=list)
     # Add these two fields
-    proposed_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    proposed_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
     agreement_date = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Relationships remain the same
@@ -393,7 +485,9 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     stripe_subscription_id = Column(String, unique=True, nullable=False)
     stripe_customer_id = Column(String, unique=True, nullable=False)
     status = Column(String, nullable=False)  # active, canceled, past_due
@@ -408,8 +502,12 @@ class Subscription(Base):
 class Vote(Base):
     __tablename__ = "votes"
 
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    video_id = Column(
+        Integer, ForeignKey("videos.id", ondelete="CASCADE"), primary_key=True
+    )
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relationships
@@ -425,14 +523,19 @@ class DeveloperRating(Base):
 
     id = Column(Integer, primary_key=True, nullable=False)
     developer_id = Column(
-        Integer, ForeignKey("developer_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("developer_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     stars = Column(Integer, nullable=False)
     comment = Column(Text, nullable=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
 
     # Relationships
@@ -441,7 +544,9 @@ class DeveloperRating(Base):
 
     __table_args__ = (
         # Ensure a user can only rate a developer once
-        UniqueConstraint("developer_id", "user_id", name="unique_developer_user_rating"),
+        UniqueConstraint(
+            "developer_id", "user_id", name="unique_developer_user_rating"
+        ),
         # Ensure rating is between 1 and 5
         CheckConstraint("stars >= 1 AND stars <= 5", name="stars_range_check"),
     )
@@ -454,9 +559,15 @@ class SnaggedRequest(Base):
     __tablename__ = "snagged_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False)
-    developer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    snagged_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False
+    )
+    developer_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    snagged_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
     is_active = Column(Boolean, default=True)  # For soft delete/hide functionality
 
     # Relationships
@@ -466,3 +577,115 @@ class SnaggedRequest(Base):
     __table_args__ = (
         UniqueConstraint("request_id", "developer_id", name="unique_snagged_request"),
     )
+
+
+# ------------------ AI Agent Marketplace ------------------
+
+
+class ProductCategory(str, enum.Enum):
+    AUTOMATION = "automation"
+    PROGRAMMING = "programming"
+    MARKETING = "marketing"
+    DATA_ANALYSIS = "data_analysis"
+    CONTENT_CREATION = "content_creation"
+    OTHER = "other"
+
+
+class ProductStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+class MarketplaceProduct(Base, TimestampMixin):
+    __tablename__ = "marketplace_products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    developer_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    long_description = Column(Text, nullable=True)
+    price = Column(Float, nullable=False)
+    category = Column(SQLAlchemyEnum(ProductCategory), nullable=False)
+    status = Column(SQLAlchemyEnum(ProductStatus), default=ProductStatus.DRAFT)
+
+    # Product details
+    version = Column(String, nullable=False, default="1.0.0")
+    requirements = Column(Text, nullable=True)
+    installation_guide = Column(Text, nullable=True)
+    documentation_url = Column(String, nullable=True)
+
+    # Analytics
+    view_count = Column(Integer, default=0)
+    download_count = Column(Integer, default=0)
+    rating = Column(Float, nullable=True)
+
+    # Relationships
+    developer = relationship("User", back_populates="products")
+    downloads = relationship(
+        "ProductDownload", back_populates="product", cascade="all, delete-orphan"
+    )
+    reviews = relationship(
+        "ProductReview", back_populates="product", cascade="all, delete-orphan"
+    )
+    related_videos = relationship(
+        "Video", secondary="product_videos", back_populates="products"
+    )
+
+
+class ProductDownload(Base, TimestampMixin):
+    __tablename__ = "product_downloads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(
+        Integer, ForeignKey("marketplace_products.id", ondelete="CASCADE")
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    price_paid = Column(Float, nullable=False)
+    transaction_id = Column(String, unique=True)
+
+    # Relationships
+    product = relationship("MarketplaceProduct", back_populates="downloads")
+    user = relationship("User")
+
+
+class ProductReview(Base, TimestampMixin):
+    __tablename__ = "product_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(
+        Integer, ForeignKey("marketplace_products.id", ondelete="CASCADE")
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    rating = Column(Integer, nullable=False)
+    review_text = Column(Text, nullable=True)
+
+    # Relationships
+    product = relationship("MarketplaceProduct", back_populates="reviews")
+    user = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("rating >= 1 AND rating <= 5", name="valid_rating"),
+        UniqueConstraint("product_id", "user_id", name="unique_product_review"),
+    )
+
+
+# Association table for products and videos
+product_videos = Table(
+    "product_videos",
+    Base.metadata,
+    Column(
+        "product_id", Integer, ForeignKey("marketplace_products.id", ondelete="CASCADE")
+    ),
+    Column("video_id", Integer, ForeignKey("videos.id", ondelete="CASCADE")),
+    UniqueConstraint("product_id", "video_id", name="unique_product_video"),
+)
+
+# Add to User model
+User.products = relationship("MarketplaceProduct", back_populates="developer")
+# Add to Video model
+Video.products = relationship(
+    "MarketplaceProduct", secondary="product_videos", back_populates="related_videos"
+)

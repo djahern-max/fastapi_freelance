@@ -19,7 +19,9 @@ def get_snagged_requests(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     if current_user.user_type != models.UserType.developer:
-        raise HTTPException(status_code=403, detail="Only developers can view snagged requests")
+        raise HTTPException(
+            status_code=403, detail="Only developers can view snagged requests"
+        )
 
     # Get snagged requests with full request and user information
     snagged_requests = (
@@ -31,7 +33,9 @@ def get_snagged_requests(
             models.SnaggedRequest.is_active == True,
         )
         .with_entities(
-            models.SnaggedRequest, models.Request, models.User.username.label("owner_username")
+            models.SnaggedRequest,
+            models.Request,
+            models.User.username.label("owner_username"),
         )
         .all()
     )
@@ -66,7 +70,9 @@ def get_snagged_requests(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     if current_user.user_type != models.UserType.developer:
-        raise HTTPException(status_code=403, detail="Only developers can view snagged requests")
+        raise HTTPException(
+            status_code=403, detail="Only developers can view snagged requests"
+        )
 
     snagged_requests = (
         db.query(models.SnaggedRequest)
@@ -111,10 +117,18 @@ def create_snagged_request(
 ):
     try:
         if current_user.user_type != models.UserType.developer:
-            raise HTTPException(status_code=403, detail="Only developers can snag requests")
+            raise HTTPException(
+                status_code=403, detail="Only developers can snag requests"
+            )
+
+        print(f"Processing snag request: {snag}")  # Debug log
 
         # Get the request
-        request = db.query(models.Request).filter(models.Request.id == snag.request_id).first()
+        request = (
+            db.query(models.Request)
+            .filter(models.Request.id == snag.request_id)
+            .first()
+        )
         if not request:
             raise HTTPException(status_code=404, detail="Request not found")
 
@@ -139,10 +153,11 @@ def create_snagged_request(
         if existing_snag:
             raise HTTPException(status_code=400, detail="Request already snagged")
 
-        # Create snag and conversation
-        new_snag = models.SnaggedRequest(request_id=snag.request_id, developer_id=current_user.id)
+        # Create all objects within a single transaction
+        new_snag = models.SnaggedRequest(
+            request_id=snag.request_id, developer_id=current_user.id
+        )
         db.add(new_snag)
-        db.flush()
 
         conversation = models.Conversation(
             request_id=snag.request_id,
@@ -151,61 +166,82 @@ def create_snagged_request(
             status=models.ConversationStatus.active,
         )
         db.add(conversation)
-        db.flush()
+        db.flush()  # Get conversation ID
 
         message = models.ConversationMessage(
-            conversation_id=conversation.id, user_id=current_user.id, content=snag.message
+            conversation_id=conversation.id,
+            user_id=current_user.id,
+            content=snag.message,
         )
         db.add(message)
-        db.flush()
+        db.flush()  # Get message ID
+
+        print(f"Created message with ID: {message.id}")  # Debug log
 
         # Handle profile link
         if snag.profile_link:
-            try:
-                profile_link = models.ConversationContentLink(
-                    conversation_id=conversation.id,
-                    message_id=message.id,
-                    content_type="profile",
-                    content_id=current_user.id,
-                )
-                db.add(profile_link)
-            except:
-                pass
+            profile_link = models.ConversationContentLink(
+                conversation_id=conversation.id,
+                message_id=message.id,
+                content_type="profile",
+                content_id=current_user.id,
+            )
+            db.add(profile_link)
+            print(f"Added profile link for user {current_user.username}")
 
         # Handle video links
         if snag.video_ids:
-            try:
-                existing_videos = (
-                    db.query(models.Video)
-                    .filter(
-                        models.Video.id.in_(snag.video_ids), models.Video.user_id == current_user.id
-                    )
-                    .all()
+            videos = (
+                db.query(models.Video)
+                .filter(
+                    models.Video.id.in_(snag.video_ids),
+                    models.Video.user_id == current_user.id,
+                )
+                .all()
+            )
+
+            if len(videos) != len(snag.video_ids):
+                raise HTTPException(
+                    status_code=400,
+                    detail="One or more videos not found or not owned by user",
                 )
 
-                for video in existing_videos:
-                    video_link = models.ConversationContentLink(
-                        conversation_id=conversation.id,
-                        message_id=message.id,
-                        content_type="video",
-                        content_id=video.id,
-                    )
-                    db.add(video_link)
-            except:
-                pass
+            for video in videos:
+                video_link = models.ConversationContentLink(
+                    conversation_id=conversation.id,
+                    message_id=message.id,
+                    content_type="video",
+                    content_id=video.id,
+                )
+                db.add(video_link)
+                print(f"Added video link for video {video.id}")
 
         db.commit()
 
+        # Verify content links were created
+        content_links = (
+            db.query(models.ConversationContentLink)
+            .filter(models.ConversationContentLink.message_id == message.id)
+            .all()
+        )
+        print(f"Created {len(content_links)} content links")
+
+        # Return response with request details
         result = (
             db.query(models.SnaggedRequest)
             .join(models.Request)
             .join(models.User, models.Request.user_id == models.User.id)
             .filter(models.SnaggedRequest.id == new_snag.id)
             .with_entities(
-                models.SnaggedRequest, models.Request, models.User.username.label("owner_username")
+                models.SnaggedRequest,
+                models.Request,
+                models.User.username.label("owner_username"),
             )
             .first()
         )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Created snag not found")
 
         snagged, request, owner_username = result
 
@@ -225,6 +261,10 @@ def create_snagged_request(
             },
         }
 
+    except HTTPException as he:
+        db.rollback()
+        raise he
     except Exception as e:
         db.rollback()
+        print(f"Error in create_snagged_request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

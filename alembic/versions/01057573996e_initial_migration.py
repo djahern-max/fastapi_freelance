@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: cc59558f8e5a
+Revision ID: 01057573996e
 Revises: 
-Create Date: 2024-12-16 11:50:12.360184
+Create Date: 2024-12-22 09:48:02.384194
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'cc59558f8e5a'
+revision: str = '01057573996e'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -78,6 +78,28 @@ def upgrade() -> None:
     sa.UniqueConstraint('user_id')
     )
     op.create_index(op.f('ix_developer_profiles_id'), 'developer_profiles', ['id'], unique=False)
+    op.create_table('marketplace_products',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('developer_id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('description', sa.Text(), nullable=False),
+    sa.Column('long_description', sa.Text(), nullable=True),
+    sa.Column('price', sa.Float(), nullable=False),
+    sa.Column('category', sa.Enum('AUTOMATION', 'PROGRAMMING', 'MARKETING', 'DATA_ANALYSIS', 'CONTENT_CREATION', 'OTHER', name='productcategory'), nullable=False),
+    sa.Column('status', sa.Enum('DRAFT', 'PUBLISHED', 'ARCHIVED', name='productstatus'), nullable=True),
+    sa.Column('version', sa.String(), nullable=False),
+    sa.Column('requirements', sa.Text(), nullable=True),
+    sa.Column('installation_guide', sa.Text(), nullable=True),
+    sa.Column('documentation_url', sa.String(), nullable=True),
+    sa.Column('view_count', sa.Integer(), nullable=True),
+    sa.Column('download_count', sa.Integer(), nullable=True),
+    sa.Column('rating', sa.Float(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_marketplace_products_id'), 'marketplace_products', ['id'], unique=False)
     op.create_table('projects',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
@@ -121,6 +143,35 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_developer_ratings_developer_id'), 'developer_ratings', ['developer_id'], unique=False)
     op.create_index(op.f('ix_developer_ratings_user_id'), 'developer_ratings', ['user_id'], unique=False)
+    op.create_table('product_downloads',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=True),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('price_paid', sa.Float(), nullable=False),
+    sa.Column('transaction_id', sa.String(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['product_id'], ['marketplace_products.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('transaction_id')
+    )
+    op.create_index(op.f('ix_product_downloads_id'), 'product_downloads', ['id'], unique=False)
+    op.create_table('product_reviews',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=True),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('rating', sa.Integer(), nullable=False),
+    sa.Column('review_text', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.CheckConstraint('rating >= 1 AND rating <= 5', name='valid_rating'),
+    sa.ForeignKeyConstraint(['product_id'], ['marketplace_products.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('product_id', 'user_id', name='unique_product_review')
+    )
+    op.create_index(op.f('ix_product_reviews_id'), 'product_reviews', ['id'], unique=False)
     op.create_table('requests',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(), nullable=False),
@@ -246,6 +297,13 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_conversation_messages_conversation_id'), 'conversation_messages', ['conversation_id'], unique=False)
     op.create_index(op.f('ix_conversation_messages_id'), 'conversation_messages', ['id'], unique=False)
+    op.create_table('product_videos',
+    sa.Column('product_id', sa.Integer(), nullable=True),
+    sa.Column('video_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['product_id'], ['marketplace_products.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['video_id'], ['videos.id'], ondelete='CASCADE'),
+    sa.UniqueConstraint('product_id', 'video_id', name='unique_product_video')
+    )
     op.create_table('request_comment_votes',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('comment_id', sa.Integer(), nullable=False),
@@ -286,6 +344,7 @@ def downgrade() -> None:
     op.drop_table('conversation_content_links')
     op.drop_table('votes')
     op.drop_table('request_comment_votes')
+    op.drop_table('product_videos')
     op.drop_index(op.f('ix_conversation_messages_id'), table_name='conversation_messages')
     op.drop_index(op.f('ix_conversation_messages_conversation_id'), table_name='conversation_messages')
     op.drop_table('conversation_messages')
@@ -305,6 +364,10 @@ def downgrade() -> None:
     op.drop_table('agreements')
     op.drop_index(op.f('ix_requests_id'), table_name='requests')
     op.drop_table('requests')
+    op.drop_index(op.f('ix_product_reviews_id'), table_name='product_reviews')
+    op.drop_table('product_reviews')
+    op.drop_index(op.f('ix_product_downloads_id'), table_name='product_downloads')
+    op.drop_table('product_downloads')
     op.drop_index(op.f('ix_developer_ratings_user_id'), table_name='developer_ratings')
     op.drop_index(op.f('ix_developer_ratings_developer_id'), table_name='developer_ratings')
     op.drop_table('developer_ratings')
@@ -312,6 +375,8 @@ def downgrade() -> None:
     op.drop_table('subscriptions')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
+    op.drop_index(op.f('ix_marketplace_products_id'), table_name='marketplace_products')
+    op.drop_table('marketplace_products')
     op.drop_index(op.f('ix_developer_profiles_id'), table_name='developer_profiles')
     op.drop_table('developer_profiles')
     op.drop_index(op.f('ix_client_profiles_id'), table_name='client_profiles')

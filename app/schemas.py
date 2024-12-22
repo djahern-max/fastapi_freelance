@@ -634,7 +634,9 @@ class RequestWithDetails(RequestOut):
     current_proposal: Optional["Agreement"] = None
     conversations: List["ConversationOut"] = []
     comments: List["RequestCommentResponse"] = []  # Changed from CommentOut
-    project: Optional[ProjectBase] = None  # Basic project info if request is in a project
+    project: Optional[ProjectBase] = (
+        None  # Basic project info if request is in a project
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -884,5 +886,97 @@ class SnaggedRequestCreate(BaseModel):
     message: str
     profile_link: bool = False
     video_ids: List[int] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------ AI Agent Marketplace ------------------
+
+
+class ProductCategory(str, Enum):
+    AUTOMATION = "automation"
+    PROGRAMMING = "programming"
+    MARKETING = "marketing"
+    DATA_ANALYSIS = "data_analysis"
+    CONTENT_CREATION = "content_creation"
+    OTHER = "other"
+
+
+class ProductStatus(str, Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+class ProductBase(BaseModel):
+    name: str
+    description: str
+    long_description: Optional[str] = None
+    price: float
+    category: ProductCategory
+    requirements: Optional[str] = None
+    installation_guide: Optional[str] = None
+    documentation_url: Optional[str] = None
+    version: str = "1.0.0"
+
+
+class ProductCreate(ProductBase):
+    video_ids: Optional[List[int]] = []
+
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    long_description: Optional[str] = None
+    price: Optional[float] = None
+    category: Optional[ProductCategory] = None
+    status: Optional[ProductStatus] = None
+    version: Optional[str] = None
+    requirements: Optional[str] = None
+    installation_guide: Optional[str] = None
+    documentation_url: Optional[str] = None
+    video_ids: Optional[List[int]] = []
+
+
+class ProductReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    review_text: Optional[str] = None
+
+
+class ProductReviewOut(BaseModel):
+    id: int
+    product_id: int
+    user_id: int
+    rating: int
+    review_text: Optional[str]
+    created_at: datetime
+    user: UserBasic
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductOut(ProductBase):
+    id: int
+    developer_id: int
+    status: ProductStatus
+    view_count: int
+    download_count: int
+    rating: Optional[float]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    developer: UserBasic
+    reviews: List[ProductReviewOut] = []
+    related_videos: List[VideoOut] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductDownloadOut(BaseModel):
+    id: int
+    product_id: int
+    user_id: int
+    price_paid: float
+    transaction_id: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

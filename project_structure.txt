@@ -1,5 +1,5 @@
 
-Project Tree for C:\Users\dahern\Documents\RYZE.AI\fastapi
+Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
 ==================================================
 📁 fastapi/
   📄 .env.test
@@ -11,7 +11,6 @@ Project Tree for C:\Users\dahern\Documents\RYZE.AI\fastapi
   📄 docker-compose-prod.yml
   📝 log_file.txt
   📝 project_structure.txt
-  📄 pytest.ini
   📝 requirements.txt
   📝 stderr_log.txt
   📝 stdout_log.txt
@@ -34,7 +33,6 @@ Project Tree for C:\Users\dahern\Documents\RYZE.AI\fastapi
     📄 oauth2.py
     📄 schemas.py
     📄 utils.py
-    📁 ai_utils/
     📁 crud/
       📄 crud_project.py
       📄 crud_rating.py
@@ -47,6 +45,7 @@ Project Tree for C:\Users\dahern\Documents\RYZE.AI\fastapi
       📄 display_videos.py
       📄 feedback.py
       📄 login.py
+      📄 marketplace_router.py
       📄 newsletter.py
       📄 payment.py
       📄 post.py
@@ -79,4 +78,3 @@ Project Tree for C:\Users\dahern\Documents\RYZE.AI\fastapi
     📄 test_post.py
     📄 test_users.py
     📄 test_vote.py
-  📁 videos/
