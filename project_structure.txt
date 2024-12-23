@@ -24,7 +24,7 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
     📄 env.py
     📄 script.py.mako
     📁 versions/
-      📄 7c4618477afa_initial_migration.py
+      📄 cdc6cb944b2e_initial_migration.py
   📁 app/
     📄 config.py
     📄 database.py

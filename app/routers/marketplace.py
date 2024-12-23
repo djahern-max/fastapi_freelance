@@ -117,10 +117,10 @@ async def upload_product_files(
     # Add validation for executables
     if file_type == "executable":
         for file in files:
-            if not file.filename.endswith((".exe", ".msi")):
+            if not file.filename.endswith((".exe", ".msi", ".zip")):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid file type. Only .exe and .msi files are allowed for executables",
+                    detail="Invalid file type. Only .exe, .msi, and .zip files are allowed for executables",
                 )
 
     temp_dir = f"/tmp/product_{product_id}"
