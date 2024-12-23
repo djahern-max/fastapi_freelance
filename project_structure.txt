@@ -23,7 +23,9 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
     📄 env.py
     📄 script.py.mako
     📁 versions/
-      📄 cc59558f8e5a_initial_migration.py
+      📄 01057573996e_initial_migration.py
+      📄 18a7be204eba_add_stripe_fields_to_marketplace_.py
+      📄 6d0636c09752_add_product_files_table.py
   📁 app/
     📄 config.py
     📄 database.py
@@ -34,6 +36,7 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
     📄 schemas.py
     📄 utils.py
     📁 crud/
+      📄 crud_marketplace.py
       📄 crud_project.py
       📄 crud_rating.py
       📄 crud_request.py
@@ -45,7 +48,7 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
       📄 display_videos.py
       📄 feedback.py
       📄 login.py
-      📄 marketplace_router.py
+      📄 marketplace.py
       📄 newsletter.py
       📄 payment.py
       📄 post.py

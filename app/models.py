@@ -610,6 +610,8 @@ class MarketplaceProduct(Base, TimestampMixin):
     price = Column(Float, nullable=False)
     category = Column(SQLAlchemyEnum(ProductCategory), nullable=False)
     status = Column(SQLAlchemyEnum(ProductStatus), default=ProductStatus.DRAFT)
+    stripe_product_id = Column(String, nullable=True)  # Moved here with core fields
+    stripe_price_id = Column(String, nullable=True)  # Moved here with core fields
 
     # Product details
     version = Column(String, nullable=False, default="1.0.0")
@@ -643,7 +645,9 @@ class ProductDownload(Base, TimestampMixin):
         Integer, ForeignKey("marketplace_products.id", ondelete="CASCADE")
     )
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-    price_paid = Column(Float, nullable=False)
+    price_paid = Column(Float, nullable=False)  # Base price
+    commission_paid = Column(Float, nullable=False, default=0.0)  # Commission amount
+    total_paid = Column(Float, nullable=False)  # Total including commission
     transaction_id = Column(String, unique=True)
 
     # Relationships
@@ -689,3 +693,32 @@ User.products = relationship("MarketplaceProduct", back_populates="developer")
 Video.products = relationship(
     "MarketplaceProduct", secondary="product_videos", back_populates="related_videos"
 )
+
+
+class ProductFile(Base, TimestampMixin):
+    __tablename__ = "product_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(
+        Integer,
+        ForeignKey("marketplace_products.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    file_type = Column(String, nullable=False)  # 'executable', 'documentation', etc.
+    file_path = Column(String, nullable=False)  # Path in Digital Ocean Spaces
+    file_name = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)  # in bytes
+    checksum = Column(String, nullable=False)  # For file integrity
+    version = Column(String, nullable=False, default="1.0.0")
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    product = relationship("MarketplaceProduct", back_populates="files")
+
+
+# Add to MarketplaceProduct model
+MarketplaceProduct.files = relationship(
+    "ProductFile", back_populates="product", cascade="all, delete-orphan"
+)
+stripe_product_id = Column(String, nullable=True)
+stripe_price_id = Column(String, nullable=True)

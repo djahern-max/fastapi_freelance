@@ -1,8 +1,8 @@
-"""Initial migration
+"""initial_migration
 
-Revision ID: 01057573996e
+Revision ID: 7c4618477afa
 Revises: 
-Create Date: 2024-12-22 09:48:02.384194
+Create Date: 2024-12-22 19:14:54.803523
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '01057573996e'
+revision: str = '7c4618477afa'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -87,6 +87,8 @@ def upgrade() -> None:
     sa.Column('price', sa.Float(), nullable=False),
     sa.Column('category', sa.Enum('AUTOMATION', 'PROGRAMMING', 'MARKETING', 'DATA_ANALYSIS', 'CONTENT_CREATION', 'OTHER', name='productcategory'), nullable=False),
     sa.Column('status', sa.Enum('DRAFT', 'PUBLISHED', 'ARCHIVED', name='productstatus'), nullable=True),
+    sa.Column('stripe_product_id', sa.String(), nullable=True),
+    sa.Column('stripe_price_id', sa.String(), nullable=True),
     sa.Column('version', sa.String(), nullable=False),
     sa.Column('requirements', sa.Text(), nullable=True),
     sa.Column('installation_guide', sa.Text(), nullable=True),
@@ -148,6 +150,8 @@ def upgrade() -> None:
     sa.Column('product_id', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=True),
     sa.Column('price_paid', sa.Float(), nullable=False),
+    sa.Column('commission_paid', sa.Float(), nullable=False),
+    sa.Column('total_paid', sa.Float(), nullable=False),
     sa.Column('transaction_id', sa.String(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
@@ -157,6 +161,22 @@ def upgrade() -> None:
     sa.UniqueConstraint('transaction_id')
     )
     op.create_index(op.f('ix_product_downloads_id'), 'product_downloads', ['id'], unique=False)
+    op.create_table('product_files',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=False),
+    sa.Column('file_type', sa.String(), nullable=False),
+    sa.Column('file_path', sa.String(), nullable=False),
+    sa.Column('file_name', sa.String(), nullable=False),
+    sa.Column('file_size', sa.Integer(), nullable=False),
+    sa.Column('checksum', sa.String(), nullable=False),
+    sa.Column('version', sa.String(), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['product_id'], ['marketplace_products.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_product_files_id'), 'product_files', ['id'], unique=False)
     op.create_table('product_reviews',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('product_id', sa.Integer(), nullable=True),
@@ -366,6 +386,8 @@ def downgrade() -> None:
     op.drop_table('requests')
     op.drop_index(op.f('ix_product_reviews_id'), table_name='product_reviews')
     op.drop_table('product_reviews')
+    op.drop_index(op.f('ix_product_files_id'), table_name='product_files')
+    op.drop_table('product_files')
     op.drop_index(op.f('ix_product_downloads_id'), table_name='product_downloads')
     op.drop_table('product_downloads')
     op.drop_index(op.f('ix_developer_ratings_user_id'), table_name='developer_ratings')

@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}:{settings.database_port}/{settings.database_name}"
 
 # Log the connection URL without revealing sensitive information (like the password)
-logger.info(f"Connecting to database: postgresql://{settings.database_username}:****@{settings.database_hostname}:{settings.database_port}/{settings.database_name}")
+logger.info(
+    f"Connecting to database: postgresql://{settings.database_username}:****@{settings.database_hostname}:{settings.database_port}/{settings.database_name}"
+)
 
 # Create the SQLAlchemy engine
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
@@ -19,6 +21,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 # Dependency to get a DB session
 def get_db():
     db = SessionLocal()
@@ -26,6 +29,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-

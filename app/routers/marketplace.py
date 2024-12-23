@@ -1,3 +1,4 @@
+# At the top of your marketplace.py file
 from fastapi import (
     APIRouter,
     Depends,
@@ -37,18 +38,53 @@ s3_client = boto3.client(
     aws_secret_access_key=os.getenv("DO_SPACES_SECRET"),
 )
 
+required_env_vars = [
+    "DO_SPACES_ENDPOINT",
+    "DO_SPACES_KEY",
+    "DO_SPACES_SECRET",
+    "DO_SPACES_BUCKET",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "FRONTEND_URL",
+]
+
+# Map your existing env vars to the required ones
+env_var_mapping = {
+    "SPACES_ENDPOINT": "SPACES_ENDPOINT",
+    "SPACES_KEY": "SPACES_KEY",
+    "SPACES_SECRET": "SPACES_SECRET",
+    "SPACES_BUCKET": "SPACES_BUCKET",
+    "STRIPE_SECRET_KEY": "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET": "STRIPE_WEBHOOK_SECRET",
+    "FRONTEND_URL": "FRONTEND_URL",
+}
+
+# Verify all required environment variables are present
+missing_vars = []
+for required_var in required_env_vars:
+    mapped_var = env_var_mapping.get(required_var, required_var)
+    if not os.getenv(mapped_var):
+        missing_vars.append(required_var)
+
+if missing_vars:
+    logger.warning(f"Missing environment variables: {', '.join(missing_vars)}")
+
+MAX_FILE_SIZE = 100 * 1024 * 1024
+
 
 @router.post("/products/files/{product_id}")
 async def upload_product_files(
     product_id: int,
     files: List[UploadFile] = File(...),
+    file_type: str = Query(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
-    background_tasks: BackgroundTasks = BackgroundTasks(),  # Modified this line
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    """Upload product files to cloud storage."""
-    # Verify product ownership
+    # Verify product ownership - ADD THIS BEFORE FILE PROCESSING
     product = crud_marketplace.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
 
     if product.developer_id != current_user.id:
         raise HTTPException(
@@ -63,12 +99,26 @@ async def upload_product_files(
         # Create temp directory
         os.makedirs(temp_dir, exist_ok=True)
 
-        # Save uploaded files to temp directory
+        # Track file sizes and generate checksums
+        file_records = []
+        import hashlib
+
+        # Save uploaded files to temp directory and collect metadata
         for file in files:
             file_path = os.path.join(temp_dir, file.filename)
             content = await file.read()
+
+            # Calculate checksum
+            checksum = hashlib.sha256(content).hexdigest()
+
+            # Save file
             with open(file_path, "wb") as f:
                 f.write(content)
+
+            # Prepare database record
+            file_records.append(
+                {"filename": file.filename, "size": len(content), "checksum": checksum}
+            )
 
         # Create ZIP archive
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -79,13 +129,29 @@ async def upload_product_files(
                     zipf.write(file_path, arcname)
 
         # Upload ZIP to DigitalOcean Spaces
+        s3_path = f"products/{product_id}/product_files.zip"
         with open(zip_path, "rb") as zip_file:
             s3_client.upload_fileobj(
                 zip_file,
-                os.getenv("DO_SPACES_BUCKET"),
-                f"products/{product_id}/product_files.zip",
+                os.getenv("SPACES_BUCKET"),  # Changed from DO_SPACES_BUCKET
+                s3_path,
                 ExtraArgs={"ACL": "private"},
             )
+        # Create ProductFile records in database
+        for file_record in file_records:
+            db_file = models.ProductFile(
+                product_id=product_id,
+                file_type=file_type,
+                file_path=s3_path,
+                file_name=file_record["filename"],
+                file_size=file_record["size"],
+                checksum=file_record["checksum"],
+                version=product.version,
+                is_active=True,
+            )
+            db.add(db_file)
+
+        db.commit()
 
         background_tasks.add_task(cleanup_temp_files, temp_dir, zip_path)
 
@@ -93,53 +159,152 @@ async def upload_product_files(
             "message": "Files uploaded successfully",
             "product_id": product_id,
             "file_count": len(files),
+            "files": [
+                {"name": fr["filename"], "size": fr["size"]} for fr in file_records
+            ],
         }
 
     except Exception as e:
         logger.error(f"Error during file upload: {str(e)}")
         background_tasks.add_task(cleanup_temp_files, temp_dir, zip_path)
+        # Rollback any database changes if there was an error
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process files: {str(e)}",
         )
 
 
-@router.get("/products/download/{product_id}")
-async def get_download_url(
+@router.post("/products/files/{product_id}")
+async def upload_product_files(
     product_id: int,
-    db: Session = Depends(database.get_db),
+    files: List[UploadFile] = File(...),
+    file_type: str = Query(...),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    """Generate temporary download URL for purchased product."""
-    # Verify purchase
-    purchase = (
-        db.query(models.ProductDownload)
-        .filter(
-            models.ProductDownload.product_id == product_id,
-            models.ProductDownload.user_id == current_user.id,
-        )
-        .first()
-    )
+    logger.info(f"Starting file upload for product {product_id}")
 
-    if not purchase:
+    # Verify product ownership
+    product = crud_marketplace.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if product.developer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must purchase this product before downloading",
+            detail="Not authorized to upload files for this product",
         )
 
+    # File size and content validation
+    file_contents = []
+    for file in files:
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File {file.filename} exceeds maximum size of 100MB",
+            )
+        file_contents.append(content)
+
+    # Add validation for executables
+    if file_type == "executable":
+        for file in files:
+            if not file.filename.endswith((".exe", ".msi")):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid file type. Only .exe and .msi files are allowed for executables",
+                )
+
+    temp_dir = f"/tmp/product_{product_id}"
+    zip_path = f"/tmp/product_{product_id}.zip"
+
     try:
-        # Generate presigned URL valid for 1 hour
-        file_key = f"products/{product_id}/product_files.zip"
-        url = s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": os.getenv("DO_SPACES_BUCKET"), "Key": file_key},
-            ExpiresIn=3600,
-        )
-        return {"download_url": url}
-    except ClientError as e:
+        # Create temp directory
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Track file sizes and generate checksums
+        file_records = []
+        import hashlib
+
+        # Save uploaded files to temp directory and collect metadata
+        for idx, file in enumerate(files):
+            file_path = os.path.join(temp_dir, file.filename)
+            content = file_contents[idx]  # Use stored content
+
+            # Calculate checksum
+            checksum = hashlib.sha256(content).hexdigest()
+
+            # Save file
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+            # Prepare database record
+            file_records.append(
+                {"filename": file.filename, "size": len(content), "checksum": checksum}
+            )
+
+        # Create ZIP archive
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, filenames in os.walk(temp_dir):
+                for filename in filenames:
+                    file_path = os.path.join(root, filename)
+                    arcname = os.path.relpath(file_path, temp_dir)
+                    zipf.write(file_path, arcname)
+
+        # Upload ZIP to DigitalOcean Spaces
+        s3_path = f"products/{product_id}/product_files.zip"
+        try:
+            with open(zip_path, "rb") as zip_file:
+                s3_client.upload_fileobj(
+                    zip_file,
+                    os.getenv("DO_SPACES_BUCKET"),
+                    s3_path,
+                    ExtraArgs={"ACL": "private"},
+                )
+        except ClientError as e:
+            logger.error(f"Failed to upload to DO Spaces: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to upload file to storage",
+            )
+
+        # Create ProductFile records in database
+        for file_record in file_records:
+            db_file = models.ProductFile(
+                product_id=product_id,
+                file_type=file_type,
+                file_path=s3_path,
+                file_name=file_record["filename"],
+                file_size=file_record["size"],
+                checksum=file_record["checksum"],
+                version=product.version,
+                is_active=True,
+            )
+            db.add(db_file)
+
+        db.commit()
+        logger.info(f"Successfully uploaded files for product {product_id}")
+
+        background_tasks.add_task(cleanup_temp_files, temp_dir, zip_path)
+
+        return {
+            "message": "Files uploaded successfully",
+            "product_id": product_id,
+            "file_count": len(files),
+            "files": [
+                {"name": fr["filename"], "size": fr["size"]} for fr in file_records
+            ],
+        }
+
+    except Exception as e:
+        logger.error(f"Error during file upload: {str(e)}")
+        background_tasks.add_task(cleanup_temp_files, temp_dir, zip_path)
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate download URL: {str(e)}",
+            detail=f"Failed to process files: {str(e)}",
         )
 
 
@@ -150,47 +315,61 @@ async def create_product(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     """Create a new product in the marketplace"""
-    if current_user.user_type != models.UserType.developer:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only developers can create products",
-        )
-
-    # Create Stripe product and price
-    stripe_product = stripe.Product.create(
-        name=product.name,
-        description=product.description,
-    )
-
-    stripe_price = stripe.Price.create(
-        product=stripe_product.id,
-        unit_amount=int(product.price * 100),  # Convert to cents
-        currency="usd",
-    )
-
-    db_product = models.MarketplaceProduct(
-        **product.model_dump(exclude={"video_ids"}),
-        developer_id=current_user.id,
-        stripe_product_id=stripe_product.id,
-        stripe_price_id=stripe_price.id,
-    )
-
-    # Add related videos if provided
-    if product.video_ids:
-        videos = (
-            db.query(models.Video)
-            .filter(
-                models.Video.id.in_(product.video_ids),
-                models.Video.user_id == current_user.id,
+    try:
+        if current_user.user_type != models.UserType.developer:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only developers can create products",
             )
-            .all()
-        )
-        db_product.related_videos.extend(videos)
 
-    db.add(db_product)
-    db.commit()
-    db.refresh(db_product)
-    return db_product
+        logger.debug(f"Creating Stripe product for: {product.name}")
+        # Create Stripe product and price
+        stripe_product = stripe.Product.create(
+            name=product.name,
+            description=product.description,
+        )
+        logger.debug(f"Created Stripe product: {stripe_product.id}")
+
+        stripe_price = stripe.Price.create(
+            product=stripe_product.id,
+            unit_amount=int(product.price * 100),  # Convert to cents
+            currency="usd",
+        )
+        logger.debug(f"Created Stripe price: {stripe_price.id}")
+
+        logger.debug("Creating database product")
+        db_product = models.MarketplaceProduct(
+            developer_id=current_user.id,
+            name=product.name,
+            description=product.description,
+            long_description=product.long_description,
+            price=product.price,
+            category=product.category,
+            stripe_product_id=stripe_product.id,
+            stripe_price_id=stripe_price.id,
+        )
+        logger.debug(f"Database product created: {db_product}")
+
+        if product.video_ids:
+            videos = (
+                db.query(models.Video)
+                .filter(
+                    models.Video.id.in_(product.video_ids),
+                    models.Video.user_id == current_user.id,
+                )
+                .all()
+            )
+            db_product.related_videos.extend(videos)
+
+        db.add(db_product)
+        db.commit()
+        db.refresh(db_product)
+        return db_product
+
+    except Exception as e:
+        logger.error(f"Error creating product: {str(e)}")
+        logger.exception(e)  # This will log the full traceback
+        raise
 
 
 @router.get("/products", response_model=schemas.PaginatedProductResponse)
@@ -226,7 +405,10 @@ async def list_products(
 async def get_product(
     product_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
+    # Change this line to match your function name
+    current_user: Optional[models.User] = Depends(
+        oauth2.get_optional_user
+    ),  # Changed from get_current_user_optional
 ):
     """Get a specific product's details"""
     product = (
@@ -310,7 +492,7 @@ async def purchase_product(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    """Create a checkout session for product purchase"""
+    """Create a checkout session for product purchase including 5% commission"""
     product = (
         db.query(models.MarketplaceProduct)
         .filter(
@@ -323,20 +505,44 @@ async def purchase_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    # Calculate base price and commission
+    base_price = int(product.price * 100)  # Convert to cents for Stripe
+    commission_rate = 0.05  # 5% commission
+    commission_amount = int(base_price * commission_rate)
+    total_amount = base_price + commission_amount
+
+    # Create a new price with the commission included
+    commission_price = stripe.Price.create(
+        unit_amount=total_amount,
+        currency="usd",
+        product=product.stripe_product_id,
+        metadata={
+            "base_price": base_price,
+            "commission_amount": commission_amount,
+            "commission_rate": "5%",
+        },
+    )
+
     # Create Stripe checkout session
     session = stripe.checkout.Session.create(
         customer=current_user.stripe_customer_id,
         payment_method_types=["card"],
         line_items=[
             {
-                "price": product.stripe_price_id,
+                "price": commission_price.id,
                 "quantity": 1,
             }
         ],
         mode="payment",
         success_url=f"{os.getenv('FRONTEND_URL')}/marketplace/purchase/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{os.getenv('FRONTEND_URL')}/marketplace/products/{product_id}",
-        metadata={"product_id": str(product_id), "user_id": str(current_user.id)},
+        metadata={
+            "product_id": str(product_id),
+            "user_id": str(current_user.id),
+            "base_price": str(base_price),
+            "commission_amount": str(commission_amount),
+            "total_amount": str(total_amount),
+        },
     )
 
     return {"url": session.url}

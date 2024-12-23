@@ -980,3 +980,12 @@ class ProductDownloadOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedProductResponse(BaseModel):
+    items: List[ProductOut]
+    total: int
+    skip: int
+    limit: int
+
+    model_config = ConfigDict(from_attributes=True)
