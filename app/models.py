@@ -635,6 +635,9 @@ class MarketplaceProduct(Base, TimestampMixin):
     related_videos = relationship(
         "Video", secondary="product_videos", back_populates="products"
     )
+    files = relationship(
+        "ProductFile", back_populates="product", cascade="all, delete-orphan"
+    )
 
 
 class ProductDownload(Base, TimestampMixin):
@@ -645,10 +648,9 @@ class ProductDownload(Base, TimestampMixin):
         Integer, ForeignKey("marketplace_products.id", ondelete="CASCADE")
     )
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-    price_paid = Column(Float, nullable=False)  # Base price
-    commission_paid = Column(Float, nullable=False, default=0.0)  # Commission amount
-    total_paid = Column(Float, nullable=False)  # Total including commission
-    transaction_id = Column(String, unique=True)
+    price_paid = Column(Float, nullable=False)
+    download_date = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    file_path = Column(String, nullable=False)
 
     # Relationships
     product = relationship("MarketplaceProduct", back_populates="downloads")

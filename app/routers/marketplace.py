@@ -25,7 +25,12 @@ import shutil
 import zipfile
 import stripe.error
 import hashlib
-import pytest
+
+from fastapi.responses import StreamingResponse
+from sqlalchemy.exc import SQLAlchemyError
+from ..oauth2 import get_current_user
+from ..utils import get_file_from_storage
+from ..models import ProductFile, ProductDownload, MarketplaceProduct
 
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
@@ -773,4 +778,66 @@ async def test_product_flow(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Test flow failed: {str(e)}",
+        )
+
+
+@router.get("/products/files/{product_id}")
+async def download_product_file(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_user
+    ),  # Changed from User to models.User
+):
+    try:
+        # Verify purchase
+        purchase = (
+            db.query(
+                models.ProductDownload
+            )  # Changed from ProductDownload to models.ProductDownload
+            .filter(
+                models.ProductDownload.product_id == product_id,
+                models.ProductDownload.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not purchase:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Purchase required to download this product",
+            )
+
+        # Get product file info
+        product_file = (
+            db.query(ProductFile)
+            .filter(
+                ProductFile.product_id == product_id,
+                ProductFile.is_active == True,  # Get active file version
+                ProductFile.file_type
+                == "executable",  # Assuming we want executable files
+            )
+            .first()
+        )
+
+        if not product_file:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Product file not found"
+            )
+
+        # Get file from storage
+        file_data = await get_file_from_storage(product_file.file_path)
+
+        return StreamingResponse(
+            file_data,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{product_file.file_name}"'
+            },
+        )
+
+    except SQLAlchemyError as db_error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error occurred: {str(db_error)}",
         )
