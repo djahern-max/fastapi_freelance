@@ -649,8 +649,9 @@ class ProductDownload(Base, TimestampMixin):
     )
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     price_paid = Column(Float, nullable=False)
-    download_date = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    file_path = Column(String, nullable=False)
+    transaction_id = Column(
+        String, nullable=True
+    )  # Adding this for tracking Stripe transactions
 
     # Relationships
     product = relationship("MarketplaceProduct", back_populates="downloads")

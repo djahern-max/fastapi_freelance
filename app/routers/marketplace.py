@@ -31,6 +31,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from ..oauth2 import get_current_user
 from ..utils import get_file_from_storage
 from ..models import ProductFile, ProductDownload, MarketplaceProduct
+from sqlalchemy import and_
 
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
@@ -257,6 +258,7 @@ async def create_product(
             category=product.category,
             stripe_product_id=stripe_product.id,
             stripe_price_id=stripe_price.id,
+            status=models.ProductStatus.PUBLISHED,
         )
 
         if product.video_ids:
@@ -422,72 +424,98 @@ async def purchase_product(
     product_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    """Create a checkout session for product purchase including 5% commission"""
-    product = (
-        db.query(models.MarketplaceProduct)
-        .filter(
-            models.MarketplaceProduct.id == product_id,
-            models.MarketplaceProduct.status == models.ProductStatus.PUBLISHED,
+    """Create a checkout session for product purchase including 5% platform fee"""
+    try:
+        # Get product with files
+        product = (
+            db.query(models.MarketplaceProduct)
+            .filter(
+                models.MarketplaceProduct.id == product_id,
+                models.MarketplaceProduct.status == models.ProductStatus.PUBLISHED,
+            )
+            .first()
         )
-        .first()
-    )
 
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
 
-    # Calculate base price and commission
-    base_price = int(product.price * 100)  # Convert to cents for Stripe
-    commission_rate = 0.05  # 5% commission
-    commission_amount = int(base_price * commission_rate)
-    total_amount = base_price + commission_amount
+        # Check if the user has already purchased this product
+        existing_purchase = (
+            db.query(models.ProductDownload)
+            .filter(
+                models.ProductDownload.product_id == product_id,
+                models.ProductDownload.user_id == current_user.id,
+            )
+            .first()
+        )
 
-    # Create a new price with the commission included
-    commission_price = stripe.Price.create(
-        unit_amount=total_amount,
-        currency="usd",
-        product=product.stripe_product_id,
-        metadata={
-            "base_price": base_price,
-            "commission_amount": commission_amount,
-            "commission_rate": "5%",
-        },
-    )
+        if existing_purchase:
+            raise HTTPException(
+                status_code=400, detail="You have already purchased this product"
+            )
 
-    # Create Stripe checkout session
-    session = stripe.checkout.Session.create(
-        customer=current_user.stripe_customer_id,
-        payment_method_types=["card"],
-        line_items=[
-            {
-                "price": commission_price.id,
-                "quantity": 1,
-            }
-        ],
-        mode="payment",
-        success_url=f"{os.getenv('FRONTEND_URL')}/marketplace/purchase/success?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{os.getenv('FRONTEND_URL')}/marketplace/products/{product_id}",
-        metadata={
-            "product_id": str(product_id),
-            "user_id": str(current_user.id),
-            "base_price": str(base_price),
-            "commission_amount": str(commission_amount),
-            "total_amount": str(total_amount),
-        },
-    )
+        # Calculate base price and platform fee (5%)
+        base_price = int(product.price * 100)  # Convert to cents
+        platform_fee = int(base_price * 0.05)  # 5% fee
+        total_amount = base_price + platform_fee
 
-    return {"url": session.url}
+        # Create a Stripe Checkout Session
+        session = stripe.checkout.Session.create(
+            customer=current_user.stripe_customer_id,
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "unit_amount": total_amount,
+                        "product_data": {
+                            "name": f"{product.name} (including 5% platform fee)",
+                            "description": product.description,
+                        },
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",
+            success_url=f"{os.getenv('FRONTEND_URL')}/marketplace/purchase/verify/{product_id}?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{os.getenv('FRONTEND_URL')}/marketplace/products/{product_id}",
+            metadata={
+                "product_id": str(product_id),
+                "user_id": str(current_user.id),
+                "base_price": str(base_price),
+                "platform_fee": str(platform_fee),
+                "total_amount": str(total_amount),
+            },
+        )
+
+        return {"url": session.url}
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating checkout session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/webhook", include_in_schema=False)
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+@router.post("/webhook/marketplace")
+async def stripe_webhook_marketplace(
+    request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
     """Handle Stripe webhooks for marketplace purchases"""
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
     try:
+        # Use the marketplace-specific webhook secret
         event = stripe.Webhook.construct_event(
-            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
+            payload,
+            sig_header,
+            os.getenv(
+                "STRIPE_WEBHOOK_SECRET_MARKETPLACE"
+            ),  # Updated to use marketplace secret
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -495,23 +523,40 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
 
-        # Record the purchase
+        # Get metadata from the session
         product_id = int(session["metadata"]["product_id"])
         user_id = int(session["metadata"]["user_id"])
+        total_amount = (
+            float(session["metadata"]["total_amount"]) / 100
+        )  # Convert cents to dollars
 
-        download = models.ProductDownload(
-            product_id=product_id,
-            user_id=user_id,
-            price_paid=session["amount_total"] / 100,  # Convert from cents
-            transaction_id=session["payment_intent"],
-        )
+        try:
+            # Record the purchase
+            product_download = models.ProductDownload(
+                product_id=product_id,
+                user_id=user_id,
+                price_paid=total_amount,
+                transaction_id=session["payment_intent"],
+            )
 
-        # Update product statistics
-        product = db.query(models.MarketplaceProduct).filter_by(id=product_id).first()
-        product.download_count += 1
+            # Update product statistics
+            product = (
+                db.query(models.MarketplaceProduct).filter_by(id=product_id).first()
+            )
+            if product:
+                product.download_count += 1
 
-        db.add(download)
-        db.commit()
+            db.add(product_download)
+            db.commit()
+
+            logger.info(
+                f"Successfully processed purchase for user {user_id}, product {product_id}"
+            )
+
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error processing purchase: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error processing purchase")
 
     return {"status": "success"}
 
@@ -785,16 +830,13 @@ async def test_product_flow(
 async def download_product_file(
     product_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        get_current_user
-    ),  # Changed from User to models.User
+    current_user: models.User = Depends(oauth2.get_current_user),
 ):
+    """Download a purchased product file with secure URL"""
     try:
         # Verify purchase
         purchase = (
-            db.query(
-                models.ProductDownload
-            )  # Changed from ProductDownload to models.ProductDownload
+            db.query(models.ProductDownload)
             .filter(
                 models.ProductDownload.product_id == product_id,
                 models.ProductDownload.user_id == current_user.id,
@@ -810,12 +852,10 @@ async def download_product_file(
 
         # Get product file info
         product_file = (
-            db.query(ProductFile)
+            db.query(models.ProductFile)
             .filter(
-                ProductFile.product_id == product_id,
-                ProductFile.is_active == True,  # Get active file version
-                ProductFile.file_type
-                == "executable",  # Assuming we want executable files
+                models.ProductFile.product_id == product_id,
+                models.ProductFile.is_active == True,
             )
             .first()
         )
@@ -825,19 +865,147 @@ async def download_product_file(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product file not found"
             )
 
-        # Get file from storage
-        file_data = await get_file_from_storage(product_file.file_path)
+        # Generate secure, time-limited download URL
+        try:
+            url = s3_client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": os.getenv("SPACES_BUCKET"),
+                    "Key": product_file.file_path,
+                },
+                ExpiresIn=300,  # URL expires in 5 minutes
+            )
 
-        return StreamingResponse(
-            file_data,
-            media_type="application/octet-stream",
-            headers={
-                "Content-Disposition": f'attachment; filename="{product_file.file_name}"'
-            },
-        )
+            return {
+                "download_url": url,
+                "filename": product_file.file_name,
+                "expires_in": 300,
+            }
 
-    except SQLAlchemyError as db_error:
+        except ClientError as e:
+            logger.error(f"Error generating download URL: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error generating download URL",
+            )
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error occurred: {str(db_error)}",
+            detail="Database error occurred",
         )
+
+
+@router.post("/webhook/marketplace")
+async def stripe_webhook_marketplace(
+    request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """Handle Stripe webhooks for marketplace purchases"""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+
+        # Get metadata from the session
+        product_id = int(session["metadata"]["product_id"])
+        user_id = int(session["metadata"]["user_id"])
+        total_amount = (
+            float(session["metadata"]["total_amount"]) / 100
+        )  # Convert cents to dollars
+
+        # Record the purchase
+        product_download = models.ProductDownload(
+            product_id=product_id,
+            user_id=user_id,
+            price_paid=total_amount,
+            transaction_id=session["payment_intent"],
+        )
+
+        try:
+            # Update product statistics
+            product = (
+                db.query(models.MarketplaceProduct).filter_by(id=product_id).first()
+            )
+            if product:
+                product.download_count += 1
+
+            db.add(product_download)
+            db.commit()
+
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error processing purchase: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error processing purchase")
+
+    return {"status": "success"}
+
+
+@router.get("/purchase/verify/{session_id}")
+async def verify_purchase(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    """Verify a successful purchase"""
+    try:
+        # Retrieve the checkout session from Stripe
+        session = stripe.checkout.Session.retrieve(session_id)
+
+        if not session or session.payment_status != "paid":
+            raise HTTPException(status_code=400, detail="Payment not completed")
+
+        # Verify the purchase exists in our database
+        product_id = int(session.metadata["product_id"])
+        purchase = (
+            db.query(models.ProductDownload)
+            .filter(
+                models.ProductDownload.product_id == product_id,
+                models.ProductDownload.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not purchase:
+            raise HTTPException(status_code=404, detail="Purchase not found")
+
+        return {
+            "success": True,
+            "product_id": product_id,
+            "download_url": f"/api/marketplace/products/files/{product_id}",
+        }
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/products/{product_id}/files/info")
+async def get_product_files(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[models.User] = Depends(oauth2.get_optional_user),
+):
+    """Get information about files associated with a product"""
+    files = (
+        db.query(models.ProductFile)
+        .filter(
+            models.ProductFile.product_id == product_id,
+            models.ProductFile.is_active == True,
+        )
+        .all()
+    )
+
+    if not files:
+        raise HTTPException(status_code=404, detail="No files found for this product")
+
+    return files

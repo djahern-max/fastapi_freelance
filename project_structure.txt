@@ -70,6 +70,7 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
     📄 play_video.py
     📄 retrieve_thumbnail.py
     📄 test_do_upload.py
+    📄 test_marketplace_flow.py
     📄 test_marketplace_integration.py
     📄 test_runner_script.py
     📄 view_do_spaces.py
