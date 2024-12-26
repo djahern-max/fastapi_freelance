@@ -832,7 +832,6 @@ async def download_product_file(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    """Download a purchased product file with secure URL"""
     try:
         # Verify purchase
         purchase = (
@@ -850,7 +849,7 @@ async def download_product_file(
                 detail="Purchase required to download this product",
             )
 
-        # Get product file info
+        # Get product file
         product_file = (
             db.query(models.ProductFile)
             .filter(
@@ -865,35 +864,24 @@ async def download_product_file(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Product file not found"
             )
 
-        # Generate secure, time-limited download URL
-        try:
-            url = s3_client.generate_presigned_url(
-                "get_object",
-                Params={
-                    "Bucket": os.getenv("SPACES_BUCKET"),
-                    "Key": product_file.file_path,
-                },
-                ExpiresIn=300,  # URL expires in 5 minutes
-            )
+        # Stream file from DO Spaces
+        response = s3_client.get_object(
+            Bucket=os.getenv("SPACES_BUCKET"), Key=product_file.file_path
+        )
 
-            return {
-                "download_url": url,
-                "filename": product_file.file_name,
-                "expires_in": 300,
-            }
+        return StreamingResponse(
+            response["Body"].iter_chunks(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{product_file.file_name}"'
+            },
+        )
 
-        except ClientError as e:
-            logger.error(f"Error generating download URL: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error generating download URL",
-            )
-
-    except SQLAlchemyError as e:
-        logger.error(f"Database error: {str(e)}")
+    except ClientError as e:
+        logger.error(f"S3 error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error occurred",
+            detail="Error accessing file",
         )
 
 
