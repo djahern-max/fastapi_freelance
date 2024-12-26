@@ -574,10 +574,6 @@ class SnaggedRequest(Base):
     request = relationship("Request", backref="snagged_by")
     developer = relationship("User", backref="snagged_requests")
 
-    __table_args__ = (
-        UniqueConstraint("request_id", "developer_id", name="unique_snagged_request"),
-    )
-
 
 # ------------------ AI Agent Marketplace ------------------
 

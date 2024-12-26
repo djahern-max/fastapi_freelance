@@ -139,20 +139,6 @@ def create_snagged_request(
                 detail=f"Only open requests can be snagged. Current status: {request.status}",
             )
 
-        # Check if already snagged
-        existing_snag = (
-            db.query(models.SnaggedRequest)
-            .filter(
-                models.SnaggedRequest.request_id == snag.request_id,
-                models.SnaggedRequest.developer_id == current_user.id,
-                models.SnaggedRequest.is_active == True,
-            )
-            .first()
-        )
-
-        if existing_snag:
-            raise HTTPException(status_code=400, detail="Request already snagged")
-
         # Create all objects within a single transaction
         new_snag = models.SnaggedRequest(
             request_id=snag.request_id, developer_id=current_user.id
