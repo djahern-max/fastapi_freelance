@@ -19,7 +19,7 @@ router = APIRouter(prefix="/conversations", tags=["Conversations"])
 def create_conversation(
     conversation: schemas.ConversationCreate,
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(require_active_subscription),
+    current_user: models.User = Depends(require_active_subscription),  # Keep this
 ):
     # Get the request and its owner
     request = (
@@ -74,56 +74,6 @@ def create_conversation(
     db.commit()
     db.refresh(new_conversation)
 
-    # If there's an initial message, create it with any linked content
-    if conversation.initial_message:
-        message = models.ConversationMessage(
-            conversation_id=new_conversation.id,
-            user_id=current_user.id,
-            content=conversation.initial_message,
-        )
-        db.add(message)
-        db.flush()  # Get message ID without committing
-
-        # Add video links if any are provided
-        if conversation.video_ids:
-            # Verify videos belong to the user
-            videos = (
-                db.query(models.Video)
-                .filter(
-                    models.Video.id.in_(conversation.video_ids),
-                    models.Video.user_id == current_user.id,
-                )
-                .all()
-            )
-
-            if len(videos) != len(conversation.video_ids):
-                raise HTTPException(
-                    status_code=400,
-                    detail="One or more videos not found or not owned by user",
-                )
-
-            for video_id in conversation.video_ids:
-                content_link = models.ConversationContentLink(
-                    conversation_id=new_conversation.id,
-                    message_id=message.id,
-                    content_type="video",
-                    content_id=video_id,
-                )
-                db.add(content_link)
-
-        # Add profile link if requested
-        if conversation.include_profile:
-            profile_link = models.ConversationContentLink(
-                conversation_id=new_conversation.id,
-                message_id=message.id,
-                content_type="profile",
-                content_id=current_user.id,
-            )
-            db.add(profile_link)
-
-        db.commit()
-        db.refresh(message)
-
     return new_conversation
 
 
@@ -135,6 +85,21 @@ def create_message(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     try:
+        # Only check subscription for developers
+        if current_user.user_type == models.UserType.developer:
+            subscription = (
+                db.query(models.Subscription)
+                .filter(models.Subscription.user_id == current_user.id)
+                .order_by(models.Subscription.created_at.desc())
+                .first()
+            )
+
+            if not subscription or subscription.status != "active":
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail="Active subscription required for developers to send messages",
+                )
+
         print(
             f"Creating message with video_ids: {message.video_ids} and include_profile: {message.include_profile}"
         )
@@ -189,8 +154,8 @@ def create_message(
                     message_id=new_message.id,
                     content_type="video",
                     content_id=video.id,
-                    title=video.title,  # Make sure your model has these fields
-                    url=video.file_path,  # Make sure your model has these fields
+                    title=video.title,
+                    url=video.file_path,
                 )
                 db.add(content_link)
                 linked_content.append(
@@ -272,7 +237,9 @@ def create_message(
 def list_user_conversations(
     request_id: int = None,
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
+    current_user: models.User = Depends(
+        oauth2.get_current_user
+    ),  # Change back to basic auth
 ):
     print(f"Fetching conversations for user {current_user.id}")
 
@@ -488,7 +455,9 @@ def create_conversation_from_video(
 def get_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
+    current_user: models.User = Depends(
+        oauth2.get_current_user
+    ),  # Change back to basic auth
 ):
     conversation = (
         db.query(models.Conversation)
