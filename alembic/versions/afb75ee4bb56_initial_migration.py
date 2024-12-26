@@ -1,8 +1,8 @@
-"""initial_migration
+"""Initial migration
 
-Revision ID: cdc6cb944b2e
+Revision ID: afb75ee4bb56
 Revises: 
-Create Date: 2024-12-22 23:27:58.679355
+Create Date: 2024-12-26 17:57:24.926652
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'cdc6cb944b2e'
+revision: str = 'afb75ee4bb56'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -150,15 +150,12 @@ def upgrade() -> None:
     sa.Column('product_id', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=True),
     sa.Column('price_paid', sa.Float(), nullable=False),
-    sa.Column('commission_paid', sa.Float(), nullable=False),
-    sa.Column('total_paid', sa.Float(), nullable=False),
     sa.Column('transaction_id', sa.String(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['product_id'], ['marketplace_products.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('transaction_id')
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_product_downloads_id'), 'product_downloads', ['id'], unique=False)
     op.create_table('product_files',
@@ -283,8 +280,7 @@ def upgrade() -> None:
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('request_id', 'developer_id', name='unique_snagged_request')
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_snagged_requests_id'), 'snagged_requests', ['id'], unique=False)
     op.create_table('videos',
