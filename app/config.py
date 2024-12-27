@@ -2,8 +2,9 @@ from pydantic_settings import BaseSettings
 import os
 from typing import Optional
 
+
 class Settings(BaseSettings):
-    env: str = 'development'  # Add this line
+    env: str = "development"
     database_hostname: str
     database_port: str
     database_password: str
@@ -12,19 +13,20 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
-    local_video_upload_dir: Optional[str] = None
-
-    class Config:
-        env_file = os.getenv('ENV_FILE', '.env')
-        extra = 'ignore'  # Add this line to ignore extra fields
+    # Remove local_video_upload_dir since we're using DO Spaces
 
     # Digital Ocean Spaces configuration
-    spaces_name: str = ''
-    spaces_region: str = ''
-    spaces_endpoint: str = ''
-    spaces_bucket: str = ''
-    spaces_key: str = ''
-    spaces_secret: str = ''
+    spaces_name: str
+    spaces_region: str
+    spaces_endpoint: str
+    spaces_bucket: str
+    spaces_key: str
+    spaces_secret: str
 
-# Load settings based on environment
+    class Config:
+        env_file = os.getenv("ENV_FILE", ".env")
+        extra = "ignore"
+
+
+# Load settings
 settings = Settings()
