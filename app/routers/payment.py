@@ -27,6 +27,15 @@ async def create_subscription(
     db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     try:
+        # Add logging statements
+        logger.info("Creating subscription with values:")
+        logger.info(f"SUBSCRIPTION_PRICE_ID: {SUBSCRIPTION_PRICE_ID}")
+        logger.info(f"FRONTEND_URL: {settings.frontend_url}")
+        logger.info(
+            f"STRIPE_SECRET_KEY first 10 chars: {settings.stripe_secret_key[:10]}"
+        )
+        logger.info(f"Customer ID: {current_user.stripe_customer_id}")
+
         # First, check if user already has an active subscription
         existing_subscription = (
             db.query(models.Subscription)
@@ -48,8 +57,8 @@ async def create_subscription(
             payment_method_types=["card"],
             line_items=[{"price": SUBSCRIPTION_PRICE_ID, "quantity": 1}],
             mode="subscription",
-            success_url=f"{os.getenv('FRONTEND_URL')}/subscription/success",
-            cancel_url=f"{os.getenv('FRONTEND_URL')}/subscription/cancel",
+            success_url=f"{settings.frontend_url}/subscription/success",
+            cancel_url=f"{settings.frontend_url}/subscription/cancel",
             metadata={"user_id": str(current_user.id)},
             billing_address_collection="required",
             allow_promotion_codes=True,
