@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from pytz import timezone
 import traceback
 from ..config import settings
+import json
 
 import logging
 
@@ -75,20 +76,25 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         logger.info("================== WEBHOOK START ==================")
         logger.info(f"Request headers: {dict(request.headers)}")
+        logger.info(f"Request host: {request.base_url}")
 
         payload = await request.body()
+        logger.info(f"Raw payload: {payload.decode()}")
         logger.info(f"Payload size: {len(payload)}")
 
         sig_header = request.headers.get("stripe-signature")
         webhook_secret = settings.stripe_webhook_secret
+        logger.info(f"Signature header: {sig_header}")
         logger.info(
-            f"Webhook secret first 4 chars: {webhook_secret[:4] if webhook_secret else 'None'}"
+            f"Webhook secret length: {len(webhook_secret) if webhook_secret else 0}"
         )
 
         try:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+            logger.info(f"Event ID: {event.get('id')}")
             logger.info(f"Event type: {event['type']}")
-            logger.info(f"Event data: {event['data']['object']}")
+            logger.info(f"Event created: {event['created']}")
+            logger.info(f"Full event data: {json.dumps(event['data'], indent=2)}")
 
             if event["type"] == "checkout.session.completed":
                 session = event["data"]["object"]
@@ -157,15 +163,94 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                         )
                         raise
 
+            elif event["type"] == "customer.subscription.deleted":
+                subscription = event["data"]["object"]
+                logger.info(f"Processing subscription deletion: {subscription.id}")
+
+                try:
+                    db_subscription = (
+                        db.query(models.Subscription)
+                        .filter(
+                            models.Subscription.stripe_subscription_id
+                            == subscription.id
+                        )
+                        .first()
+                    )
+
+                    if db_subscription:
+                        logger.info(
+                            f"Updating subscription status to cancelled for ID: {subscription.id}"
+                        )
+                        db_subscription.status = "cancelled"
+                        db_subscription.updated_at = datetime.now(timezone("UTC"))
+                        db.commit()
+                        logger.info("Successfully updated subscription status")
+                    else:
+                        logger.warning(
+                            f"No subscription found for ID: {subscription.id}"
+                        )
+
+                except SQLAlchemyError as e:
+                    db.rollback()
+                    logger.error(
+                        f"Database error handling subscription deletion: {str(e)}"
+                    )
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    raise
+
+            elif event["type"] == "customer.subscription.updated":
+                subscription = event["data"]["object"]
+                logger.info(f"Processing subscription update: {subscription.id}")
+
+                try:
+                    db_subscription = (
+                        db.query(models.Subscription)
+                        .filter(
+                            models.Subscription.stripe_subscription_id
+                            == subscription.id
+                        )
+                        .first()
+                    )
+
+                    if db_subscription:
+                        logger.info(
+                            f"Updating subscription period end for ID: {subscription.id}"
+                        )
+                        db_subscription.current_period_end = datetime.fromtimestamp(
+                            subscription.current_period_end
+                        ).replace(tzinfo=timezone("UTC"))
+                        db_subscription.updated_at = datetime.now(timezone("UTC"))
+                        db.commit()
+                        logger.info("Successfully updated subscription period")
+                    else:
+                        logger.warning(
+                            f"No subscription found for ID: {subscription.id}"
+                        )
+
+                except SQLAlchemyError as e:
+                    db.rollback()
+                    logger.error(
+                        f"Database error handling subscription update: {str(e)}"
+                    )
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    raise
+
+            return {"status": "success"}
+
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Signature verification failed: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid signature")
         except Exception as e:
             logger.error(f"Webhook processing error: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
         logger.error(f"Outer webhook error: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        logger.info("================== WEBHOOK END ==================")
 
 
 @router.get("/subscription-status")
