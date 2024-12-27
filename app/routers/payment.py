@@ -73,99 +73,98 @@ async def create_subscription(
 @router.post("/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     try:
-        logger.info("----------------")
-        logger.info("Webhook received")
-        logger.info(f"Request method: {request.method}")
-        logger.info(f"Request headers: {dict(request.headers)}")  # Add this
+        logger.info("================== WEBHOOK START ==================")
+        logger.info(f"Request headers: {dict(request.headers)}")
 
         payload = await request.body()
-        logger.info(f"Received webhook payload of size: {len(payload)}")
+        logger.info(f"Payload size: {len(payload)}")
 
         sig_header = request.headers.get("stripe-signature")
-        logger.info(f"Stripe signature present: {bool(sig_header)}")
-        if sig_header:
-            logger.info(f"Signature starts with: {sig_header[:10]}")  # Add this
-
-        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+        webhook_secret = settings.stripe_webhook_secret
         logger.info(
-            f"Using webhook secret starting with: {webhook_secret[:4] if webhook_secret else 'None'}"
+            f"Webhook secret first 4 chars: {webhook_secret[:4] if webhook_secret else 'None'}"
         )
 
         try:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-            logger.info(f"Successfully constructed event of type: {event['type']}")
-            logger.info(f"Event data: {event['data']['object']}")  # Add this
+            logger.info(f"Event type: {event['type']}")
+            logger.info(f"Event data: {event['data']['object']}")
+
+            if event["type"] == "checkout.session.completed":
+                session = event["data"]["object"]
+                subscription_id = session.get("subscription")
+                logger.info(f"Subscription ID from session: {subscription_id}")
+
+                if subscription_id:
+                    subscription = stripe.Subscription.retrieve(subscription_id)
+                    customer_id = session["customer"]
+                    user_id = int(session["metadata"]["user_id"])
+                    logger.info(
+                        f"Processing subscription: {subscription_id} for user: {user_id}"
+                    )
+
+                    current_period_end = datetime.fromtimestamp(
+                        subscription.current_period_end
+                    ).replace(tzinfo=timezone("UTC"))
+
+                    # Log the subscription we're about to create/update
+                    logger.info(
+                        f"Subscription details: Status={subscription.status}, End={current_period_end}"
+                    )
+
+                    try:
+                        # Check for existing subscription
+                        existing_subscription = (
+                            db.query(models.Subscription)
+                            .filter(models.Subscription.user_id == user_id)
+                            .first()
+                        )
+                        logger.info(
+                            f"Existing subscription found: {bool(existing_subscription)}"
+                        )
+
+                        if existing_subscription:
+                            logger.info("Updating existing subscription")
+                            existing_subscription.stripe_subscription_id = (
+                                subscription_id
+                            )
+                            existing_subscription.status = "active"
+                            existing_subscription.current_period_end = (
+                                current_period_end
+                            )
+                            existing_subscription.updated_at = datetime.now(
+                                timezone("UTC")
+                            )
+                        else:
+                            logger.info("Creating new subscription")
+                            db_subscription = models.Subscription(
+                                user_id=user_id,
+                                stripe_subscription_id=subscription_id,
+                                stripe_customer_id=customer_id,
+                                status="active",
+                                current_period_end=current_period_end,
+                            )
+                            db.add(db_subscription)
+
+                        db.commit()
+                        logger.info("Database commit successful")
+
+                    except SQLAlchemyError as e:
+                        db.rollback()
+                        logger.error(f"Database error: {str(e)}")
+                        logger.error(
+                            f"Database error details: {traceback.format_exc()}"
+                        )
+                        raise
+
         except Exception as e:
-            logger.error(f"Failed to construct event: {str(e)}")
-            logger.error(f"Payload received: {payload.decode()}")  # Add this
+            logger.error(f"Webhook processing error: {str(e)}")
+            logger.error(traceback.format_exc())
             raise
 
-        # Handle subscription events
-        if event["type"] == "checkout.session.completed":
-            session = event["data"]["object"]
-            subscription_id = session.get("subscription")
-
-            if subscription_id:
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                customer_id = session["customer"]
-                user_id = int(session["metadata"]["user_id"])
-
-                current_period_end = datetime.fromtimestamp(
-                    subscription.current_period_end
-                ).replace(tzinfo=timezone("UTC"))
-
-                # Update or create subscription
-                existing_subscription = (
-                    db.query(models.Subscription)
-                    .filter(models.Subscription.user_id == user_id)
-                    .first()
-                )
-
-                if existing_subscription:
-                    existing_subscription.stripe_subscription_id = subscription_id
-                    existing_subscription.status = "active"
-                    existing_subscription.current_period_end = current_period_end
-                    existing_subscription.updated_at = datetime.now(timezone("UTC"))
-                else:
-                    db_subscription = models.Subscription(
-                        user_id=user_id,
-                        stripe_subscription_id=subscription_id,
-                        stripe_customer_id=customer_id,
-                        status="active",
-                        current_period_end=current_period_end,
-                    )
-                    db.add(db_subscription)
-
-                try:
-                    db.commit()
-                    logger.info(
-                        f"Successfully processed subscription for user {user_id}"
-                    )
-                except SQLAlchemyError as e:
-                    db.rollback()
-                    logger.error(f"Database error processing subscription: {str(e)}")
-                    raise HTTPException(
-                        status_code=500, detail="Error processing subscription"
-                    )
-
-        # Handle payment events
-        elif event["type"] == "payment_intent.succeeded":
-            payment_intent = event["data"]["object"]
-            logger.info(f"Payment succeeded: {payment_intent.id}")
-
-        elif event["type"] == "payment_intent.payment_failed":
-            payment_intent = event["data"]["object"]
-            logger.error(f"Payment failed: {payment_intent.id}")
-
-        return {"status": "success"}
-
     except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
+        logger.error(f"Outer webhook error: {str(e)}")
         logger.error(traceback.format_exc())
-        # Add request details in case of error
-        logger.error(f"Request URL: {request.url}")
-        logger.error(f"Request method: {request.method}")
-        logger.error(f"Request headers: {dict(request.headers)}")
         raise
 
 
