@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 import logging
+import sys
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -39,11 +40,28 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Configure logging
+# Configure logging (replace your current logging config with this)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(
+            "/var/log/ryzeapi/app.log"
+        ),  # Make sure this directory exists
+    ],
 )
 logger = logging.getLogger(__name__)
+
+
+# Add startup logging
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting RYZE.AI API")
+    logger.info(f"Environment: {os.getenv('ENV')}")
+    logger.info(f"Allowed origins: {os.getenv('ALLOWED_ORIGINS')}")
+    yield
+    logger.info("Shutting down RYZE.AI API")
 
 
 # Load environment variables

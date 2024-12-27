@@ -9,6 +9,7 @@ import os
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from pytz import timezone
+import traceback
 
 import logging
 
@@ -62,14 +63,18 @@ async def create_subscription(
 @router.post("/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     try:
-        # Add detailed logging
+        logger.info("----------------")
         logger.info("Webhook received")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request headers: {dict(request.headers)}")  # Add this
 
         payload = await request.body()
         logger.info(f"Received webhook payload of size: {len(payload)}")
 
         sig_header = request.headers.get("stripe-signature")
         logger.info(f"Stripe signature present: {bool(sig_header)}")
+        if sig_header:
+            logger.info(f"Signature starts with: {sig_header[:10]}")  # Add this
 
         webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
         logger.info(
@@ -79,8 +84,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         try:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
             logger.info(f"Successfully constructed event of type: {event['type']}")
+            logger.info(f"Event data: {event['data']['object']}")  # Add this
         except Exception as e:
             logger.error(f"Failed to construct event: {str(e)}")
+            logger.error(f"Payload received: {payload.decode()}")  # Add this
             raise
 
         # Handle subscription events
@@ -144,10 +151,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
-        # Log the full traceback
-        import traceback
-
         logger.error(traceback.format_exc())
+        # Add request details in case of error
+        logger.error(f"Request URL: {request.url}")
+        logger.error(f"Request method: {request.method}")
+        logger.error(f"Request headers: {dict(request.headers)}")
         raise
 
 
