@@ -61,12 +61,13 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
       📄 snagged_requests.py
       📄 video_upload.py
       📄 vote.py
+  📁 logs/
+    📄 app.log
   📁 scripts/
     📄 check_port.py
     📄 cleanup.py
     📄 cleanup_simple.py
     📄 command_notes_cli.py
-    📄 config.py
     📄 play_video.py
     📄 retrieve_thumbnail.py
     📄 test_do_upload.py

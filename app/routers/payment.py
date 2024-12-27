@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from pytz import timezone
 import traceback
+from ..config import settings
 
 import logging
 
@@ -17,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-SUBSCRIPTION_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
+stripe.api_key = settings.stripe_secret_key
+SUBSCRIPTION_PRICE_ID = settings.stripe_price_id
 
 
 @router.post("/create-subscription")
