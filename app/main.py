@@ -40,15 +40,26 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Configure logging (replace your current logging config with this)
+# Load environment variables first
+load_dotenv()
+
+# Configure logging based on environment
+if os.getenv("ENV") == "production":
+    LOG_DIR = "/var/log/ryzeapi"
+else:
+    # Use a local directory for development
+    LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+
+# Create the log directory if it doesn't exist
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(
-            "/var/log/ryzeapi/app.log"
-        ),  # Make sure this directory exists
+        logging.FileHandler(os.path.join(LOG_DIR, "app.log")),
     ],
 )
 logger = logging.getLogger(__name__)
