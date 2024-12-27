@@ -28,44 +28,40 @@ async def create_subscription(
     db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     try:
-        # Add logging statements
-        logger.info("Creating subscription with values:")
-        logger.info(f"SUBSCRIPTION_PRICE_ID: {SUBSCRIPTION_PRICE_ID}")
-        logger.info(f"FRONTEND_URL: {settings.frontend_url}")
-        logger.info(
-            f"STRIPE_SECRET_KEY first 10 chars: {settings.stripe_secret_key[:10]}"
-        )
-        logger.info(f"Customer ID: {current_user.stripe_customer_id}")
-
-        # First, check if user already has an active subscription
-        existing_subscription = (
-            db.query(models.Subscription)
-            .filter(
-                models.Subscription.user_id == current_user.id,
-                models.Subscription.status == "active",
+        # First, ensure customer exists or create them
+        if not current_user.stripe_customer_id:
+            customer = stripe.Customer.create(
+                email=current_user.email, metadata={"user_id": str(current_user.id)}
             )
-            .first()
-        )
+            current_user.stripe_customer_id = customer.id
+            db.commit()
+        else:
+            # Verify customer exists in Stripe
+            try:
+                stripe.Customer.retrieve(current_user.stripe_customer_id)
+            except stripe.error.InvalidRequestError:
+                # Customer doesn't exist in Stripe, create new one
+                customer = stripe.Customer.create(
+                    email=current_user.email, metadata={"user_id": str(current_user.id)}
+                )
+                current_user.stripe_customer_id = customer.id
+                db.commit()
 
-        if existing_subscription:
-            raise HTTPException(
-                status_code=400, detail="User already has an active subscription"
-            )
-
-        print(f"Creating subscription for user: {current_user.id}")
+        # Then create the checkout session
         session = stripe.checkout.Session.create(
             customer=current_user.stripe_customer_id,
             payment_method_types=["card"],
-            line_items=[{"price": SUBSCRIPTION_PRICE_ID, "quantity": 1}],
+            line_items=[{"price": settings.stripe_price_id, "quantity": 1}],
             mode="subscription",
             success_url=f"{settings.frontend_url}/subscription/success",
             cancel_url=f"{settings.frontend_url}/subscription/cancel",
             metadata={"user_id": str(current_user.id)},
-            billing_address_collection="required",
             allow_promotion_codes=True,
+            billing_address_collection="required",
         )
-        print(f"Checkout session created: {session.id}")
-        return JSONResponse(content={"url": session.url})
+
+        return {"url": session.url}
+
     except stripe.error.StripeError as e:
         print(f"Stripe error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -295,27 +291,141 @@ async def create_payment_intent(
     current_user: models.User = Depends(get_current_user),
 ):
     try:
+        # Validate amount
+        if amount <= 0:
+            logger.error(f"Invalid amount provided: {amount}")
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
+        # Log the attempt
         logger.info(
-            f"Creating payment intent for user {current_user.id} with amount {amount}"
+            f"Creating payment intent - User: {current_user.id}, "
+            f"Amount: ${amount/100:.2f}, "
+            f"Customer ID: {current_user.stripe_customer_id}"
         )
 
-        # Create a PaymentIntent
-        intent = stripe.PaymentIntent.create(
-            amount=amount,
-            currency="usd",
-            customer=current_user.stripe_customer_id,
-            metadata={"user_id": str(current_user.id)},
-        )
+        # Verify customer exists in Stripe
+        try:
+            customer = stripe.Customer.retrieve(current_user.stripe_customer_id)
+            if customer.get("deleted"):
+                logger.error(
+                    f"Stripe customer {current_user.stripe_customer_id} was deleted"
+                )
+                raise HTTPException(status_code=400, detail="Invalid customer account")
+        except stripe.error.InvalidRequestError:
+            logger.error(
+                f"Invalid Stripe customer ID: {current_user.stripe_customer_id}"
+            )
+            raise HTTPException(status_code=400, detail="Invalid customer account")
 
-        logger.info(f"Successfully created payment intent: {intent.id}")
+        # Create PaymentIntent with detailed metadata
+        try:
+            intent = stripe.PaymentIntent.create(
+                amount=amount,
+                currency="usd",
+                customer=current_user.stripe_customer_id,
+                metadata={
+                    "user_id": str(current_user.id),
+                    "user_email": current_user.email,
+                    "environment": (
+                        "live" if stripe.api_key.startswith("sk_live") else "test"
+                    ),
+                    "created_at": datetime.now(timezone("UTC")).isoformat(),
+                },
+                description=f"Payment for user {current_user.email}",
+                statement_descriptor="RYZE.AI PAYMENT",
+                statement_descriptor_suffix="RYZE",
+                capture_method="automatic",
+            )
 
-        return {"clientSecret": intent.client_secret, "paymentIntentId": intent.id}
-    except stripe.error.StripeError as e:
-        logger.error(f"Stripe error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+            logger.info(
+                f"Payment intent created successfully - "
+                f"ID: {intent.id}, "
+                f"Amount: ${intent.amount/100:.2f}, "
+                f"Status: {intent.status}"
+            )
+
+            return {
+                "clientSecret": intent.client_secret,
+                "paymentIntentId": intent.id,
+                "amount": intent.amount,
+                "status": intent.status,
+            }
+
+        except stripe.error.CardError as e:
+            # Card was declined
+            logger.error(f"Card error for user {current_user.id}: {str(e)}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "card_error",
+                    "message": e.error.message,
+                    "code": e.error.code,
+                },
+            )
+
+        except stripe.error.InvalidRequestError as e:
+            # Invalid parameters were supplied to Stripe's API
+            logger.error(f"Invalid Stripe request for user {current_user.id}: {str(e)}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_request",
+                    "message": "Invalid payment parameters",
+                },
+            )
+
+        except stripe.error.AuthenticationError as e:
+            # Authentication with Stripe's API failed
+            logger.error(f"Stripe authentication error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "authentication_error",
+                    "message": "Failed to authenticate with payment provider",
+                },
+            )
+
+        except stripe.error.APIConnectionError as e:
+            # Network communication with Stripe failed
+            logger.error(f"Stripe API connection error: {str(e)}")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "api_connection_error",
+                    "message": "Could not connect to payment provider",
+                },
+            )
+
+        except stripe.error.StripeError as e:
+            # Generic error
+            logger.error(
+                f"Unexpected Stripe error for user {current_user.id}: {str(e)}"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "payment_error",
+                    "message": "An unexpected error occurred with the payment provider",
+                },
+            )
+
+    except HTTPException:
+        raise
+
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Catch any other unexpected errors
+        logger.error(
+            f"Critical error in create_payment_intent: {str(e)}\n"
+            f"Traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "server_error", "message": "An unexpected error occurred"},
+        )
+
+    finally:
+        # Log the completion of the request
+        logger.info(f"Completed payment intent request for user {current_user.id}")
 
 
 @router.post("/confirm-payment")
