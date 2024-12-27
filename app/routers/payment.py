@@ -219,44 +219,6 @@ async def confirm_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# Modify the webhook handler to handle both subscriptions and one-time payments
-@router.post("/webhook", include_in_schema=False)
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    try:
-        payload = await request.body()
-        sig_header = request.headers.get("stripe-signature")
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
-        )
-
-        logger.info(f"Received webhook event: {event['type']}")
-
-        # Handle subscription events
-        if event["type"] == "checkout.session.completed":
-            # Your existing subscription handling code...
-            pass
-
-        # Handle one-time payment events
-        elif event["type"] == "payment_intent.succeeded":
-            payment_intent = event["data"]["object"]
-            user_id = int(payment_intent["metadata"]["user_id"])
-
-            # Here you might want to update your database to record the successful payment
-            logger.info(f"Payment succeeded for user {user_id}")
-
-        elif event["type"] == "payment_intent.payment_failed":
-            payment_intent = event["data"]["object"]
-            user_id = int(payment_intent["metadata"]["user_id"])
-            logger.error(f"Payment failed for user {user_id}")
-
-        return {"status": "success"}
-    except stripe.error.SignatureVerificationError as e:
-        raise HTTPException(status_code=400, detail="Invalid signature")
-    except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @router.post("/create-checkout-session")
 async def create_checkout_session(
     product_id: int,
