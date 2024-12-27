@@ -500,67 +500,6 @@ async def purchase_product(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/webhook/marketplace")
-async def stripe_webhook_marketplace(
-    request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
-    """Handle Stripe webhooks for marketplace purchases"""
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-
-    try:
-        # Use the marketplace-specific webhook secret
-        event = stripe.Webhook.construct_event(
-            payload,
-            sig_header,
-            os.getenv(
-                "STRIPE_WEBHOOK_SECRET_MARKETPLACE"
-            ),  # Updated to use marketplace secret
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-
-        # Get metadata from the session
-        product_id = int(session["metadata"]["product_id"])
-        user_id = int(session["metadata"]["user_id"])
-        total_amount = (
-            float(session["metadata"]["total_amount"]) / 100
-        )  # Convert cents to dollars
-
-        try:
-            # Record the purchase
-            product_download = models.ProductDownload(
-                product_id=product_id,
-                user_id=user_id,
-                price_paid=total_amount,
-                transaction_id=session["payment_intent"],
-            )
-
-            # Update product statistics
-            product = (
-                db.query(models.MarketplaceProduct).filter_by(id=product_id).first()
-            )
-            if product:
-                product.download_count += 1
-
-            db.add(product_download)
-            db.commit()
-
-            logger.info(
-                f"Successfully processed purchase for user {user_id}, product {product_id}"
-            )
-
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Database error processing purchase: {str(e)}")
-            raise HTTPException(status_code=500, detail="Error processing purchase")
-
-    return {"status": "success"}
-
-
 @router.post("/products/{product_id}/reviews", response_model=schemas.ProductReviewOut)
 async def create_review(
     product_id: int,
@@ -885,18 +824,14 @@ async def download_product_file(
         )
 
 
-@router.post("/webhook/marketplace")
-async def stripe_webhook_marketplace(
-    request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
-    """Handle Stripe webhooks for marketplace purchases"""
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-
+@router.post("/webhook/marketplace", include_in_schema=False)
+async def stripe_webhook_marketplace(request: Request, db: Session = Depends(get_db)):
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
-        )
+        payload = await request.body()
+        sig_header = request.headers.get("stripe-signature")
+
+        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET_MARKETPLACE")
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

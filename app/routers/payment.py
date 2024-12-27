@@ -64,28 +64,27 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         payload = await request.body()
         sig_header = request.headers.get("stripe-signature")
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
-        )
 
-        print(f"Received webhook event: {event['type']}")
+        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
 
+        logger.info(f"Received webhook event: {event['type']}")
+
+        # Handle subscription events
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-
-            # Retrieve the subscription details
             subscription_id = session.get("subscription")
+
             if subscription_id:
                 subscription = stripe.Subscription.retrieve(subscription_id)
                 customer_id = session["customer"]
                 user_id = int(session["metadata"]["user_id"])
 
-                # Get current period end from subscription
                 current_period_end = datetime.fromtimestamp(
                     subscription.current_period_end
                 ).replace(tzinfo=timezone("UTC"))
 
-                # Check for existing subscription
+                # Update or create subscription
                 existing_subscription = (
                     db.query(models.Subscription)
                     .filter(models.Subscription.user_id == user_id)
@@ -93,13 +92,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 )
 
                 if existing_subscription:
-                    # Update existing subscription
                     existing_subscription.stripe_subscription_id = subscription_id
                     existing_subscription.status = "active"
                     existing_subscription.current_period_end = current_period_end
                     existing_subscription.updated_at = datetime.now(timezone("UTC"))
                 else:
-                    # Create new subscription
                     db_subscription = models.Subscription(
                         user_id=user_id,
                         stripe_subscription_id=subscription_id,
@@ -111,7 +108,9 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
                 try:
                     db.commit()
-                    print(f"Successfully processed subscription for user {user_id}")
+                    logger.info(
+                        f"Successfully processed subscription for user {user_id}"
+                    )
                 except SQLAlchemyError as e:
                     db.rollback()
                     logger.error(f"Database error processing subscription: {str(e)}")
@@ -119,8 +118,19 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                         status_code=500, detail="Error processing subscription"
                     )
 
+        # Handle payment events
+        elif event["type"] == "payment_intent.succeeded":
+            payment_intent = event["data"]["object"]
+            logger.info(f"Payment succeeded: {payment_intent.id}")
+
+        elif event["type"] == "payment_intent.payment_failed":
+            payment_intent = event["data"]["object"]
+            logger.error(f"Payment failed: {payment_intent.id}")
+
         return {"status": "success"}
+
     except stripe.error.SignatureVerificationError as e:
+        logger.error(f"Signature verification failed: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
