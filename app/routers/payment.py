@@ -62,13 +62,26 @@ async def create_subscription(
 @router.post("/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     try:
+        # Add detailed logging
+        logger.info("Webhook received")
+
         payload = await request.body()
+        logger.info(f"Received webhook payload of size: {len(payload)}")
+
         sig_header = request.headers.get("stripe-signature")
+        logger.info(f"Stripe signature present: {bool(sig_header)}")
 
         webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        logger.info(
+            f"Using webhook secret starting with: {webhook_secret[:4] if webhook_secret else 'None'}"
+        )
 
-        logger.info(f"Received webhook event: {event['type']}")
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+            logger.info(f"Successfully constructed event of type: {event['type']}")
+        except Exception as e:
+            logger.error(f"Failed to construct event: {str(e)}")
+            raise
 
         # Handle subscription events
         if event["type"] == "checkout.session.completed":
@@ -129,12 +142,13 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
         return {"status": "success"}
 
-    except stripe.error.SignatureVerificationError as e:
-        logger.error(f"Signature verification failed: {str(e)}")
-        raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        # Log the full traceback
+        import traceback
+
+        logger.error(traceback.format_exc())
+        raise
 
 
 @router.get("/subscription-status")

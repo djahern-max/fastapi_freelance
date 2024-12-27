@@ -26,6 +26,7 @@ from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+import logging
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -36,6 +37,13 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 # Load environment variables
