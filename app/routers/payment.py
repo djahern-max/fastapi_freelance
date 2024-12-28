@@ -253,16 +253,36 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 async def get_subscription_status(
     db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
+    print("============= Subscription Status Check =============")
+    print(f"User ID: {current_user.id}")
+    print(f"Stripe Customer ID: {current_user.stripe_customer_id}")
+
     subscription = (
         db.query(models.Subscription)
         .filter(models.Subscription.user_id == current_user.id)
         .order_by(models.Subscription.created_at.desc())
         .first()
     )
-    print(f"Checking subscription status for user {current_user.id}: {subscription}")
+    print(f"Database subscription found: {subscription is not None}")
 
     if not subscription:
+        print("No subscription found in database")
+        # Let's check Stripe directly
+        try:
+            if current_user.stripe_customer_id:
+                stripe_subs = stripe.Subscription.list(
+                    customer=current_user.stripe_customer_id, limit=1, status="active"
+                )
+                print(f"Stripe subscriptions found: {len(stripe_subs.data)}")
+                if stripe_subs.data:
+                    print("Active subscription found in Stripe but not in database!")
+                    # Could add logic here to sync the subscription
+        except Exception as e:
+            print(f"Error checking Stripe: {str(e)}")
         return {"status": "none"}
+
+    print(f"Subscription status from DB: {subscription.status}")
+    print(f"Subscription end date: {subscription.current_period_end}")
 
     # Make both datetimes timezone-aware for comparison
     current_time = datetime.now(timezone("UTC"))
@@ -272,15 +292,21 @@ async def get_subscription_status(
     if subscription_end.tzinfo is None:
         subscription_end = subscription_end.replace(tzinfo=timezone("UTC"))
 
+    print(f"Current time (UTC): {current_time}")
+    print(f"Subscription end (UTC): {subscription_end}")
+
     if subscription_end < current_time:
+        print("Subscription has expired")
         subscription.status = "expired"
         try:
             db.commit()
         except SQLAlchemyError as e:
             db.rollback()
+            print(f"Database error updating subscription status: {str(e)}")
             logger.error(f"Database error updating subscription status: {str(e)}")
         return {"status": "expired"}
 
+    print(f"Returning status: {subscription.status}")
     return {"status": subscription.status, "current_period_end": subscription_end}
 
 
