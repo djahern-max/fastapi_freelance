@@ -57,6 +57,20 @@ class VideoType(str, enum.Enum):
     progress_update = "progress_update"
 
 
+class ProductType(str, enum.Enum):
+    BROWSER_EXTENSION = "browser_extension"
+    WEB_APP = "web_app"
+    API_SERVICE = "api_service"
+    AUTOMATION_SCRIPT = "automation_script"
+
+
+class PricingModel(str, enum.Enum):
+    ONE_TIME = "one_time"
+    SUBSCRIPTION_MONTHLY = "subscription_monthly"
+    SUBSCRIPTION_YEARLY = "subscription_yearly"
+    USAGE_BASED = "usage_based"
+
+
 # ------------------ User Model ------------------
 class User(Base):
     __tablename__ = "users"
@@ -619,6 +633,9 @@ class MarketplaceProduct(Base, TimestampMixin):
     view_count = Column(Integer, default=0)
     download_count = Column(Integer, default=0)
     rating = Column(Float, nullable=True)
+    browser_support = Column(JSON, nullable=True)  # Store browser compatibility
+    permissions_required = Column(JSON, nullable=True)  # Store required permissions
+    manifest_version = Column(String, nullable=True)  # Store extension manifest version
 
     # Relationships
     developer = relationship("User", back_populates="products")

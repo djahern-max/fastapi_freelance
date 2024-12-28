@@ -1,9 +1,9 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, HttpUrl
-from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
 import enum
 import re
+from datetime import datetime
 
 
 # ------------------ Enums ------------------
@@ -42,6 +42,20 @@ class RequestVisibility(str, Enum):
     private = "private"
     shared = "shared"
     public = "public"
+
+
+class ProductType(str, Enum):
+    BROWSER_EXTENSION = "browser_extension"
+    WEB_APP = "web_app"
+    API_SERVICE = "api_service"
+    AUTOMATION_SCRIPT = "automation_script"
+
+
+class PricingModel(str, Enum):
+    ONE_TIME = "one_time"
+    SUBSCRIPTION_MONTHLY = "subscription_monthly"
+    SUBSCRIPTION_YEARLY = "subscription_yearly"
+    USAGE_BASED = "usage_based"
 
 
 # ------------------ User Schemas ------------------
@@ -908,6 +922,13 @@ class ProductStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class BrowserSupport(BaseModel):
+    chrome: bool = True
+    firefox: Optional[bool] = False
+    safari: Optional[bool] = False
+    edge: Optional[bool] = False
+
+
 class ProductBase(BaseModel):
     name: str
     description: str
@@ -918,6 +939,34 @@ class ProductBase(BaseModel):
     installation_guide: Optional[str] = None
     documentation_url: Optional[str] = None
     version: str = "1.0.0"
+    # Add these new fields
+    product_type: ProductType
+    pricing_model: PricingModel = PricingModel.ONE_TIME
+    browser_support: Optional[BrowserSupport] = None
+    permissions_required: Optional[List[str]] = None
+    manifest_version: Optional[str] = None
+
+    @field_validator("permissions_required")
+    def validate_permissions(cls, v):
+        if v is None:
+            return []
+        valid_permissions = [
+            "activeTab",
+            "storage",
+            "notifications",
+            "webRequest",
+            "scripting",
+        ]
+        for perm in v:
+            if perm not in valid_permissions:
+                raise ValueError(f"Invalid permission: {perm}")
+        return v
+
+    @field_validator("browser_support")
+    def validate_browser_support(cls, v):
+        if v is None:
+            return BrowserSupport()
+        return v
 
 
 class ProductCreate(ProductBase):

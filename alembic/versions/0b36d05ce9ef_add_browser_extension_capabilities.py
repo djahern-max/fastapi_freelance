@@ -1,8 +1,8 @@
-"""Initial migration
+"""Add browser extension capabilities
 
-Revision ID: afb75ee4bb56
+Revision ID: 0b36d05ce9ef
 Revises: 
-Create Date: 2024-12-26 17:57:24.926652
+Create Date: 2024-12-28 07:21:24.854917
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'afb75ee4bb56'
+revision: str = '0b36d05ce9ef'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -96,6 +96,9 @@ def upgrade() -> None:
     sa.Column('view_count', sa.Integer(), nullable=True),
     sa.Column('download_count', sa.Integer(), nullable=True),
     sa.Column('rating', sa.Float(), nullable=True),
+    sa.Column('browser_support', sa.JSON(), nullable=True),
+    sa.Column('permissions_required', sa.JSON(), nullable=True),
+    sa.Column('manifest_version', sa.String(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ondelete='CASCADE'),

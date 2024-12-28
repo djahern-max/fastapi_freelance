@@ -214,3 +214,28 @@ def increment_product_view(db: Session, product_id: int):
     product = get_product(db, product_id)
     product.view_count += 1
     db.commit()
+
+
+# Add browser extension specific validation and handling:
+def validate_browser_extension(product: schemas.ProductCreate):
+    """Validate browser extension specific fields"""
+    if product.product_type == models.ProductType.BROWSER_EXTENSION:
+        if not product.browser_support:
+            raise HTTPException(
+                status_code=400,
+                detail="Browser support must be specified for browser extensions",
+            )
+        # Add more extension-specific validations
+
+
+def create_product(db: Session, product: schemas.ProductCreate, developer_id: int):
+    """Create a new marketplace product."""
+    # Add browser extension validation
+    if product.product_type == models.ProductType.BROWSER_EXTENSION:
+        validate_browser_extension(product)
+
+    # Your existing code...
+    db_product = models.MarketplaceProduct(
+        **product.model_dump(exclude={"video_ids"}),
+        developer_id=developer_id,
+    )

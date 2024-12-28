@@ -25,6 +25,7 @@ import shutil
 import zipfile
 import stripe.error
 import hashlib
+import json
 
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -230,66 +231,65 @@ async def create_product(
     try:
         if current_user.user_type != models.UserType.developer:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only developers can create products",
+                status_code=403, detail="Only developers can create products"
             )
 
-        logger.debug(f"Creating Stripe product for: {product.name}")
-        # Create Stripe product and price
+        # Create Stripe product with metadata
         stripe_product = stripe.Product.create(
             name=product.name,
             description=product.description,
-        )
-        logger.debug(f"Created Stripe product: {stripe_product.id}")
-
-        stripe_price = stripe.Price.create(
-            product=stripe_product.id,
-            unit_amount=int(product.price * 100),  # Convert to cents
-            currency="usd",
-        )
-        logger.debug(f"Created Stripe price: {stripe_price.id}")
-
-        db_product = models.MarketplaceProduct(
-            developer_id=current_user.id,
-            name=product.name,
-            description=product.description,
-            long_description=product.long_description,
-            price=product.price,
-            category=product.category,
-            stripe_product_id=stripe_product.id,
-            stripe_price_id=stripe_price.id,
-            status=models.ProductStatus.PUBLISHED,
+            metadata={
+                "product_type": product.product_type,
+                "pricing_model": product.pricing_model,
+                "version": product.version,
+                # Add extension-specific metadata
+                "browser_support": (
+                    json.dumps(product.browser_support.dict())
+                    if product.browser_support
+                    else None
+                ),
+                "manifest_version": product.manifest_version,
+            },
         )
 
-        if product.video_ids:
-            videos = (
-                db.query(models.Video)
-                .filter(
-                    models.Video.id.in_(product.video_ids),
-                    models.Video.user_id == current_user.id,
-                )
-                .all()
+        # Create appropriate Stripe price based on pricing model
+        price_data = {
+            "currency": "usd",
+            "product": stripe_product.id,
+        }
+
+        if product.pricing_model == models.PricingModel.ONE_TIME:
+            price_data["unit_amount"] = int(product.price * 100)
+        elif product.pricing_model in [
+            models.PricingModel.SUBSCRIPTION_MONTHLY,
+            models.PricingModel.SUBSCRIPTION_YEARLY,
+        ]:
+            price_data.update(
+                {
+                    "unit_amount": int(product.price * 100),
+                    "recurring": {
+                        "interval": (
+                            "month"
+                            if product.pricing_model
+                            == models.PricingModel.SUBSCRIPTION_MONTHLY
+                            else "year"
+                        )
+                    },
+                }
             )
-            db_product.related_videos.extend(videos)
 
-        db.add(db_product)
-        db.commit()
-        db.refresh(db_product)
+        stripe_price = stripe.Price.create(**price_data)
+
+        # Create database record
+        db_product = crud_marketplace.create_product(
+            db=db, product=product, developer_id=current_user.id
+        )
+
         return db_product
 
     except stripe.error.StripeError as e:
-        logger.error(f"Stripe error creating product: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create product payment information",
-        )
-    except Exception as e:
-        logger.error(f"Error creating product: {str(e)}")
-        logger.exception(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create product",
-        )
+        logger.error(f"Stripe error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/products", response_model=schemas.PaginatedProductResponse)
@@ -932,3 +932,46 @@ async def get_product_files(
         raise HTTPException(status_code=404, detail="No files found for this product")
 
     return files
+
+
+@router.post("/products/validate-extension")
+async def validate_extension(
+    manifest: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    """Validate a browser extension's manifest file"""
+    try:
+        content = await manifest.read()
+        manifest_data = json.loads(content.decode())
+
+        # Validate required fields
+        required_fields = ["manifest_version", "name", "version", "permissions"]
+        missing_fields = [f for f in required_fields if f not in manifest_data]
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {', '.join(missing_fields)}",
+            )
+
+        # Validate permissions
+        valid_permissions = ["activeTab", "storage", "notifications", "webRequest"]
+        invalid_permissions = [
+            p
+            for p in manifest_data.get("permissions", [])
+            if p not in valid_permissions
+        ]
+        if invalid_permissions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid permissions: {', '.join(invalid_permissions)}",
+            )
+
+        return {
+            "valid": True,
+            "manifest": manifest_data,
+            "warnings": [],  # Add any warnings about permissions etc.
+        }
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid manifest.json format")
