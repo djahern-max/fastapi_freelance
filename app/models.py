@@ -213,14 +213,68 @@ class Project(Base, TimestampMixin):
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-
-    # Project metadata
     is_active = Column(Boolean, default=True)
+    average_rating = Column(Float, nullable=True)
+    total_ratings = Column(Integer, default=0)
+
+    # New showcase fields
+    is_public = Column(Boolean, default=False)
+    live_url = Column(String, nullable=True)
+    repository_url = Column(String, nullable=True)
+    development_status = Column(String, nullable=True)
+    showcase_priority = Column(Integer, default=0)
+    published_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="projects")
     requests = relationship("Request", back_populates="project")
     videos = relationship("Video", back_populates="project")
+    ratings = relationship(
+        "ProjectRating", back_populates="project", cascade="all, delete-orphan"
+    )
+    technologies = relationship(
+        "ProjectTechnology", back_populates="project", cascade="all, delete-orphan"
+    )
+
+
+class ProjectTechnology(Base):
+    __tablename__ = "project_technologies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    name = Column(String, nullable=False)
+
+    # Relationship
+    project = relationship("Project", back_populates="technologies")
+
+
+class ProjectRating(Base):
+    __tablename__ = "project_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    stars = Column(Integer, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    # Relationships
+    project = relationship("Project", back_populates="ratings")
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "user_id", name="unique_project_user_rating"),
+        CheckConstraint("stars >= 1 AND stars <= 5", name="valid_stars_range"),
+    )
 
 
 # ------------------ Request and RequestShare Models ------------------

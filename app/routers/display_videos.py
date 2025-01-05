@@ -312,16 +312,21 @@ async def stream_video(
 @router.get("/shared/{share_token}")
 async def get_shared_video(share_token: str, db: Session = Depends(get_db)):
     # Get the video by share token
-    video = (
-        db.query(Video)
-        .filter(Video.share_token == share_token, Video.is_public == True)
-        .first()
-    )
+    video = db.query(Video).filter(Video.share_token == share_token).first()
 
     if not video:
         raise HTTPException(
             status_code=404, detail="Video not found or is no longer shared"
         )
+
+    # Include user information if available
+    user_data = None
+    if video.user:
+        user_data = {
+            "id": video.user.id,
+            "full_name": video.user.full_name,
+            "username": video.user.username,
+        }
 
     return {
         "id": video.id,
@@ -331,4 +336,7 @@ async def get_shared_video(share_token: str, db: Session = Depends(get_db)):
         "thumbnail_path": video.thumbnail_path,
         "project_url": video.project_url,
         "upload_date": video.upload_date,
+        "user": user_data,
+        "user_id": video.user_id,
+        "is_public": video.is_public,
     }

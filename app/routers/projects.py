@@ -5,6 +5,7 @@ from ..oauth2 import get_current_user
 from app import schemas, crud, models
 from fastapi import status
 from fastapi.params import Query
+from typing import List
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -30,7 +31,12 @@ def create_project(
                 "total_budget": 0.0,
                 "agreed_amount": 0.0,
             },
-            "conversation_stats": {"total": 0, "active": 0, "negotiating": 0, "agreed": 0},
+            "conversation_stats": {
+                "total": 0,
+                "active": 0,
+                "negotiating": 0,
+                "agreed": 0,
+            },
         }
 
         # Construct the response
@@ -63,7 +69,9 @@ def get_projects(
     projects = crud.crud_project.get_projects_by_user(db=db, user_id=current_user.id)
     if include_stats:
         for project in projects:
-            project.stats = crud.crud_project.get_project_stats(db=db, project_id=project.id)
+            project.stats = crud.crud_project.get_project_stats(
+                db=db, project_id=project.id
+            )
     return projects
 
 
@@ -76,10 +84,13 @@ def delete_project(
     # Verify user is a client before allowing deletion
     if current_user.user_type != models.UserType.client:  # Using lowercase
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can delete projects"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients can delete projects",
         )
 
-    crud.crud_project.delete_project(db=db, project_id=project_id, user_id=current_user.id)
+    crud.crud_project.delete_project(
+        db=db, project_id=project_id, user_id=current_user.id
+    )
     return {"message": "Project deleted successfully"}
 
 
@@ -95,7 +106,51 @@ def get_project(
     # Check if user owns the project or has access
     if project.user_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this project"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this project",
+        )
+
+    return project
+
+
+@router.post("/{project_id}/publish")
+def publish_project(
+    project_id: int,
+    project_data: schemas.ProjectPublish,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Publish a project to the public showcase"""
+    project = crud.crud_project.get_project(db=db, project_id=project_id)
+
+    if project.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this project",
+        )
+
+    return crud.crud_project.publish_project(
+        db=db, project_id=project_id, project_data=project_data
+    )
+
+
+@router.get("/showcase", response_model=List[schemas.ProjectShowcase])
+def get_showcase_projects(
+    skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
+):
+    """Get all published showcase projects"""
+    return crud.crud_project.get_showcase_projects(db=db, skip=skip, limit=limit)
+
+
+@router.get("/showcase/{project_id}", response_model=schemas.ProjectShowcase)
+def get_showcase_project(project_id: int, db: Session = Depends(get_db)):
+    """Get a specific published showcase project"""
+    project = crud.crud_project.get_project(db=db, project_id=project_id)
+
+    if not project or not project.is_public:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or not public",
         )
 
     return project
