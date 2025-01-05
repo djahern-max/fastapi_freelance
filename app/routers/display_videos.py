@@ -14,6 +14,8 @@ import uuid
 from sqlalchemy.sql import text
 from sqlalchemy import func, case
 from typing import Optional
+from app.database import get_db
+from app.models import Video
 
 load_dotenv()
 
@@ -72,7 +74,11 @@ def display_videos(
         for video in videos:
             try:
                 # Count likes
-                likes_count = db.query(models.Vote).filter(models.Vote.video_id == video.id).count()
+                likes_count = (
+                    db.query(models.Vote)
+                    .filter(models.Vote.video_id == video.id)
+                    .count()
+                )
 
                 # Check if current user liked the video
                 liked = False
@@ -80,7 +86,8 @@ def display_videos(
                     liked = (
                         db.query(models.Vote)
                         .filter(
-                            models.Vote.video_id == video.id, models.Vote.user_id == current_user.id
+                            models.Vote.video_id == video.id,
+                            models.Vote.user_id == current_user.id,
                         )
                         .first()
                         is not None
@@ -110,7 +117,8 @@ def display_videos(
         logger.info(f"Successfully processed {len(processed_videos)} videos")
 
         return schemas.VideoResponse(
-            user_videos=[], other_videos=processed_videos  # Or filter for user's videos if needed
+            user_videos=[],
+            other_videos=processed_videos,  # Or filter for user's videos if needed
         )
 
     except Exception as e:
@@ -126,8 +134,12 @@ def get_user_videos(
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
     try:
-        user_videos = db.query(models.Video).filter(models.Video.user_id == current_user.id).all()
-        other_videos = db.query(models.Video).filter(models.Video.user_id != current_user.id).all()
+        user_videos = (
+            db.query(models.Video).filter(models.Video.user_id == current_user.id).all()
+        )
+        other_videos = (
+            db.query(models.Video).filter(models.Video.user_id != current_user.id).all()
+        )
         return schemas.VideoResponse(user_videos=user_videos, other_videos=other_videos)
     except Exception as e:
         logger.error(f"Error retrieving user videos: {str(e)}")
@@ -168,7 +180,11 @@ async def list_spaces_videos(
                         "title": None,  # To be retrieved from DB
                         "description": None,  # To be retrieved from DB
                     }
-                elif file_extension.lower() in [".webp", ".jpg", ".png"]:  # Thumbnail formats
+                elif file_extension.lower() in [
+                    ".webp",
+                    ".jpg",
+                    ".png",
+                ]:  # Thumbnail formats
                     thumbnails[file_name] = f"{base_url}/{filename}"
 
         # Match videos with their metadata from the database
@@ -217,11 +233,17 @@ async def stream_video(
                 async with aiohttp.ClientSession() as session:
                     async with session.get(video.file_path) as response:
                         if response.status != 200:
-                            raise HTTPException(status_code=404, detail="Video file not found")
+                            raise HTTPException(
+                                status_code=404, detail="Video file not found"
+                            )
 
                         headers = {
-                            "Content-Type": response.headers.get("Content-Type", "video/mp4"),
-                            "Content-Length": response.headers.get("Content-Length", ""),
+                            "Content-Type": response.headers.get(
+                                "Content-Type", "video/mp4"
+                            ),
+                            "Content-Length": response.headers.get(
+                                "Content-Length", ""
+                            ),
                             "Accept-Ranges": "bytes",
                         }
 
@@ -285,3 +307,28 @@ async def stream_video(
     except Exception as e:
         logger.error(f"Error streaming video {video_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/shared/{share_token}")
+async def get_shared_video(share_token: str, db: Session = Depends(get_db)):
+    # Get the video by share token
+    video = (
+        db.query(Video)
+        .filter(Video.share_token == share_token, Video.is_public == True)
+        .first()
+    )
+
+    if not video:
+        raise HTTPException(
+            status_code=404, detail="Video not found or is no longer shared"
+        )
+
+    return {
+        "id": video.id,
+        "title": video.title,
+        "description": video.description,
+        "file_path": video.file_path,
+        "thumbnail_path": video.thumbnail_path,
+        "project_url": video.project_url,
+        "upload_date": video.upload_date,
+    }
