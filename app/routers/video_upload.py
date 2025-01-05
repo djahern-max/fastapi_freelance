@@ -221,9 +221,10 @@ async def generate_share_link(
     video.is_public = True
     db.commit()
 
+    # Use ENV instead of ENVIRONMENT
     base_url = (
         "https://www.ryze.ai"
-        if os.getenv("ENVIRONMENT") == "production"
+        if os.getenv("ENV") == "production"
         else "http://localhost:3000"
     )
     share_url = f"{base_url}/shared/videos/{video.share_token}"
