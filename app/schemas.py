@@ -356,18 +356,6 @@ class VideoFilter(BaseModel):
 
 
 # ------------------ Project Schemas ------------------
-
-
-class UserPublicProfile(BaseModel):
-    id: int
-    username: str
-    full_name: str
-    profile_image_url: Optional[str]
-
-    class Config:
-        orm_mode = True
-
-
 class ProjectBase(BaseModel):
     """Simplified project schema - just basic grouping info"""
 
@@ -416,47 +404,6 @@ class ProjectWithRequests(ProjectOut):
     requests: List["RequestOut"] = []
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class ProjectTechnologyBase(BaseModel):
-    name: str
-
-
-class ProjectTechnologyCreate(ProjectTechnologyBase):
-    pass
-
-
-class ProjectTechnology(ProjectTechnologyBase):
-    id: int
-    project_id: int
-
-    class Config:
-        orm_mode = True
-
-
-class ProjectPublish(BaseModel):
-    is_public: bool = True
-    live_url: Optional[str] = None
-    repository_url: Optional[str] = None
-    development_status: Optional[str] = None
-    technologies: List[str] = []
-    showcase_priority: Optional[int] = 0
-
-
-class ProjectShowcase(BaseModel):
-    id: int
-    name: str
-    description: Optional[str] = None
-    live_url: Optional[str] = None
-    repository_url: Optional[str] = None
-    development_status: Optional[str] = None
-    technologies: List[str] = []
-    user: "UserPublicProfile"
-    videos: List["VideoBase"]
-    published_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------ Agreement Schemas ------------------

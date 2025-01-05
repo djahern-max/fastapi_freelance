@@ -5,7 +5,6 @@ from ..oauth2 import get_current_user
 from app import schemas, crud, models
 from fastapi import status
 from fastapi.params import Query
-from typing import List
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -108,49 +107,6 @@ def get_project(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this project",
-        )
-
-    return project
-
-
-@router.post("/{project_id}/publish")
-def publish_project(
-    project_id: int,
-    project_data: schemas.ProjectPublish,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """Publish a project to the public showcase"""
-    project = crud.crud_project.get_project(db=db, project_id=project_id)
-
-    if project.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to modify this project",
-        )
-
-    return crud.crud_project.publish_project(
-        db=db, project_id=project_id, project_data=project_data
-    )
-
-
-@router.get("/showcase", response_model=List[schemas.ProjectShowcase])
-def get_showcase_projects(
-    skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
-):
-    """Get all published showcase projects"""
-    return crud.crud_project.get_showcase_projects(db=db, skip=skip, limit=limit)
-
-
-@router.get("/showcase/{project_id}", response_model=schemas.ProjectShowcase)
-def get_showcase_project(project_id: int, db: Session = Depends(get_db)):
-    """Get a specific published showcase project"""
-    project = crud.crud_project.get_project(db=db, project_id=project_id)
-
-    if not project or not project.is_public:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found or not public",
         )
 
     return project
