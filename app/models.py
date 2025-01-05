@@ -186,19 +186,21 @@ class Video(Base):
         Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True
     )
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     video_type = Column(
         SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo
     )
+    share_token = Column(String, unique=True, nullable=True, index=True)
+    project_url = Column(String, nullable=True)
+    is_public = Column(Boolean, default=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
     user = relationship("User", back_populates="videos")
     project = relationship("Project", back_populates="videos")
     request = relationship("Request", back_populates="videos")
-    votes = relationship(
-        "Vote", back_populates="video", cascade="all, delete-orphan"
-    )  # Add this line
+    votes = relationship("Vote", back_populates="video", cascade="all, delete-orphan")
 
 
 # ------------------ Project Model ------------------

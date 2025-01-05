@@ -10,6 +10,7 @@ from botocore.exceptions import NoCredentialsError
 from app import oauth2
 from app.models import User
 import logging
+from typing import Optional
 
 # Initialize the logger
 logger = logging.getLogger(__name__)
@@ -49,7 +50,9 @@ async def upload_video(
     try:
         # Log initial request details
         logger.info(f"Starting video upload for user {current_user.id}")
-        logger.info(f"File details - Filename: {file.filename}, Content-Type: {file.content_type}")
+        logger.info(
+            f"File details - Filename: {file.filename}, Content-Type: {file.content_type}"
+        )
         if thumbnail:
             logger.info(
                 f"Thumbnail details - Filename: {thumbnail.filename}, Content-Type: {thumbnail.content_type}"
@@ -70,7 +73,9 @@ async def upload_video(
             file_content = await file.read()
             if not file_content:
                 raise ValueError("File content is empty")
-            logger.info(f"Successfully read file content, size: {len(file_content)} bytes")
+            logger.info(
+                f"Successfully read file content, size: {len(file_content)} bytes"
+            )
         except Exception as e:
             logger.error(f"Error reading file content: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
@@ -108,7 +113,9 @@ async def upload_video(
             logger.info("Successfully uploaded video to DO Spaces")
         except Exception as e:
             logger.error(f"Error uploading video to DO Spaces: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Upload to DO Spaces failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Upload to DO Spaces failed: {str(e)}"
+            )
 
         file_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_filename}"
         logger.info(f"Generated video URL: {file_url}")
@@ -129,10 +136,14 @@ async def upload_video(
 
                 # Set content type based on file extension
                 content_type = (
-                    "image/webp" if thumbnail_extension.lower() == ".webp" else "image/jpeg"
+                    "image/webp"
+                    if thumbnail_extension.lower() == ".webp"
+                    else "image/jpeg"
                 )
 
-                logger.info(f"Uploading thumbnail with filename: {unique_thumbnail_filename}")
+                logger.info(
+                    f"Uploading thumbnail with filename: {unique_thumbnail_filename}"
+                )
                 s3.put_object(
                     Bucket=os.getenv("SPACES_BUCKET"),
                     Key=unique_thumbnail_filename,
@@ -179,3 +190,42 @@ async def upload_video(
         await file.seek(0)
         if thumbnail:
             await thumbnail.seek(0)
+
+
+@router.post("/{video_id}/share")
+async def generate_share_link(
+    video_id: int,
+    project_url: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(oauth2.get_current_user),
+):
+    # Get the video
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Check ownership
+    if video.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to share this video"
+        )
+
+    # Update project URL if provided
+    if project_url:
+        video.project_url = project_url
+
+    # Generate share token if not exists
+    if not video.share_token:
+        video.share_token = str(uuid.uuid4())
+
+    video.is_public = True
+    db.commit()
+
+    base_url = (
+        "https://www.ryze.ai"
+        if os.getenv("ENVIRONMENT") == "production"
+        else "http://localhost:3000"
+    )
+    share_url = f"{base_url}/shared/videos/{video.share_token}"
+
+    return {"share_url": share_url, "project_url": video.project_url}

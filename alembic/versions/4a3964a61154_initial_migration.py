@@ -1,8 +1,8 @@
-"""Add browser extension capabilities
+"""initial migration
 
-Revision ID: 0b36d05ce9ef
+Revision ID: 4a3964a61154
 Revises: 
-Create Date: 2024-12-28 07:21:24.854917
+Create Date: 2025-01-05 14:03:00.714807
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0b36d05ce9ef'
+revision: str = '4a3964a61154'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -297,13 +297,19 @@ def upgrade() -> None:
     sa.Column('request_id', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('video_type', sa.Enum('project_overview', 'solution_demo', 'progress_update', name='videotype'), nullable=False),
+    sa.Column('share_token', sa.String(), nullable=True),
+    sa.Column('project_url', sa.String(), nullable=True),
+    sa.Column('is_public', sa.Boolean(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_videos_id'), 'videos', ['id'], unique=False)
+    op.create_index(op.f('ix_videos_share_token'), 'videos', ['share_token'], unique=True)
     op.create_index(op.f('ix_videos_title'), 'videos', ['title'], unique=False)
+    op.create_index(op.f('ix_videos_user_id'), 'videos', ['user_id'], unique=False)
     op.create_table('conversation_messages',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('conversation_id', sa.Integer(), nullable=False),
@@ -367,7 +373,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_conversation_messages_id'), table_name='conversation_messages')
     op.drop_index(op.f('ix_conversation_messages_conversation_id'), table_name='conversation_messages')
     op.drop_table('conversation_messages')
+    op.drop_index(op.f('ix_videos_user_id'), table_name='videos')
     op.drop_index(op.f('ix_videos_title'), table_name='videos')
+    op.drop_index(op.f('ix_videos_share_token'), table_name='videos')
     op.drop_index(op.f('ix_videos_id'), table_name='videos')
     op.drop_table('videos')
     op.drop_index(op.f('ix_snagged_requests_id'), table_name='snagged_requests')
