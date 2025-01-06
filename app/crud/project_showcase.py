@@ -1,4 +1,3 @@
-# crud/project_showcase.py
 import boto3
 import os
 import uuid
@@ -7,7 +6,11 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from fastapi import UploadFile
 from .. import models, schemas
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
+# Create a thread pool executor for running boto3 operations
+executor = ThreadPoolExecutor(max_workers=4)
 
 s3 = boto3.client(
     "s3",
@@ -16,6 +19,21 @@ s3 = boto3.client(
     aws_access_key_id=os.getenv("SPACES_KEY"),
     aws_secret_access_key=os.getenv("SPACES_SECRET"),
 )
+
+
+async def upload_to_s3(file_content: bytes, bucket: str, key: str, content_type: str):
+    """Async wrapper for S3 upload"""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        executor,
+        lambda: s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file_content,
+            ACL="public-read",
+            ContentType=content_type,
+        ),
+    )
 
 
 async def create_project_showcase(
@@ -29,17 +47,17 @@ async def create_project_showcase(
         # Handle image upload
         image_url = None
         if image_file:
+            file_content = await image_file.read()
             unique_filename = (
                 f"{uuid.uuid4()}{os.path.splitext(image_file.filename)[1]}"
             )
-            await s3.put_object(
-                Bucket=os.getenv("SPACES_BUCKET"),
-                Key=f"showcase-images/{unique_filename}",
-                Body=await image_file.read(),
-                ACL="public-read",
-                ContentType=image_file.content_type,
+            key = f"showcase-images/{unique_filename}"
+
+            await upload_to_s3(
+                file_content, os.getenv("SPACES_BUCKET"), key, image_file.content_type
             )
-            image_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/showcase-images/{unique_filename}"
+
+            image_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{key}"
 
         # Handle README upload
         readme_url = None
@@ -49,23 +67,25 @@ async def create_project_showcase(
                     status_code=400, detail="README must be a markdown file"
                 )
 
+            file_content = await readme_file.read()
             unique_filename = f"{uuid.uuid4()}.md"
-            await s3.put_object(
-                Bucket=os.getenv("SPACES_BUCKET"),
-                Key=f"showcase-readmes/{unique_filename}",
-                Body=await readme_file.read(),
-                ACL="public-read",
-                ContentType="text/markdown",
-            )
-            readme_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/showcase-readmes/{unique_filename}"
+            key = f"showcase-readmes/{unique_filename}"
 
-        # Create showcase
+            await upload_to_s3(
+                file_content, os.getenv("SPACES_BUCKET"), key, "text/markdown"
+            )
+
+            readme_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{key}"
+
+        # Create showcase with exact fields from schema
+        showcase_dict = showcase.model_dump()
         db_showcase = models.Showcase(
-            **showcase.dict(),  # Changed from showcase_data to showcase.dict()
+            **showcase_dict,
             developer_id=developer_id,
             image_url=image_url,
             readme_url=readme_url,
         )
+
         db.add(db_showcase)
         db.commit()
         db.refresh(db_showcase)
@@ -107,7 +127,8 @@ def update_project_showcase(
             status_code=403, detail="Not authorized to update this showcase"
         )
 
-    for key, value in showcase.dict().items():
+    showcase_data = showcase.dict(exclude_unset=True)
+    for key, value in showcase_data.items():
         setattr(db_showcase, key, value)
 
     db.commit()

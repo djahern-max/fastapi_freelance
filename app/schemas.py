@@ -1097,8 +1097,11 @@ class ShowcaseRating(ShowcaseRatingBase):
 class ProjectShowcaseBase(BaseModel):
     title: str
     description: str
-    readme: Optional[str] = None
-    video_ids: Optional[List[int]] = []
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    demo_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectShowcaseCreate(ProjectShowcaseBase):

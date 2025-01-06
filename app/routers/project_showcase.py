@@ -22,34 +22,33 @@ router = APIRouter(prefix="/project-showcase", tags=["project-showcase"])
 async def create_showcase(
     title: str = Form(...),
     description: str = Form(...),
-    readme_file: UploadFile = File(None),
-    image_file: UploadFile = File(None),
     project_url: Optional[str] = Form(None),
     repository_url: Optional[str] = Form(None),
     demo_url: Optional[str] = Form(None),
-    developer_profile_id: Optional[int] = Form(None),
-    video_ids: str = Form("[]"),  # JSON string of video IDs
+    readme_file: Optional[UploadFile] = File(None),
+    image_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    # Convert the form data into your existing schema format
-    showcase_data = schemas.ProjectShowcaseCreate(
-        title=title,
-        description=description,
-        project_url=project_url,
-        repository_url=repository_url,
-        demo_url=demo_url,
-        developer_profile_id=developer_profile_id,
-        video_ids=json.loads(video_ids),
-    )
+    try:
+        # Create showcase data without video_ids
+        showcase_data = schemas.ProjectShowcaseCreate(
+            title=title,
+            description=description,
+            project_url=project_url,
+            repository_url=repository_url,
+            demo_url=demo_url,
+        )
 
-    return await create_project_showcase(
-        db=db,
-        showcase=showcase_data,
-        developer_id=current_user.id,
-        image_file=image_file,
-        readme_file=readme_file,
-    )
+        return await create_project_showcase(
+            db=db,
+            showcase=showcase_data,
+            developer_id=current_user.id,
+            image_file=image_file,
+            readme_file=readme_file,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{showcase_id}", response_model=schemas.ProjectShowcase)
