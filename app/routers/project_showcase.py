@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from typing import Optional
 from sqlalchemy.orm import Session
 from typing import List
+import json
 from .. import schemas, models
 from ..database import get_db
 from ..oauth2 import get_current_user
@@ -16,12 +19,37 @@ router = APIRouter(prefix="/project-showcase", tags=["project-showcase"])
 
 
 @router.post("/", response_model=schemas.ProjectShowcase)
-def create_showcase(
-    showcase: schemas.ProjectShowcaseCreate,
+async def create_showcase(
+    title: str = Form(...),
+    description: str = Form(...),
+    readme_file: UploadFile = File(None),
+    image_file: UploadFile = File(None),
+    project_url: Optional[str] = Form(None),
+    repository_url: Optional[str] = Form(None),
+    demo_url: Optional[str] = Form(None),
+    developer_profile_id: Optional[int] = Form(None),
+    video_ids: str = Form("[]"),  # JSON string of video IDs
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return create_project_showcase(db, showcase, current_user.id)
+    # Convert the form data into your existing schema format
+    showcase_data = schemas.ProjectShowcaseCreate(
+        title=title,
+        description=description,
+        project_url=project_url,
+        repository_url=repository_url,
+        demo_url=demo_url,
+        developer_profile_id=developer_profile_id,
+        video_ids=json.loads(video_ids),
+    )
+
+    return await create_project_showcase(
+        db=db,
+        showcase=showcase_data,
+        developer_id=current_user.id,
+        image_file=image_file,
+        readme_file=readme_file,
+    )
 
 
 @router.get("/{showcase_id}", response_model=schemas.ProjectShowcase)

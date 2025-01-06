@@ -1044,8 +1044,18 @@ class PaginatedProductResponse(BaseModel):
 class ShowcaseBase(BaseModel):
     title: str
     description: str
-    readme: Optional[str] = None
-    video_ids: Optional[List[int]] = []
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    demo_url: Optional[str] = None
+
+    field_validator("project_url", "repository_url", "demo_url")
+
+    def validate_urls(cls, v):
+        if v is not None:
+            # Basic URL validation
+            if not v.startswith(("http://", "https://")):
+                raise ValueError("URL must start with http:// or https://")
+        return v
 
 
 class ShowcaseCreate(ShowcaseBase):

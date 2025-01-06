@@ -135,26 +135,51 @@ class User(Base):
     )
 
 
-# ------------------ Developer Showcase Models ------------------
+# ------------------ Video Model ------------------
+
+showcase_videos = Table(
+    "showcase_videos",
+    Base.metadata,
+    Column("showcase_id", Integer, ForeignKey("showcases.id", ondelete="CASCADE")),
+    Column("video_id", Integer, ForeignKey("videos.id", ondelete="CASCADE")),
+    UniqueConstraint("showcase_id", "video_id", name="unique_showcase_video"),
+)
 
 
-class Showcase(Base):
-    __tablename__ = "showcases"
+class Video(Base):
+    __tablename__ = "videos"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=False)
-    readme = Column(Text)
-    developer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    video_ids = Column(ARRAY(Integer))
-
-    # Update the relationships
-    developer = relationship(
-        "User", back_populates="showcases", foreign_keys=[developer_id]
+    title = Column(String, index=True)
+    description = Column(String, nullable=True)
+    file_path = Column(String, nullable=False)
+    thumbnail_path = Column(String, nullable=True)
+    upload_date = Column(DateTime(timezone=True), server_default=func.now())
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
-    ratings = relationship("ShowcaseRating", back_populates="showcase")
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    video_type = Column(
+        SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo
+    )
+    share_token = Column(String, unique=True, nullable=True, index=True)
+    project_url = Column(String, nullable=True)
+    is_public = Column(Boolean, default=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="videos")
+    project = relationship("Project", back_populates="videos")
+    request = relationship("Request", back_populates="videos")
+    votes = relationship("Vote", back_populates="video", cascade="all, delete-orphan")
+    showcases = relationship(
+        "Showcase", secondary=showcase_videos, back_populates="videos"
+    )
 
 
 class ShowcaseRating(Base):
@@ -172,6 +197,35 @@ class ShowcaseRating(Base):
     rater = relationship(
         "User", back_populates="showcase_ratings_given", foreign_keys=[rater_id]
     )
+
+
+# ------------------ Developer Showcase Models ------------------
+
+
+class Showcase(Base):
+    __tablename__ = "showcases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    image_url = Column(String)  # Project thumbnail
+    readme_url = Column(String)  # README file
+    project_url = Column(String)  # Live project URL
+    repository_url = Column(String)  # Source code repository
+    demo_url = Column(String)  # Live demo if different from project URL
+    developer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    developer_profile_id = Column(Integer, ForeignKey("developer_profiles.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Update the relationships
+    developer = relationship(
+        "User", back_populates="showcases", foreign_keys=[developer_id]
+    )
+    developer_profile = relationship("DeveloperProfile", backref="showcases")
+    videos = relationship(
+        "Video", secondary="showcase_videos", back_populates="showcases"
+    )
+    ratings = relationship("ShowcaseRating", back_populates="showcase")
 
 
 # ------------------ Profile Models ------------------
@@ -216,40 +270,6 @@ class ClientProfile(Base):
     )
 
     user = relationship("User", back_populates="client_profile")
-
-
-# ------------------ Video Model ------------------
-class Video(Base):
-    __tablename__ = "videos"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String, nullable=True)
-    file_path = Column(String, nullable=False)
-    thumbnail_path = Column(String, nullable=True)
-    upload_date = Column(DateTime(timezone=True), server_default=func.now())
-    project_id = Column(
-        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
-    )
-    request_id = Column(
-        Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True
-    )
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    video_type = Column(
-        SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo
-    )
-    share_token = Column(String, unique=True, nullable=True, index=True)
-    project_url = Column(String, nullable=True)
-    is_public = Column(Boolean, default=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Relationships
-    user = relationship("User", back_populates="videos")
-    project = relationship("Project", back_populates="videos")
-    request = relationship("Request", back_populates="videos")
-    votes = relationship("Vote", back_populates="video", cascade="all, delete-orphan")
 
 
 # ------------------ Project Model ------------------
