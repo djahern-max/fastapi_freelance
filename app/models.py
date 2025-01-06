@@ -191,7 +191,7 @@ class ShowcaseRating(Base):
     id = Column(Integer, primary_key=True, index=True)
     showcase_id = Column(Integer, ForeignKey("showcases.id"), nullable=False)
     rater_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    rating = Column(Integer, nullable=False)
+    stars = Column(Integer, nullable=False)  # Changed from rating to stars
     comment = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -200,7 +200,9 @@ class ShowcaseRating(Base):
     rater = relationship("User")
 
     __table_args__ = (
-        CheckConstraint("rating >= 1 AND rating <= 5", name="check_rating_range"),
+        CheckConstraint(
+            "stars >= 1 AND stars <= 5", name="check_stars_range"
+        ),  # Updated constraint name
         UniqueConstraint("showcase_id", "rater_id", name="unique_showcase_rating"),
     )
 
@@ -224,6 +226,8 @@ class Showcase(Base):
     developer_profile_id = Column(Integer, ForeignKey("developer_profiles.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    average_rating = Column(Float, default=0.0)  # Add this line
+    total_ratings = Column(Integer, default=0)  # Add this line
 
     developer = relationship(
         "User",

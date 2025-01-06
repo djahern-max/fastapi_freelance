@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
-from typing import Optional
-from sqlalchemy.orm import Session
-from typing import List
-import json
+from typing import Optional, List
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
+import logging
+import os
+import uuid
+import boto3
+import httpx
+from ..models import User
 from .. import schemas, models
 from ..database import get_db
 from ..oauth2 import get_current_user
+from ..models import Showcase, ShowcaseRating
 from ..crud.project_showcase import (
     create_project_showcase,
     get_project_showcase,
@@ -14,9 +19,18 @@ from ..crud.project_showcase import (
     update_project_showcase,
     delete_project_showcase,
 )
-from sqlalchemy.orm import Session, selectinload
 
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/project-showcase", tags=["project-showcase"])
+
+s3 = boto3.client(
+    "s3",
+    region_name=os.getenv("SPACES_REGION"),
+    endpoint_url=os.getenv("SPACES_ENDPOINT"),
+    aws_access_key_id=os.getenv("SPACES_KEY"),
+    aws_secret_access_key=os.getenv("SPACES_SECRET"),
+)
 
 
 @router.post("/", response_model=schemas.ProjectShowcase)
@@ -25,29 +39,64 @@ async def create_showcase(
     description: str = Form(...),
     project_url: Optional[str] = Form(None),
     repository_url: Optional[str] = Form(None),
-    demo_url: Optional[str] = Form(None),
-    readme_file: Optional[UploadFile] = File(None),
     image_file: Optional[UploadFile] = File(None),
+    readme_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        # Create showcase data without video_ids
+        if not all([os.getenv("SPACES_BUCKET"), os.getenv("SPACES_REGION")]):
+            raise HTTPException(status_code=500, detail="Storage configuration missing")
+
+        image_url = None
+        if image_file:
+            file_extension = os.path.splitext(image_file.filename)[1]
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+            image_content = await image_file.read()
+
+            s3.put_object(
+                Bucket=os.getenv("SPACES_BUCKET"),
+                Key=unique_filename,
+                Body=image_content,
+                ACL="public-read",
+                ContentType=image_file.content_type,
+            )
+
+            image_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_filename}"
+
+        readme_url = None
+        if readme_file:
+            if not readme_file.filename.endswith(".md"):
+                raise HTTPException(
+                    status_code=400, detail="README must be a markdown file"
+                )
+
+            unique_filename = f"{uuid.uuid4()}.md"
+            readme_content = await readme_file.read()
+
+            s3.put_object(
+                Bucket=os.getenv("SPACES_BUCKET"),
+                Key=unique_filename,
+                Body=readme_content,
+                ACL="public-read",
+                ContentType="text/markdown",
+            )
+
+            readme_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_filename}"
+
         showcase_data = schemas.ProjectShowcaseCreate(
             title=title,
             description=description,
             project_url=project_url,
             repository_url=repository_url,
-            demo_url=demo_url,
+            image_url=image_url,
+            readme_url=readme_url,
         )
 
         return await create_project_showcase(
-            db=db,
-            showcase=showcase_data,
-            developer_id=current_user.id,
-            image_file=image_file,
-            readme_file=readme_file,
+            db=db, showcase=showcase_data, developer_id=current_user.id
         )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -61,10 +110,30 @@ def read_showcase(showcase_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/developer/{developer_id}", response_model=List[schemas.ProjectShowcase])
-def read_developer_showcases(
+async def get_developer_showcases_route(
     developer_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
-    return get_developer_showcases(db, developer_id, skip, limit)
+    try:
+        showcases = await get_developer_showcases_crud(db, developer_id, skip, limit)
+        return showcases or []
+    except Exception as e:
+        logger.error(f"Error fetching developer showcases: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+# Rename the crud function to avoid naming conflict
+async def get_developer_showcases_crud(
+    db: Session, developer_id: int, skip: int = 0, limit: int = 100
+):
+    return (
+        db.query(Showcase)
+        .filter(Showcase.developer_id == developer_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.put("/{showcase_id}", response_model=schemas.ProjectShowcase)
@@ -84,3 +153,130 @@ def delete_showcase(
     current_user: models.User = Depends(get_current_user),
 ):
     return delete_project_showcase(db, showcase_id, current_user.id)
+
+
+@router.get("/{showcase_id}/readme")  # Remove duplicate project-showcase
+async def get_showcase_readme(showcase_id: int, db: Session = Depends(get_db)):
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if not showcase.readme_url:
+        raise HTTPException(status_code=404, detail="No README found")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(showcase.readme_url)
+            return {"content": response.text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{showcase_id}/rating", response_model=schemas.ShowcaseRating)
+async def rate_showcase(
+    showcase_id: int,
+    rating_data: schemas.ShowcaseRatingCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    # Check if showcase exists
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Project showcase not found")
+
+    # Check if user is not rating their own showcase
+    if showcase.developer_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot rate your own showcase")
+
+    # Check if user has already rated
+    existing_rating = (
+        db.query(models.ShowcaseRating)
+        .filter(
+            models.ShowcaseRating.showcase_id == showcase_id,
+            models.ShowcaseRating.rater_id == current_user.id,
+        )
+        .first()
+    )
+
+    if existing_rating:
+        # Update existing rating
+        existing_rating.stars = rating_data.stars  # Changed from rating to stars
+        existing_rating.comment = rating_data.comment
+        db.commit()
+        db.refresh(existing_rating)
+        return existing_rating
+
+    # Create new rating
+    db_rating = models.ShowcaseRating(
+        showcase_id=showcase_id,
+        rater_id=current_user.id,
+        stars=rating_data.stars,  # Changed from rating to stars
+        comment=rating_data.comment,
+    )
+    db.add(db_rating)
+    db.commit()
+    db.refresh(db_rating)
+
+    # Update showcase rating stats
+    await update_showcase_stats(db, showcase_id)
+
+    return db_rating
+
+
+@router.get("/{showcase_id}/rating", response_model=schemas.ShowcaseRatingStats)
+async def get_showcase_rating(showcase_id: int, db: Session = Depends(get_db)):
+    # Calculate average rating and total ratings directly from ShowcaseRating table
+    rating_stats = (
+        db.query(
+            func.avg(models.ShowcaseRating.stars).label("average_rating"),
+            func.count(models.ShowcaseRating.id).label("total_ratings"),
+        )
+        .filter(models.ShowcaseRating.showcase_id == showcase_id)
+        .first()
+    )
+
+    return {
+        "average_rating": float(rating_stats[0]) if rating_stats[0] else 0.0,
+        "total_ratings": rating_stats[1] if rating_stats[1] else 0,
+    }
+
+
+@router.get("/{showcase_id}/user-rating", response_model=schemas.ShowcaseRating)
+async def get_user_showcase_rating(
+    showcase_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    rating = (
+        db.query(models.ShowcaseRating)
+        .filter(
+            models.ShowcaseRating.showcase_id == showcase_id,
+            models.ShowcaseRating.rater_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not rating:
+        raise HTTPException(status_code=404, detail="No rating found for this user")
+
+    return rating
+
+
+async def update_showcase_stats(db: Session, showcase_id: int):
+    """Helper function to update showcase rating statistics"""
+    stats = (
+        db.query(
+            func.avg(models.ShowcaseRating.stars).label(
+                "average_rating"
+            ),  # Changed from rating to stars
+            func.count(models.ShowcaseRating.id).label("total_ratings"),
+        )
+        .filter(models.ShowcaseRating.showcase_id == showcase_id)
+        .first()
+    )
+
+    showcase = get_project_showcase(db, showcase_id)
+    if showcase:
+        showcase.average_rating = float(stats[0]) if stats[0] else 0.0
+        showcase.total_ratings = stats[1]
+        db.commit()

@@ -18,11 +18,11 @@ from app.routers import (
     feedback,
     payment,
     vote,
-    ratings,
     snagged_requests,
     marketplace,
     shared_videos,
     project_showcase,
+    rating,
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -127,11 +127,11 @@ routers_with_prefixes = [
     (feedback.router, ""),
     (payment.router, ""),
     (vote.router, ""),
-    (ratings.router, ""),
     (snagged_requests.router, ""),
     (marketplace.router, ""),
     (shared_videos.router, ""),
     (project_showcase.router, ""),
+    (rating.router, ""),
 ]
 
 # Include all routers in this code

@@ -1041,49 +1041,18 @@ class PaginatedProductResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ShowcaseBase(BaseModel):
-    title: str
-    description: str
-    project_url: Optional[str] = None
-    repository_url: Optional[str] = None
-    demo_url: Optional[str] = None
-
-    field_validator("project_url", "repository_url", "demo_url")
-
-    def validate_urls(cls, v):
-        if v is not None:
-            # Basic URL validation
-            if not v.startswith(("http://", "https://")):
-                raise ValueError("URL must start with http:// or https://")
-        return v
-
-
-class ShowcaseCreate(ShowcaseBase):
-    pass
-
-
-class Showcase(ShowcaseBase):
-    id: int
-    developer_id: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        orm_mode = True
-
-
-from pydantic import Field
-
-
+# Base class for ratings
 class ShowcaseRatingBase(BaseModel):
-    rating: int = Field(ge=1, le=5)
+    stars: int = Field(..., ge=1, le=5)
     comment: Optional[str] = None
 
 
+# Used for creating ratings
 class ShowcaseRatingCreate(ShowcaseRatingBase):
     pass
 
 
+# Full rating model with all fields
 class ShowcaseRating(ShowcaseRatingBase):
     id: int
     showcase_id: int
@@ -1093,23 +1062,42 @@ class ShowcaseRating(ShowcaseRatingBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Statistics response model
+class ShowcaseRatingStats(BaseModel):
+    average_rating: float = Field(default=0.0)
+    total_ratings: int = Field(default=0)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Base class for showcases
 class ProjectShowcaseBase(BaseModel):
     title: str
     description: str
     project_url: Optional[str] = None
     repository_url: Optional[str] = None
-    demo_url: Optional[str] = None
+
+    @field_validator("project_url", "repository_url")
+    def validate_urls(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
 
 
+# Used for creating showcases
 class ProjectShowcaseCreate(ProjectShowcaseBase):
     pass
 
 
+# Full showcase model with all fields
 class ProjectShowcase(ProjectShowcaseBase):
     id: int
     developer_id: int
     created_at: datetime
     updated_at: datetime
+    image_url: Optional[str] = None
+    readme_url: Optional[str] = None
+    average_rating: Optional[float] = 0.0
+    total_ratings: Optional[int] = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
