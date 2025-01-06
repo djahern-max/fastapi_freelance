@@ -13,6 +13,7 @@ from sqlalchemy import (
     JSON,
     text,
     CheckConstraint,
+    ARRAY,
 )
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
@@ -122,6 +123,54 @@ class User(Base):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+
+    showcases = relationship(
+        "Showcase", back_populates="developer", foreign_keys="[Showcase.developer_id]"
+    )
+    showcase_ratings_given = relationship(
+        "ShowcaseRating",
+        back_populates="rater",
+        foreign_keys="[ShowcaseRating.rater_id]",
+    )
+
+
+# ------------------ Developer Showcase Models ------------------
+
+
+class Showcase(Base):
+    __tablename__ = "showcases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    readme = Column(Text)
+    developer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    video_ids = Column(ARRAY(Integer))
+
+    # Update the relationships
+    developer = relationship(
+        "User", back_populates="showcases", foreign_keys=[developer_id]
+    )
+    ratings = relationship("ShowcaseRating", back_populates="showcase")
+
+
+class ShowcaseRating(Base):
+    __tablename__ = "showcase_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    showcase_id = Column(Integer, ForeignKey("showcases.id"), nullable=False)
+    rater_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    rating = Column(Integer, nullable=False)
+    comment = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Update the relationships
+    showcase = relationship("Showcase", back_populates="ratings")
+    rater = relationship(
+        "User", back_populates="showcase_ratings_given", foreign_keys=[rater_id]
     )
 
 

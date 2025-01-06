@@ -4,6 +4,7 @@ from enum import Enum
 import enum
 import re
 from datetime import datetime
+from pydantic.types import conint
 
 
 # ------------------ Enums ------------------
@@ -1038,3 +1039,67 @@ class PaginatedProductResponse(BaseModel):
     limit: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShowcaseBase(BaseModel):
+    title: str
+    description: str
+    readme: Optional[str] = None
+    video_ids: Optional[List[int]] = []
+
+
+class ShowcaseCreate(ShowcaseBase):
+    pass
+
+
+class Showcase(ShowcaseBase):
+    id: int
+    developer_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+from pydantic import Field
+
+
+class ShowcaseRatingBase(BaseModel):
+    rating: int = Field(ge=1, le=5)  # Rating between 1-5
+    comment: Optional[str] = None
+
+
+class ShowcaseRatingCreate(ShowcaseRatingBase):
+    pass
+
+
+class ShowcaseRating(ShowcaseRatingBase):
+    id: int
+    showcase_id: int
+    rater_id: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class ProjectShowcaseBase(BaseModel):
+    title: str
+    description: str
+    readme: Optional[str] = None
+    video_ids: Optional[List[int]] = []
+
+
+class ProjectShowcaseCreate(ProjectShowcaseBase):
+    pass
+
+
+class ProjectShowcase(ProjectShowcaseBase):
+    id: int
+    developer_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True  # Updated from orm_mode = True for Pydantic v2
