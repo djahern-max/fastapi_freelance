@@ -126,7 +126,10 @@ class User(Base):
     )
 
     showcases = relationship(
-        "Showcase", back_populates="developer", foreign_keys="[Showcase.developer_id]"
+        "Showcase",
+        back_populates="developer",
+        foreign_keys="[Showcase.developer_id]",
+        lazy="select",  # Add this
     )
     showcase_ratings_given = relationship(
         "ShowcaseRating",
@@ -192,10 +195,13 @@ class ShowcaseRating(Base):
     comment = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Update the relationships
+    # Relationships
     showcase = relationship("Showcase", back_populates="ratings")
-    rater = relationship(
-        "User", back_populates="showcase_ratings_given", foreign_keys=[rater_id]
+    rater = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("rating >= 1 AND rating <= 5", name="check_rating_range"),
+        UniqueConstraint("showcase_id", "rater_id", name="unique_showcase_rating"),
     )
 
 
@@ -204,28 +210,34 @@ class ShowcaseRating(Base):
 
 class Showcase(Base):
     __tablename__ = "showcases"
+    __mapper_args__ = {"eager_defaults": True}
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
-    image_url = Column(String)  # Project thumbnail
-    readme_url = Column(String)  # README file
-    project_url = Column(String)  # Live project URL
-    repository_url = Column(String)  # Source code repository
-    demo_url = Column(String)  # Live demo if different from project URL
+    image_url = Column(String)
+    readme_url = Column(String)
+    project_url = Column(String)
+    repository_url = Column(String)
+    demo_url = Column(String)
     developer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     developer_profile_id = Column(Integer, ForeignKey("developer_profiles.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    # Update the relationships
+
     developer = relationship(
-        "User", back_populates="showcases", foreign_keys=[developer_id]
+        "User",
+        back_populates="showcases",
+        foreign_keys=[developer_id],
+        lazy="select",
     )
-    developer_profile = relationship("DeveloperProfile", backref="showcases")
+    developer_profile = relationship(
+        "DeveloperProfile", backref="showcases", lazy="joined"
+    )
     videos = relationship(
-        "Video", secondary="showcase_videos", back_populates="showcases"
+        "Video", secondary="showcase_videos", back_populates="showcases", lazy="select"
     )
-    ratings = relationship("ShowcaseRating", back_populates="showcase")
+    ratings = relationship("ShowcaseRating", back_populates="showcase", lazy="select")
 
 
 # ------------------ Profile Models ------------------

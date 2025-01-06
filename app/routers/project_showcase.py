@@ -14,6 +14,7 @@ from ..crud.project_showcase import (
     update_project_showcase,
     delete_project_showcase,
 )
+from sqlalchemy.orm import Session, selectinload
 
 router = APIRouter(prefix="/project-showcase", tags=["project-showcase"])
 

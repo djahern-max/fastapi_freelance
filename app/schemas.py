@@ -1076,7 +1076,7 @@ from pydantic import Field
 
 
 class ShowcaseRatingBase(BaseModel):
-    rating: int = Field(ge=1, le=5)  # Rating between 1-5
+    rating: int = Field(ge=1, le=5)
     comment: Optional[str] = None
 
 
@@ -1090,8 +1090,7 @@ class ShowcaseRating(ShowcaseRatingBase):
     rater_id: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectShowcaseBase(BaseModel):
@@ -1100,8 +1099,6 @@ class ProjectShowcaseBase(BaseModel):
     project_url: Optional[str] = None
     repository_url: Optional[str] = None
     demo_url: Optional[str] = None
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectShowcaseCreate(ProjectShowcaseBase):
@@ -1115,4 +1112,4 @@ class ProjectShowcase(ProjectShowcaseBase):
     updated_at: datetime
 
     class Config:
-        from_attributes = True  # Updated from orm_mode = True for Pydantic v2
+        from_attributes = True
