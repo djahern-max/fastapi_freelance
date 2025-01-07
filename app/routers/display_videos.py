@@ -16,6 +16,13 @@ from sqlalchemy import func, case
 from typing import Optional
 from app.database import get_db
 from app.models import Video
+from app.schemas import (
+    DeveloperRatingCreate,
+    VideoRatingResponse,
+    User,
+)
+from app.crud import rating as rating_crud
+from app.oauth2 import get_current_user
 
 load_dotenv()
 
@@ -340,3 +347,42 @@ async def get_shared_video(share_token: str, db: Session = Depends(get_db)):
         "user_id": video.user_id,
         "is_public": video.is_public,
     }
+
+
+@router.post("/{video_id}/rating", response_model=VideoRatingResponse)
+async def rate_video(
+    video_id: int,
+    rating_data: DeveloperRatingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if video.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot rate your own video")
+
+    try:
+        # Use the CRUD service
+        rating = rating_crud.create_or_update_video_rating(
+            db, video_id, current_user.id, rating_data
+        )
+
+        stats = rating_crud.get_video_rating_stats(db, video_id)
+
+        # Update the video's aggregate ratings
+        video.average_rating = stats["average_rating"]
+        video.total_ratings = stats["total_ratings"]
+        db.commit()
+
+        return VideoRatingResponse(
+            success=True,
+            average_rating=stats["average_rating"],
+            total_ratings=stats["total_ratings"],
+            message="Rating submitted successfully",
+        )
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))

@@ -285,6 +285,9 @@ class VideoBase(BaseModel):
     video_type: VideoType = VideoType.solution_demo
     likes: int = 0
     liked_by_user: bool = False
+    # Add these fields
+    average_rating: float = 0.0
+    total_ratings: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -354,6 +357,47 @@ class VideoFilter(BaseModel):
     request_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VideoRatingResponse(BaseModel):
+    success: bool
+    average_rating: float
+    total_ratings: int
+    message: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VideoRatingBase(BaseModel):
+    stars: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = None
+
+
+class VideoRatingCreate(VideoRatingBase):
+    pass
+
+
+class VideoRating(VideoRatingBase):
+    id: int
+    video_id: int
+    rater_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VideoRatingStats(BaseModel):
+    average_rating: float = Field(default=0.0)
+    total_ratings: int = Field(default=0)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VideoRatingResponse(BaseModel):
+    success: bool
+    average_rating: float
+    total_ratings: int
+    message: str
 
 
 # ------------------ Project Schemas ------------------
@@ -1070,6 +1114,15 @@ class ShowcaseRatingStats(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShowcaseRatingResponse(BaseModel):
+    success: bool
+    average_rating: float
+    total_ratings: int
+    message: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Base class for showcases
 class ProjectShowcaseBase(BaseModel):
     title: str
@@ -1099,5 +1152,19 @@ class ProjectShowcase(ProjectShowcaseBase):
     readme_url: Optional[str] = None
     average_rating: Optional[float] = 0.0
     total_ratings: Optional[int] = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DeveloperMetricsResponse(BaseModel):
+    profile_rating: float
+    video_rating: float
+    showcase_rating: float
+    composite_score: float
+    total_videos: int
+    total_showcases: int
+    total_likes: int
+    total_projects: int
+    success_rate: float
 
     model_config = ConfigDict(from_attributes=True)

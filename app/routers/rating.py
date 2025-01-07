@@ -1,6 +1,6 @@
 import sys
 
-sys.setrecursionlimit(10000)
+
 from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import Optional, List

@@ -24,7 +24,8 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
     📄 env.py
     📄 script.py.mako
     📁 versions/
-      📄 0b36d05ce9ef_add_browser_extension_capabilities.py
+      📄 1157cd107644_reverting_to_working_version.py
+      📄 6fbecec6d92b_add_showcase_and_ratings.py
   📁 app/
     📄 config.py
     📄 database.py
@@ -40,10 +41,13 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
       📄 crud_rating.py
       📄 crud_request.py
       📄 crud_user.py
+      📄 project_showcase.py
+      📄 video_rating.py
     📁 routers/
       📄 agreements.py
       📄 comments.py
       📄 conversations.py
+      📄 developer_metrics.py
       📄 display_videos.py
       📄 feedback.py
       📄 login.py
@@ -52,15 +56,19 @@ Project Tree for /Users/ryze.ai/projects/RYZE/fastapi
       📄 payment.py
       📄 post.py
       📄 profile.py
+      📄 project_showcase.py
       📄 projects.py
       📄 public_profile.py
-      📄 ratings.py
+      📄 rating.py
       📄 register.py
       📄 request.py
       📄 save_commands.py
+      📄 shared_videos.py
       📄 snagged_requests.py
+      📄 video_ratings.py
       📄 video_upload.py
       📄 vote.py
+    📁 utils/
   📁 logs/
     📄 app.log
   📁 scripts/

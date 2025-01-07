@@ -149,6 +149,26 @@ showcase_videos = Table(
 )
 
 
+class VideoRating(Base):
+    __tablename__ = "video_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("videos.id"), nullable=False)
+    rater_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    stars = Column(Integer, nullable=False)
+    comment = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    video = relationship("Video", back_populates="ratings")
+    rater = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("stars >= 1 AND stars <= 5", name="check_video_stars_range"),
+        UniqueConstraint("video_id", "rater_id", name="unique_video_rating"),
+    )
+
+
 class Video(Base):
     __tablename__ = "videos"
 
@@ -182,6 +202,9 @@ class Video(Base):
     votes = relationship("Vote", back_populates="video", cascade="all, delete-orphan")
     showcases = relationship(
         "Showcase", secondary=showcase_videos, back_populates="videos"
+    )
+    ratings = relationship(
+        "VideoRating", back_populates="video", cascade="all, delete-orphan"
     )
 
 
@@ -228,6 +251,7 @@ class Showcase(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     average_rating = Column(Float, default=0.0)  # Add this line
     total_ratings = Column(Integer, default=0)  # Add this line
+    share_token = Column(String, unique=True, nullable=True)
 
     developer = relationship(
         "User",
