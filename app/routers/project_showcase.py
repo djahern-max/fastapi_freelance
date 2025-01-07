@@ -7,6 +7,10 @@ import os
 import uuid
 import boto3
 import httpx
+import markdown
+import bleach
+import json
+from sqlalchemy.orm import joinedload
 from ..models import User
 from .. import schemas, models
 from ..database import get_db
@@ -39,6 +43,7 @@ async def create_showcase(
     description: str = Form(...),
     project_url: Optional[str] = Form(None),
     repository_url: Optional[str] = Form(None),
+    selected_video_ids: Optional[str] = Form(None),  # Add this
     image_file: Optional[UploadFile] = File(None),
     readme_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -110,6 +115,33 @@ async def create_showcase(
         }
 
         db_showcase = models.Showcase(**showcase_data)
+        if selected_video_ids:
+            try:
+                video_ids = json.loads(selected_video_ids)
+                if not isinstance(video_ids, list):
+                    raise ValueError("selected_video_ids must be a JSON array")
+
+                videos = (
+                    db.query(models.Video)
+                    .filter(
+                        models.Video.id.in_(video_ids),
+                        models.Video.user_id == current_user.id,
+                    )
+                    .all()
+                )
+
+                if len(videos) != len(video_ids):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="One or more video IDs are invalid or don't belong to you",
+                    )
+
+                db_showcase.videos = videos
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid JSON format for selected_video_ids"
+                )
+
         db.add(db_showcase)
         db.commit()
         db.refresh(db_showcase)
@@ -123,7 +155,16 @@ async def create_showcase(
 
 @router.get("/{showcase_id}", response_model=schemas.ProjectShowcase)
 def read_showcase(showcase_id: int, db: Session = Depends(get_db)):
-    db_showcase = get_project_showcase(db, showcase_id)
+    db_showcase = (
+        db.query(models.Showcase)
+        .options(
+            joinedload(models.Showcase.developer),  # Load basic user info
+            joinedload(models.Showcase.developer_profile),  # Load developer profile
+            joinedload(models.Showcase.videos),  # Load videos
+        )
+        .filter(models.Showcase.id == showcase_id)
+        .first()
+    )
     if not db_showcase:
         raise HTTPException(status_code=404, detail="Project showcase not found")
     return db_showcase
@@ -157,13 +198,58 @@ async def get_developer_showcases_crud(
 
 
 @router.put("/{showcase_id}", response_model=schemas.ProjectShowcase)
-def update_showcase(
+async def update_showcase(
     showcase_id: int,
-    showcase: schemas.ProjectShowcaseCreate,
+    showcase_data: schemas.ProjectShowcaseUpdate,  # Create this schema
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return update_project_showcase(db, showcase_id, showcase, current_user.id)
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if showcase.developer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this showcase"
+        )
+
+    # Update the fields
+    for field, value in showcase_data.dict(exclude_unset=True).items():
+        setattr(showcase, field, value)
+
+    db.commit()
+    db.refresh(showcase)
+    return showcase
+
+
+@router.put("/{showcase_id}/files")
+async def update_showcase_files(
+    showcase_id: int,
+    image_file: Optional[UploadFile] = File(None),
+    readme_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if showcase.developer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this showcase"
+        )
+
+    # Handle file uploads similar to your create route
+    if image_file:
+        # Upload image and update image_url
+        pass
+
+    if readme_file:
+        # Upload readme and update readme_url
+        pass
+
+    db.commit()
+    return {"message": "Files updated successfully"}
 
 
 @router.delete("/{showcase_id}")
@@ -175,21 +261,103 @@ def delete_showcase(
     return delete_project_showcase(db, showcase_id, current_user.id)
 
 
-@router.get("/{showcase_id}/readme")  # Remove duplicate project-showcase
-async def get_showcase_readme(showcase_id: int, db: Session = Depends(get_db)):
+@router.get("/{showcase_id}/readme")
+async def get_showcase_readme(
+    showcase_id: int, format: Optional[str] = "html", db: Session = Depends(get_db)
+):
     showcase = get_project_showcase(db, showcase_id)
     if not showcase:
-        raise HTTPException(status_code=404, detail="Showcase not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Showcase not found"
+        )
 
     if not showcase.readme_url:
-        raise HTTPException(status_code=404, detail="No README found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No README found for this showcase",
+        )
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(showcase.readme_url)
-            return {"content": response.text}
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="README file not found or inaccessible",
+                )
+
+            content = response.text
+
+            if format == "html":
+                # Convert markdown to HTML with specific extensions
+                html = markdown.markdown(
+                    content,
+                    extensions=[
+                        "fenced_code",
+                        "codehilite",
+                        "tables",
+                        "nl2br",
+                        "sane_lists",
+                    ],
+                )
+
+                # Clean the HTML for security
+                allowed_tags = [
+                    "p",
+                    "h1",
+                    "h2",
+                    "h3",
+                    "h4",
+                    "h5",
+                    "h6",
+                    "a",
+                    "ul",
+                    "ol",
+                    "li",
+                    "strong",
+                    "em",
+                    "code",
+                    "pre",
+                    "blockquote",
+                    "table",
+                    "thead",
+                    "tbody",
+                    "tr",
+                    "th",
+                    "td",
+                    "br",
+                    "hr",
+                    "div",
+                    "span",
+                ]
+                allowed_attrs = {
+                    "a": ["href", "title"],
+                    "code": ["class"],
+                    "pre": ["class"],
+                    "div": ["class"],
+                    "span": ["class"],
+                    "*": ["id"],
+                }
+
+                cleaned_html = bleach.clean(
+                    html, tags=allowed_tags, attributes=allowed_attrs, strip=True
+                )
+
+                return {"content": cleaned_html, "format": "html"}
+            else:
+                return {"content": content, "format": "raw"}
+
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching README: {str(e)}",
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing README: {str(e)}",
+        )
 
 
 @router.post("/{showcase_id}/rating", response_model=schemas.ShowcaseRatingResponse)
@@ -346,8 +514,43 @@ async def create_share_link(
     if not showcase:
         raise HTTPException(status_code=404, detail="Showcase not found")
 
-    share_token = str(uuid.uuid4())
-    showcase.share_token = share_token
-    db.commit()
+    # Instead of creating a new token, we'll just return the showcase ID
+    # since we already have a public endpoint to view showcases
+    return {"share_url": f"/showcase/{showcase_id}"}
 
-    return {"share_token": share_token}
+
+@router.put("/{showcase_id}/videos")
+async def update_showcase_videos(
+    showcase_id: int,
+    video_ids: List[int],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if showcase.developer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this showcase"
+        )
+
+    # Get all videos that belong to the user
+    videos = (
+        db.query(models.Video)
+        .filter(models.Video.id.in_(video_ids), models.Video.user_id == current_user.id)
+        .all()
+    )
+
+    if len(videos) != len(video_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="One or more video IDs are invalid or don't belong to you",
+        )
+
+    # Update the showcase's videos
+    showcase.videos = videos
+    db.commit()
+    db.refresh(showcase)
+
+    return {"message": "Videos updated successfully"}

@@ -1129,8 +1129,10 @@ class ProjectShowcaseBase(BaseModel):
     description: str
     project_url: Optional[str] = None
     repository_url: Optional[str] = None
+    demo_url: Optional[str] = None  # Add this to match your model
+    selected_video_ids: Optional[List[int]] = []  # Add this for video selection
 
-    @field_validator("project_url", "repository_url")
+    @field_validator("project_url", "repository_url", "demo_url")
     def validate_urls(cls, v):
         if v is not None and not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
@@ -1138,8 +1140,18 @@ class ProjectShowcaseBase(BaseModel):
 
 
 # Used for creating showcases
-class ProjectShowcaseCreate(ProjectShowcaseBase):
-    pass
+class ProjectShowcaseCreate(BaseModel):
+    title: str
+    description: str
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    selected_video_ids: Optional[List[int]] = []
+
+    @field_validator("project_url", "repository_url")
+    def validate_urls(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
 
 
 # Full showcase model with all fields
@@ -1150,8 +1162,15 @@ class ProjectShowcase(ProjectShowcaseBase):
     updated_at: datetime
     image_url: Optional[str] = None
     readme_url: Optional[str] = None
+    demo_url: Optional[str] = None
     average_rating: Optional[float] = 0.0
     total_ratings: Optional[int] = 0
+    share_token: Optional[str] = None
+    videos: Optional[List[VideoOut]] = []
+    developer: Optional[UserBasic] = None  # Change this to just include basic user info
+    developer_profile: Optional[DeveloperProfilePublic] = (
+        None  # Keep the full profile separate
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1168,3 +1187,36 @@ class DeveloperMetricsResponse(BaseModel):
     success_rate: float
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TableOfContentsItem(BaseModel):
+    level: int
+    text: str
+    id: str
+
+
+class ReadmeMetadata(BaseModel):
+    word_count: int
+    heading_count: int
+    has_code_blocks: bool
+
+
+class ReadmeContent(BaseModel):
+    content: str
+    format: str
+    toc: Optional[List[TableOfContentsItem]] = None
+    metadata: Optional[ReadmeMetadata] = None
+
+
+class ProjectShowcaseUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    selected_video_ids: Optional[List[int]] = []
+
+    @field_validator("project_url", "repository_url")
+    def validate_urls(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v

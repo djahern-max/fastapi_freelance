@@ -1,8 +1,8 @@
-"""reverting to working version
+"""initial migration
 
-Revision ID: 1157cd107644
+Revision ID: 07cc34676cb1
 Revises: 
-Create Date: 2025-01-06 18:43:28.115569
+Create Date: 2025-01-07 06:09:06.575805
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '1157cd107644'
+revision: str = '07cc34676cb1'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -226,9 +226,11 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.Column('average_rating', sa.Float(), nullable=True),
     sa.Column('total_ratings', sa.Integer(), nullable=True),
+    sa.Column('share_token', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['developer_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['developer_profile_id'], ['developer_profiles.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('share_token')
     )
     op.create_index(op.f('ix_showcases_id'), 'showcases', ['id'], unique=False)
     op.create_table('agreements',
@@ -380,6 +382,20 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['video_id'], ['videos.id'], ondelete='CASCADE'),
     sa.UniqueConstraint('showcase_id', 'video_id', name='unique_showcase_video')
     )
+    op.create_table('video_ratings',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('video_id', sa.Integer(), nullable=False),
+    sa.Column('rater_id', sa.Integer(), nullable=False),
+    sa.Column('stars', sa.Integer(), nullable=False),
+    sa.Column('comment', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.CheckConstraint('stars >= 1 AND stars <= 5', name='check_video_stars_range'),
+    sa.ForeignKeyConstraint(['rater_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['video_id'], ['videos.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('video_id', 'rater_id', name='unique_video_rating')
+    )
+    op.create_index(op.f('ix_video_ratings_id'), 'video_ratings', ['id'], unique=False)
     op.create_table('votes',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('video_id', sa.Integer(), nullable=False),
@@ -409,6 +425,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_conversation_content_links_id'), table_name='conversation_content_links')
     op.drop_table('conversation_content_links')
     op.drop_table('votes')
+    op.drop_index(op.f('ix_video_ratings_id'), table_name='video_ratings')
+    op.drop_table('video_ratings')
     op.drop_table('showcase_videos')
     op.drop_table('request_comment_votes')
     op.drop_table('product_videos')
