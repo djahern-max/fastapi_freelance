@@ -89,7 +89,7 @@ async def create_project_showcase(
 ):
     try:
         # Handle image upload with validation
-        image_url = (
+        uploaded_image_url = (
             await validate_and_upload_file(
                 image_file, "showcase-images", allowed_types=["image/"]
             )
@@ -98,21 +98,28 @@ async def create_project_showcase(
         )
 
         # Handle README upload with validation
-        readme_url = None
+        uploaded_readme_url = None
         if readme_file:
             if not readme_file.filename.endswith(".md"):
                 raise HTTPException(
                     status_code=400, detail="README must be a markdown file"
                 )
-            readme_url = await validate_and_upload_file(readme_file, "showcase-readmes")
+            uploaded_readme_url = await validate_and_upload_file(
+                readme_file, "showcase-readmes"
+            )
 
         # Create showcase with exact fields from schema
         showcase_dict = showcase.model_dump()
+
+        # Remove video_ids and include_profile from dict as they're not db columns
+        video_ids = showcase_dict.pop("video_ids", [])
+        include_profile = showcase_dict.pop("include_profile", False)
+
         db_showcase = models.Showcase(
             **showcase_dict,
             developer_id=developer_id,
-            image_url=image_url,
-            readme_url=readme_url,
+            image_url=uploaded_image_url,
+            readme_url=uploaded_readme_url,
         )
 
         db.add(db_showcase)
@@ -190,3 +197,52 @@ def delete_project_showcase(db: Session, showcase_id: int, developer_id: int):
     db.delete(db_showcase)
     db.commit()
     return {"message": "Project showcase deleted successfully"}
+
+
+async def get_linked_content_details(db: Session, showcase_id: int) -> List[dict]:
+    showcase = (
+        db.query(models.Showcase)
+        .options(selectinload(models.Showcase.content_links))
+        .filter(models.Showcase.id == showcase_id)
+        .first()
+    )
+
+    if not showcase:
+        return []
+
+    linked_content = []
+    for link in showcase.content_links:
+        if link.content_type == "video":
+            video = (
+                db.query(models.Video)
+                .filter(models.Video.id == link.content_id)
+                .first()
+            )
+            if video:
+                linked_content.append(
+                    {
+                        "id": link.id,
+                        "type": "video",
+                        "content_id": video.id,
+                        "title": video.title,
+                        "thumbnail_url": video.thumbnail_path,
+                    }
+                )
+        elif link.content_type == "profile":
+            profile = (
+                db.query(models.DeveloperProfile)
+                .filter(models.DeveloperProfile.user_id == link.content_id)
+                .first()
+            )
+            if profile:
+                linked_content.append(
+                    {
+                        "id": link.id,
+                        "type": "profile",
+                        "content_id": link.content_id,
+                        "developer_name": profile.user.username,
+                        "profile_image_url": profile.profile_image_url,
+                    }
+                )
+
+    return linked_content

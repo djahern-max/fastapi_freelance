@@ -154,19 +154,27 @@ async def create_showcase(
 
 
 @router.get("/{showcase_id}", response_model=schemas.ProjectShowcase)
-def read_showcase(showcase_id: int, db: Session = Depends(get_db)):
+async def read_showcase(showcase_id: int, db: Session = Depends(get_db)):
     db_showcase = (
         db.query(models.Showcase)
         .options(
-            joinedload(models.Showcase.developer),  # Load basic user info
-            joinedload(models.Showcase.developer_profile),  # Load developer profile
-            joinedload(models.Showcase.videos),  # Load videos
+            joinedload(models.Showcase.developer),
+            joinedload(models.Showcase.developer_profile),
+            joinedload(models.Showcase.videos),
+            joinedload(models.Showcase.content_links).joinedload(
+                models.ShowcaseContentLink.video
+            ),
+            joinedload(models.Showcase.content_links).joinedload(
+                models.ShowcaseContentLink.profile
+            ),
         )
         .filter(models.Showcase.id == showcase_id)
         .first()
     )
+
     if not db_showcase:
         raise HTTPException(status_code=404, detail="Project showcase not found")
+
     return db_showcase
 
 

@@ -1220,3 +1220,51 @@ class ProjectShowcaseUpdate(BaseModel):
         if v is not None and not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
         return v
+
+
+class ShowcaseContentLink(BaseModel):
+    id: int
+    type: str  # 'video' or 'profile'
+    content_id: int
+    title: Optional[str] = None  # For videos
+    thumbnail_url: Optional[str] = None  # For videos
+    profile_image_url: Optional[str] = None  # For profiles
+    developer_name: Optional[str] = None  # For profiles
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Update the ProjectShowcaseCreate schema
+class ProjectShowcaseCreate(BaseModel):
+    title: str
+    description: str
+    project_url: Optional[str] = None
+    repository_url: Optional[str] = None
+    video_ids: Optional[List[int]] = []  # Changed from selected_video_ids
+    include_profile: Optional[bool] = False  # Added for profile linking
+
+    @field_validator("project_url", "repository_url")
+    def validate_urls(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+
+# Update the ProjectShowcase schema
+class ProjectShowcase(ProjectShowcaseBase):
+    id: int
+    developer_id: int
+    created_at: datetime
+    updated_at: datetime
+    image_url: Optional[str] = None
+    readme_url: Optional[str] = None
+    demo_url: Optional[str] = None
+    average_rating: Optional[float] = 0.0
+    total_ratings: Optional[int] = 0
+    share_token: Optional[str] = None
+    linked_content: List[ShowcaseContentLink] = []  # Add this field
+    videos: Optional[List[VideoOut]] = []
+    developer: Optional[UserBasic] = None
+    developer_profile: Optional[DeveloperProfilePublic] = None
+
+    model_config = ConfigDict(from_attributes=True)

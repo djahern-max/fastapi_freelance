@@ -22,6 +22,7 @@ import enum
 from datetime import datetime
 from .database import Base
 from sqlalchemy import Table
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
 # ------------------ Mixin ------------------
@@ -266,6 +267,74 @@ class Showcase(Base):
         "Video", secondary="showcase_videos", back_populates="showcases", lazy="select"
     )
     ratings = relationship("ShowcaseRating", back_populates="showcase", lazy="select")
+
+    content_links = relationship(
+        "ShowcaseContentLink",
+        back_populates="showcase",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+    @hybrid_property
+    def linked_content(self):
+        content = []
+        for link in self.content_links:
+            if link.content_type == "video":
+                video = link.video
+                if video:
+                    content.append(
+                        {
+                            "id": link.id,
+                            "type": "video",
+                            "content_id": video.id,
+                            "title": video.title,
+                            "thumbnail_url": video.thumbnail_path,
+                        }
+                    )
+            elif link.content_type == "profile":
+                profile = link.profile
+                if profile:
+                    content.append(
+                        {
+                            "id": link.id,
+                            "type": "profile",
+                            "content_id": link.content_id,
+                            "developer_name": profile.user.username,
+                            "profile_image_url": profile.profile_image_url,
+                        }
+                    )
+        return content
+
+
+class ShowcaseContentLink(Base):
+    __tablename__ = "showcase_content_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    showcase_id = Column(
+        Integer, ForeignKey("showcases.id", ondelete="CASCADE"), nullable=False
+    )
+    content_type = Column(String, nullable=False)  # 'video' or 'profile'
+    content_id = Column(Integer, nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Add relationships
+    showcase = relationship("Showcase", back_populates="content_links")
+    video = relationship(
+        "Video",
+        primaryjoin="and_(ShowcaseContentLink.content_type=='video', "
+        "ShowcaseContentLink.content_id==Video.id)",
+        foreign_keys=[content_id],
+        viewonly=True,
+    )
+    profile = relationship(
+        "DeveloperProfile",
+        primaryjoin="and_(ShowcaseContentLink.content_type=='profile', "
+        "ShowcaseContentLink.content_id==DeveloperProfile.user_id)",
+        foreign_keys=[content_id],
+        viewonly=True,
+    )
 
 
 # ------------------ Profile Models ------------------

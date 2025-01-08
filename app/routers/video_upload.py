@@ -204,12 +204,6 @@ async def generate_share_link(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    # Check ownership
-    if video.user_id != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to share this video"
-        )
-
     # Update project URL if provided
     if project_url:
         video.project_url = project_url
@@ -221,7 +215,6 @@ async def generate_share_link(
     video.is_public = True
     db.commit()
 
-    # Use ENV instead of ENVIRONMENT
     base_url = (
         "https://www.ryze.ai"
         if os.getenv("ENV") == "production"
