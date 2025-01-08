@@ -186,63 +186,55 @@ def update_project_showcase(
 
 def delete_project_showcase(db: Session, showcase_id: int, developer_id: int):
     """Delete a project showcase"""
-    db_showcase = get_project_showcase(db, showcase_id)
-    if not db_showcase:
-        raise HTTPException(status_code=404, detail="Project showcase not found")
-    if db_showcase.developer_id != developer_id:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to delete this showcase"
+    try:
+        # Get showcase with joined relationships
+        db_showcase = (
+            db.query(models.Showcase)
+            .options(
+                selectinload(models.Showcase.content_links),
+                selectinload(models.Showcase.ratings),
+                selectinload(models.Showcase.videos),
+            )
+            .filter(models.Showcase.id == showcase_id)
+            .first()
         )
 
-    db.delete(db_showcase)
-    db.commit()
-    return {"message": "Project showcase deleted successfully"}
+        if not db_showcase:
+            raise HTTPException(status_code=404, detail="Project showcase not found")
 
-
-async def get_linked_content_details(db: Session, showcase_id: int) -> List[dict]:
-    showcase = (
-        db.query(models.Showcase)
-        .options(selectinload(models.Showcase.content_links))
-        .filter(models.Showcase.id == showcase_id)
-        .first()
-    )
-
-    if not showcase:
-        return []
-
-    linked_content = []
-    for link in showcase.content_links:
-        if link.content_type == "video":
-            video = (
-                db.query(models.Video)
-                .filter(models.Video.id == link.content_id)
-                .first()
+        if db_showcase.developer_id != developer_id:
+            raise HTTPException(
+                status_code=403, detail="Not authorized to delete this showcase"
             )
-            if video:
-                linked_content.append(
-                    {
-                        "id": link.id,
-                        "type": "video",
-                        "content_id": video.id,
-                        "title": video.title,
-                        "thumbnail_url": video.thumbnail_path,
-                    }
-                )
-        elif link.content_type == "profile":
-            profile = (
-                db.query(models.DeveloperProfile)
-                .filter(models.DeveloperProfile.user_id == link.content_id)
-                .first()
-            )
-            if profile:
-                linked_content.append(
-                    {
-                        "id": link.id,
-                        "type": "profile",
-                        "content_id": link.content_id,
-                        "developer_name": profile.user.username,
-                        "profile_image_url": profile.profile_image_url,
-                    }
-                )
 
-    return linked_content
+        # Delete files from S3
+        if db_showcase.image_url:
+            try:
+                image_key = db_showcase.image_url.split("/")[-1]
+                s3.delete_object(
+                    Bucket=os.getenv("SPACES_BUCKET"),
+                    Key=f"showcase-images/{image_key}",
+                )
+            except Exception as e:
+                logger.error(f"Error deleting image from S3: {str(e)}")
+
+        if db_showcase.readme_url:
+            try:
+                readme_key = db_showcase.readme_url.split("/")[-1]
+                s3.delete_object(
+                    Bucket=os.getenv("SPACES_BUCKET"),
+                    Key=f"showcase-readmes/{readme_key}",
+                )
+            except Exception as e:
+                logger.error(f"Error deleting readme from S3: {str(e)}")
+
+        # Delete showcase (this will cascade delete ratings and content links)
+        db.delete(db_showcase)
+        db.commit()
+
+        return {"message": "Project showcase deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting showcase: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -230,6 +230,14 @@ class ShowcaseRating(Base):
         UniqueConstraint("showcase_id", "rater_id", name="unique_showcase_rating"),
     )
 
+    showcase_id = Column(
+        Integer,
+        ForeignKey("showcases.id", ondelete="CASCADE"),  # Add ondelete CASCADE
+        nullable=False,
+    )
+
+    showcase = relationship("Showcase", back_populates="ratings")
+
 
 # ------------------ Developer Showcase Models ------------------
 
@@ -266,7 +274,12 @@ class Showcase(Base):
     videos = relationship(
         "Video", secondary="showcase_videos", back_populates="showcases", lazy="select"
     )
-    ratings = relationship("ShowcaseRating", back_populates="showcase", lazy="select")
+    ratings = relationship(
+        "ShowcaseRating",
+        back_populates="showcase",
+        cascade="all, delete-orphan",  # Add this cascade rule
+        lazy="select",
+    )
 
     content_links = relationship(
         "ShowcaseContentLink",

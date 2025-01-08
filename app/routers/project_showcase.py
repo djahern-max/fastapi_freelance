@@ -43,7 +43,8 @@ async def create_showcase(
     description: str = Form(...),
     project_url: Optional[str] = Form(None),
     repository_url: Optional[str] = Form(None),
-    selected_video_ids: Optional[str] = Form(None),  # Add this
+    selected_video_ids: Optional[str] = Form(None),
+    include_profile: Optional[bool] = Form(False),  # Added for profile linking
     image_file: Optional[UploadFile] = File(None),
     readme_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -61,11 +62,9 @@ async def create_showcase(
 
         image_url = None
         if image_file:
-            # Generate unique filename with UUID
             file_extension = os.path.splitext(image_file.filename)[1]
             image_key = f"showcase-images/{uuid.uuid4()}{file_extension}"
 
-            # Upload to Spaces
             await image_file.seek(0)
             image_content = await image_file.read()
 
@@ -77,10 +76,8 @@ async def create_showcase(
                 ContentType=image_file.content_type,
             )
 
-            # Construct the full URL
             image_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{image_key}"
 
-        # Handle README file similarly
         readme_url = None
         if readme_file:
             if not readme_file.filename.endswith(".md"):
@@ -103,7 +100,7 @@ async def create_showcase(
 
             readme_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{readme_key}"
 
-        # Create showcase in database
+        # Create showcase base data
         showcase_data = {
             "title": title,
             "description": description,
@@ -114,7 +111,10 @@ async def create_showcase(
             "developer_id": current_user.id,
         }
 
+        # Create the showcase instance
         db_showcase = models.Showcase(**showcase_data)
+
+        # Handle video linking
         if selected_video_ids:
             try:
                 video_ids = json.loads(selected_video_ids)
@@ -142,6 +142,39 @@ async def create_showcase(
                     status_code=400, detail="Invalid JSON format for selected_video_ids"
                 )
 
+        # Handle profile linking
+        if include_profile:
+            developer_profile = (
+                db.query(models.DeveloperProfile)
+                .filter(models.DeveloperProfile.user_id == current_user.id)
+                .first()
+            )
+
+            if not developer_profile:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Developer profile not found. Please create a profile first.",
+                )
+
+            db_showcase.developer_profile_id = developer_profile.id
+
+            # Create content link for profile
+            profile_content_link = models.ShowcaseContentLink(
+                content_type="profile",
+                content_id=current_user.id,  # Using user_id as content_id for profiles
+            )
+            db_showcase.content_links.append(profile_content_link)
+
+        # Add content links for videos
+        if selected_video_ids and videos:
+            for video in videos:
+                video_content_link = models.ShowcaseContentLink(
+                    content_type="video",
+                    content_id=video.id,
+                )
+                db_showcase.content_links.append(video_content_link)
+
+        # Save to database
         db.add(db_showcase)
         db.commit()
         db.refresh(db_showcase)
@@ -562,3 +595,35 @@ async def update_showcase_videos(
     db.refresh(showcase)
 
     return {"message": "Videos updated successfully"}
+
+
+@router.put("/{showcase_id}/profile", response_model=schemas.ProjectShowcase)
+async def link_profile_to_showcase(
+    showcase_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if showcase.developer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this showcase"
+        )
+
+    # Link the developer's profile
+    developer_profile = (
+        db.query(models.DeveloperProfile)
+        .filter(models.DeveloperProfile.user_id == current_user.id)
+        .first()
+    )
+
+    if not developer_profile:
+        raise HTTPException(status_code=404, detail="Developer profile not found")
+
+    showcase.developer_profile_id = developer_profile.id
+    db.commit()
+    db.refresh(showcase)
+
+    return showcase
