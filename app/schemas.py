@@ -87,7 +87,7 @@ class UserCreate(BaseModel):
     full_name: str
     password: str
     user_type: UserType
-    terms_accepted: bool = Field(..., description="Must accept terms of agreement")
+    terms_accepted: bool
 
     @field_validator("user_type", mode="before")
     def user_type_to_lower(cls, v):
@@ -96,8 +96,10 @@ class UserCreate(BaseModel):
     @field_validator("terms_accepted")
     def terms_must_be_accepted(cls, v):
         if not v:
-            raise ValueError("You must accept the terms of agreement to register.")
+            raise ValueError("Terms must be accepted")
         return v
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserLogin(BaseModel):
@@ -441,67 +443,13 @@ class ProjectOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]  # Make this optional if it's nullable in the DB
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 
 class ProjectWithRequests(ProjectOut):
     requests: List["RequestOut"] = []
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ------------------ Agreement Schemas ------------------
-
-
-class AgreementBase(BaseModel):
-    request_id: int
-    price: float
-    terms: str
-    developer_id: int
-    client_id: int
-    proposed_changes: Optional[str] = None
-
-    @field_validator("price")
-    def price_must_be_positive(cls, v):
-        if v <= 0:
-            raise ValueError("Price must be greater than 0")
-        return v
-
-
-class AgreementCreate(AgreementBase):
-    pass
-
-
-class NegotiationHistoryEntry(BaseModel):
-    action: str  # 'proposal', 'acceptance', 'counter'
-    user_id: int
-    timestamp: datetime
-    price: float
-    terms: str
-    changes: Optional[str] = None
-
-
-class Agreement(AgreementBase):
-    id: int
-    status: str  # 'proposed', 'accepted', 'completed'
-    proposed_by: int
-    proposed_at: datetime
-    agreement_date: Optional[datetime] = None
-    negotiation_history: List[NegotiationHistoryEntry]
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgreementAccept(BaseModel):
-    accepted_by: int
-    accepted_at: datetime
-
-
-class AgreementStatus(BaseModel):
-    request_id: int
-    status: str
 
 
 # ------------------ Request Schemas ------------------
@@ -689,8 +637,6 @@ class RequestActionResponse(BaseModel):
 class RequestWithDetails(RequestOut):
     """Extended request information including related data"""
 
-    current_agreement: Optional["Agreement"] = None
-    current_proposal: Optional["Agreement"] = None
     conversations: List["ConversationOut"] = []
     comments: List["RequestCommentResponse"] = []  # Changed from CommentOut
     project: Optional[ProjectBase] = (
@@ -945,142 +891,6 @@ class SnaggedRequestCreate(BaseModel):
     message: str
     profile_link: bool = False
     video_ids: List[int] = []
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ------------------ AI Agent Marketplace ------------------
-
-
-class ProductCategory(str, Enum):
-    AUTOMATION = "automation"
-    PROGRAMMING = "programming"
-    MARKETING = "marketing"
-    DATA_ANALYSIS = "data_analysis"
-    CONTENT_CREATION = "content_creation"
-    OTHER = "other"
-
-
-class ProductStatus(str, Enum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    ARCHIVED = "archived"
-
-
-class BrowserSupport(BaseModel):
-    chrome: bool = True
-    firefox: Optional[bool] = False
-    safari: Optional[bool] = False
-    edge: Optional[bool] = False
-
-
-class ProductBase(BaseModel):
-    name: str
-    description: str
-    long_description: Optional[str] = None
-    price: float
-    category: ProductCategory
-    requirements: Optional[str] = None
-    installation_guide: Optional[str] = None
-    documentation_url: Optional[str] = None
-    version: str = "1.0.0"
-    # Add these new fields
-    product_type: ProductType
-    pricing_model: PricingModel = PricingModel.ONE_TIME
-    browser_support: Optional[BrowserSupport] = None
-    permissions_required: Optional[List[str]] = None
-    manifest_version: Optional[str] = None
-
-    @field_validator("permissions_required")
-    def validate_permissions(cls, v):
-        if v is None:
-            return []
-        valid_permissions = [
-            "activeTab",
-            "storage",
-            "notifications",
-            "webRequest",
-            "scripting",
-        ]
-        for perm in v:
-            if perm not in valid_permissions:
-                raise ValueError(f"Invalid permission: {perm}")
-        return v
-
-    @field_validator("browser_support")
-    def validate_browser_support(cls, v):
-        if v is None:
-            return BrowserSupport()
-        return v
-
-
-class ProductCreate(ProductBase):
-    video_ids: Optional[List[int]] = []
-
-
-class ProductUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    long_description: Optional[str] = None
-    price: Optional[float] = None
-    category: Optional[ProductCategory] = None
-    status: Optional[ProductStatus] = None
-    version: Optional[str] = None
-    requirements: Optional[str] = None
-    installation_guide: Optional[str] = None
-    documentation_url: Optional[str] = None
-    video_ids: Optional[List[int]] = []
-
-
-class ProductReviewCreate(BaseModel):
-    rating: int = Field(..., ge=1, le=5)
-    review_text: Optional[str] = None
-
-
-class ProductReviewOut(BaseModel):
-    id: int
-    product_id: int
-    user_id: int
-    rating: int
-    review_text: Optional[str]
-    created_at: datetime
-    user: UserBasic
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ProductOut(ProductBase):
-    id: int
-    developer_id: int
-    status: ProductStatus
-    view_count: int
-    download_count: int
-    rating: Optional[float]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    developer: UserBasic
-    reviews: List[ProductReviewOut] = []
-    related_videos: List[VideoOut] = []
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ProductDownloadOut(BaseModel):
-    id: int
-    product_id: int
-    user_id: int
-    price_paid: float
-    transaction_id: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PaginatedProductResponse(BaseModel):
-    items: List[ProductOut]
-    total: int
-    skip: int
-    limit: int
 
     model_config = ConfigDict(from_attributes=True)
 

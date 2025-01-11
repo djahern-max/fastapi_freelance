@@ -48,142 +48,74 @@ async def upload_video(
     current_user: User = Depends(oauth2.get_current_user),
 ):
     try:
-        # Log initial request details
-        logger.info(f"Starting video upload for user {current_user.id}")
-        logger.info(
-            f"File details - Filename: {file.filename}, Content-Type: {file.content_type}"
-        )
-        if thumbnail:
-            logger.info(
-                f"Thumbnail details - Filename: {thumbnail.filename}, Content-Type: {thumbnail.content_type}"
-            )
+        # Log file details
 
-        # Verify DO Spaces configuration
-        spaces_config = {
-            "bucket": os.getenv("SPACES_BUCKET"),
-            "region": os.getenv("SPACES_REGION"),
-            "endpoint": os.getenv("SPACES_ENDPOINT"),
-            "key_exists": bool(os.getenv("SPACES_KEY")),
-            "secret_exists": bool(os.getenv("SPACES_SECRET")),
-        }
-        logger.info(f"DO Spaces Configuration: {spaces_config}")
-
-        # Read file content with error handling
-        try:
-            file_content = await file.read()
-            if not file_content:
-                raise ValueError("File content is empty")
-            logger.info(
-                f"Successfully read file content, size: {len(file_content)} bytes"
-            )
-        except Exception as e:
-            logger.error(f"Error reading file content: {str(e)}")
-            raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
+        # Read and validate file content
+        file_content = await file.read()
+        if not file_content:
+            raise HTTPException(status_code=400, detail="Video file is empty")
 
         # Initialize S3 client
-        try:
-            s3 = boto3.client(
-                "s3",
-                region_name=os.getenv("SPACES_REGION"),
-                endpoint_url=os.getenv("SPACES_ENDPOINT"),
-                aws_access_key_id=os.getenv("SPACES_KEY"),
-                aws_secret_access_key=os.getenv("SPACES_SECRET"),
-            )
-            logger.info("Successfully initialized S3 client")
-        except Exception as e:
-            logger.error(f"Error initializing S3 client: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"S3 client initialization failed: {str(e)}"
-            )
+        s3 = boto3.client(
+            "s3",
+            region_name=os.getenv("SPACES_REGION"),
+            endpoint_url=os.getenv("SPACES_ENDPOINT"),
+            aws_access_key_id=os.getenv("SPACES_KEY"),
+            aws_secret_access_key=os.getenv("SPACES_SECRET"),
+        )
 
-        # Generate unique filename and upload video
+        # Upload video
         file_extension = os.path.splitext(file.filename)[1]
         unique_filename = f"{uuid.uuid4()}{file_extension}"
-        logger.info(f"Generated unique filename: {unique_filename}")
-
-        # Upload video to DO Spaces
-        try:
-            s3.put_object(
-                Bucket=os.getenv("SPACES_BUCKET"),
-                Key=unique_filename,
-                Body=file_content,
-                ACL="public-read",
-                ContentType="video/mp4",
-            )
-            logger.info("Successfully uploaded video to DO Spaces")
-        except Exception as e:
-            logger.error(f"Error uploading video to DO Spaces: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"Upload to DO Spaces failed: {str(e)}"
-            )
-
+        s3.put_object(
+            Bucket=os.getenv("SPACES_BUCKET"),
+            Key=unique_filename,
+            Body=file_content,
+            ACL="public-read",
+            ContentType=file.content_type or "application/octet-stream",
+        )
         file_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_filename}"
-        logger.info(f"Generated video URL: {file_url}")
 
         # Handle thumbnail upload if provided
         thumbnail_path = None
         if thumbnail:
-            try:
-                logger.info("Starting thumbnail upload")
-                thumbnail_content = await thumbnail.read()
+            thumbnail_content = await thumbnail.read()
+            if not thumbnail_content:
+                raise HTTPException(status_code=400, detail="Thumbnail file is empty")
 
-                if not thumbnail_content:
-                    logger.error("Thumbnail content is empty")
-                    raise ValueError("Thumbnail content is empty")
+            thumbnail_extension = os.path.splitext(thumbnail.filename)[1]
+            unique_thumbnail_filename = f"{uuid.uuid4()}{thumbnail_extension}"
+            thumbnail_content_type = thumbnail.content_type or "image/jpeg"
 
-                thumbnail_extension = os.path.splitext(thumbnail.filename)[1]
-                unique_thumbnail_filename = f"{uuid.uuid4()}{thumbnail_extension}"
-
-                # Set content type based on file extension
-                content_type = (
-                    "image/webp"
-                    if thumbnail_extension.lower() == ".webp"
-                    else "image/jpeg"
-                )
-
-                logger.info(
-                    f"Uploading thumbnail with filename: {unique_thumbnail_filename}"
-                )
-                s3.put_object(
-                    Bucket=os.getenv("SPACES_BUCKET"),
-                    Key=unique_thumbnail_filename,
-                    Body=thumbnail_content,
-                    ACL="public-read",
-                    ContentType=content_type,
-                )
-
-                thumbnail_path = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_thumbnail_filename}"
-                logger.info(f"Thumbnail uploaded successfully: {thumbnail_path}")
-
-            except Exception as e:
-                logger.error(f"Error uploading thumbnail: {str(e)}")
-                logger.warning("Continuing without thumbnail due to upload error")
-
-        # Save to database
-        try:
-            new_video = Video(
-                title=title,
-                description=description,
-                file_path=file_url,
-                thumbnail_path=thumbnail_path,
-                project_id=project_id,
-                request_id=request_id,
-                user_id=current_user.id,
-                video_type=video_type,
+            s3.put_object(
+                Bucket=os.getenv("SPACES_BUCKET"),
+                Key=unique_thumbnail_filename,
+                Body=thumbnail_content,
+                ACL="public-read",
+                ContentType=thumbnail_content_type,
             )
-            db.add(new_video)
-            db.commit()
-            db.refresh(new_video)
-            logger.info(f"Successfully saved video to database with ID: {new_video.id}")
+            thumbnail_path = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_thumbnail_filename}"
 
-            return new_video
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        # Save video record in database
+        new_video = Video(
+            title=title,
+            description=description,
+            file_path=file_url,
+            thumbnail_path=thumbnail_path,
+            project_id=project_id,
+            request_id=request_id,
+            user_id=current_user.id,
+            video_type=video_type,
+        )
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+
+        return new_video
 
     except Exception as e:
-        logger.error(f"Unexpected error in upload_video: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+        raise HTTPException(status_code=500, detail="Failed to upload video")
 
     finally:
         # Reset file positions

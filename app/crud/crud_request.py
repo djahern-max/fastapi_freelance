@@ -77,14 +77,18 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
     # If developer_id is provided, automatically create a share
     if hasattr(request, "developer_id") and request.developer_id:
         db_share = models.RequestShare(
-            request_id=db_request.id, shared_with_user_id=request.developer_id, can_edit=False
+            request_id=db_request.id,
+            shared_with_user_id=request.developer_id,
+            can_edit=False,
         )
         db.add(db_share)
         db.commit()
 
     # Add the video relationship if video_id is provided
     if hasattr(request, "video_id") and request.video_id:
-        video = db.query(models.Video).filter(models.Video.id == request.video_id).first()
+        video = (
+            db.query(models.Video).filter(models.Video.id == request.video_id).first()
+        )
         if video:
             video.request_id = db_request.id
             db.commit()
@@ -107,7 +111,9 @@ def get_requests_by_user(
         db.query(models.Request)
         .join(models.User, models.Request.user_id == models.User.id)
         .options(contains_eager(models.Request.user))
-        .options(joinedload(models.Request.shared_with).joinedload(models.RequestShare.user))
+        .options(
+            joinedload(models.Request.shared_with).joinedload(models.RequestShare.user)
+        )
         .filter(models.Request.user_id == user_id)
     )
 
@@ -119,8 +125,14 @@ def get_requests_by_user(
             db.query(models.Request)
             .join(models.User, models.Request.user_id == models.User.id)
             .options(contains_eager(models.Request.user))
-            .options(joinedload(models.Request.shared_with).joinedload(models.RequestShare.user))
-            .join(models.RequestShare, models.Request.id == models.RequestShare.request_id)
+            .options(
+                joinedload(models.Request.shared_with).joinedload(
+                    models.RequestShare.user
+                )
+            )
+            .join(
+                models.RequestShare, models.Request.id == models.RequestShare.request_id
+            )
             .filter(models.RequestShare.shared_with_user_id == user_id)
         )
 
@@ -154,22 +166,15 @@ def get_requests_by_user(
 def get_public_requests(
     db: Session, skip: int = 0, limit: int = 100, developer_id: Optional[int] = None
 ):
-    """Get public requests with optional developer filtering."""
-    print(f"Getting public requests. Developer ID: {developer_id}")
-
     # Base query for public requests
     query = db.query(models.Request).filter(models.Request.is_public == True)
 
     if developer_id:
-        print(f"Developer with ID {developer_id} is viewing requests")
-        # You could add developer-specific logic here in the future
-        # For example:
-        # - Filtering by developer skills
-        # - Excluding requests the developer has already responded to
-        # - Showing only requests in certain categories
+        # Filter by developer_id if provided
+        pass
 
     requests = query.offset(skip).limit(limit).all()
-    print(f"Found {len(requests)} requests")
+
     return requests
 
 
@@ -177,7 +182,9 @@ def get_request_by_id(db: Session, request_id: int):
     """Retrieve a specific request by its ID."""
     request = (
         db.query(models.Request)
-        .join(models.User, models.Request.user_id == models.User.id)  # Join with User table
+        .join(
+            models.User, models.Request.user_id == models.User.id
+        )  # Join with User table
         .filter(models.Request.id == request_id)
         .first()
     )
@@ -190,12 +197,17 @@ def get_request_by_id(db: Session, request_id: int):
     return request
 
 
-def update_request(db: Session, request_id: int, request_update: RequestUpdate, user_id: int):
+def update_request(
+    db: Session, request_id: int, request_update: RequestUpdate, user_id: int
+):
     """Update a request with partial data."""
-    print(f"Starting update for request {request_id}")
 
     # Get the existing request
-    request = db.query(Request).filter(Request.id == request_id, Request.user_id == user_id).first()
+    request = (
+        db.query(Request)
+        .filter(Request.id == request_id, Request.user_id == user_id)
+        .first()
+    )
 
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -207,11 +219,10 @@ def update_request(db: Session, request_id: int, request_update: RequestUpdate, 
 
     # Convert update data to dict, excluding None values
     update_data = request_update.model_dump(exclude_unset=True, exclude_none=True)
-    print(f"Update data received: {update_data}")
 
     # Handle status update specifically
     if "status" in update_data:
-        print(f"Updating status from {request.status} to {update_data['status']}")
+
         request.status = update_data["status"]
 
     # Handle other fields
@@ -243,26 +254,29 @@ def update_request(db: Session, request_id: int, request_update: RequestUpdate, 
             "shared_with_info": [],
         }
 
-        print(f"Final response: {response_dict}")
         return response_dict
 
     except Exception as e:
         db.rollback()
-        print(f"Error during update: {str(e)}")
+
         raise HTTPException(status_code=400, detail=str(e))
 
 
 # ------------------ Sharing Functionality ------------------
 
 
-def share_request(db: Session, request_id: int, user_id: int, share: schemas.RequestShare):
+def share_request(
+    db: Session, request_id: int, user_id: int, share: schemas.RequestShare
+):
     """Share a request with another user, ensuring no sensitive data is shared."""
     request = get_request_by_id(db, request_id)
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
     if request.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to share this request")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to share this request"
+        )
 
     if request.contains_sensitive_data:
         raise HTTPException(
@@ -281,7 +295,9 @@ def share_request(db: Session, request_id: int, user_id: int, share: schemas.Req
     )
 
     if existing_share:
-        raise HTTPException(status_code=400, detail="Request is already shared with this user")
+        raise HTTPException(
+            status_code=400, detail="Request is already shared with this user"
+        )
 
     db_share = models.RequestShare(
         request_id=request_id,
@@ -302,7 +318,8 @@ def remove_share(db: Session, request_id: int, user_id: int, shared_user_id: int
 
     if request.user_id != user_id:
         raise HTTPException(
-            status_code=403, detail="Not authorized to modify sharing settings for this request"
+            status_code=403,
+            detail="Not authorized to modify sharing settings for this request",
         )
 
     share = (
@@ -338,7 +355,9 @@ def toggle_request_privacy(db: Session, request_id: int, user_id: int, is_public
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
     if request.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this request")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this request"
+        )
 
     request.is_public = is_public
     db.commit()
@@ -353,7 +372,10 @@ def get_request_shares(db: Session, request_id: int) -> List[models.User]:
     """Get all users that a request is shared with."""
     return (
         db.query(models.User)
-        .join(models.RequestShare, models.RequestShare.shared_with_user_id == models.User.id)
+        .join(
+            models.RequestShare,
+            models.RequestShare.shared_with_user_id == models.User.id,
+        )
         .filter(models.RequestShare.request_id == request_id)
         .all()
     )
@@ -365,14 +387,18 @@ def add_request_to_project(db: Session, request_id: int, project_id: int, user_i
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
     if request.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to modify this request")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to modify this request"
+        )
 
     # Get the project and verify ownership
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to add to this project")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to add to this project"
+        )
 
     # Get the owner's username
     owner = db.query(models.User).filter(models.User.id == request.user_id).first()
@@ -394,7 +420,9 @@ def remove_request_from_project(db: Session, request_id: int, user_id: int):
     """Remove a request from its project."""
     request = get_request_by_id(db, request_id)
     if not request or request.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to modify this request")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to modify this request"
+        )
 
     request.project_id = None
     request.added_to_project_at = None

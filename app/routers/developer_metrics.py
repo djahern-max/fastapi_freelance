@@ -89,7 +89,6 @@ async def get_developer_metrics(developer_id: int, db: Session = Depends(get_db)
         }
 
     except Exception as e:
-        print(f"Error calculating metrics: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while calculating developer metrics",

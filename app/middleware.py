@@ -10,9 +10,6 @@ from fastapi import status
 from .database import get_db
 
 
-logger = logging.getLogger(__name__)
-
-
 async def require_active_subscription(
     current_user: models.User = Depends(oauth2.get_current_user),
     db: Session = Depends(get_db),

@@ -121,8 +121,6 @@ def create_snagged_request(
                 status_code=403, detail="Only developers can snag requests"
             )
 
-        print(f"Processing snag request: {snag}")  # Debug log
-
         # Get the request
         request = (
             db.query(models.Request)
@@ -162,8 +160,6 @@ def create_snagged_request(
         db.add(message)
         db.flush()  # Get message ID
 
-        print(f"Created message with ID: {message.id}")  # Debug log
-
         # Handle profile link
         if snag.profile_link:
             profile_link = models.ConversationContentLink(
@@ -173,7 +169,6 @@ def create_snagged_request(
                 content_id=current_user.id,
             )
             db.add(profile_link)
-            print(f"Added profile link for user {current_user.username}")
 
         # Handle video links
         if snag.video_ids:
@@ -200,7 +195,6 @@ def create_snagged_request(
                     content_id=video.id,
                 )
                 db.add(video_link)
-                print(f"Added video link for video {video.id}")
 
         db.commit()
 
@@ -210,7 +204,6 @@ def create_snagged_request(
             .filter(models.ConversationContentLink.message_id == message.id)
             .all()
         )
-        print(f"Created {len(content_links)} content links")
 
         # Return response with request details
         result = (
@@ -252,5 +245,5 @@ def create_snagged_request(
         raise he
     except Exception as e:
         db.rollback()
-        print(f"Error in create_snagged_request: {str(e)}")
+
         raise HTTPException(status_code=500, detail=str(e))

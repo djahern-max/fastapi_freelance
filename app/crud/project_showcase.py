@@ -40,9 +40,9 @@ async def upload_to_s3(file_content: bytes, bucket: str, key: str, content_type:
                 ContentType=content_type,
             ),
         )
-        logger.info(f"Successfully uploaded file to {key}")
+
     except Exception as e:
-        logger.error(f"Error uploading to S3: {str(e)}")
+
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 
@@ -74,7 +74,7 @@ async def validate_and_upload_file(
         return f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{key}"
 
     except Exception as e:
-        logger.error(f"Error processing file upload: {str(e)}")
+
         raise
     finally:
         await file.seek(0)
@@ -126,11 +126,10 @@ async def create_project_showcase(
         db.commit()
         db.refresh(db_showcase)
 
-        logger.info(f"Created showcase {db_showcase.id} for developer {developer_id}")
         return db_showcase
 
     except Exception as e:
-        logger.error(f"Error creating showcase: {str(e)}")
+
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -157,7 +156,7 @@ async def get_developer_showcases(
             .all()
         )
     except Exception as e:
-        logger.error(f"Database error: {str(e)}")
+
         raise
 
 
@@ -215,8 +214,8 @@ def delete_project_showcase(db: Session, showcase_id: int, developer_id: int):
                     Bucket=os.getenv("SPACES_BUCKET"),
                     Key=f"showcase-images/{image_key}",
                 )
-            except Exception as e:
-                logger.error(f"Error deleting image from S3: {str(e)}")
+            except Exception:
+                pass  # Continue if image deletion fails
 
         if db_showcase.readme_url:
             try:
@@ -225,8 +224,8 @@ def delete_project_showcase(db: Session, showcase_id: int, developer_id: int):
                     Bucket=os.getenv("SPACES_BUCKET"),
                     Key=f"showcase-readmes/{readme_key}",
                 )
-            except Exception as e:
-                logger.error(f"Error deleting readme from S3: {str(e)}")
+            except Exception:
+                pass  # Continue if readme deletion fails
 
         # Delete showcase (this will cascade delete ratings and content links)
         db.delete(db_showcase)
@@ -236,5 +235,4 @@ def delete_project_showcase(db: Session, showcase_id: int, developer_id: int):
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting showcase: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

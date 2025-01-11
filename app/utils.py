@@ -49,5 +49,4 @@ async def get_file_from_storage(file_path: str) -> io.BytesIO:
         return file_data
 
     except Exception as e:
-        print(f"Error retrieving file from storage: {str(e)}")
         raise

@@ -125,13 +125,12 @@ def create_message(
         )
         db.add(new_message)
         db.flush()  # Get the message ID without committing
-        print(f"Created message with ID: {new_message.id}")
 
         linked_content = []  # Initialize linked_content list
 
         # Handle video links
         if message.video_ids:
-            print(f"Processing video IDs: {message.video_ids}")
+
             videos = (
                 db.query(models.Video)
                 .filter(
@@ -140,7 +139,6 @@ def create_message(
                 )
                 .all()
             )
-            print(f"Found videos: {[(v.id, v.title) for v in videos]}")
 
             if len(videos) != len(message.video_ids):
                 raise HTTPException(
@@ -167,7 +165,6 @@ def create_message(
                         "url": video.file_path,
                     }
                 )
-                print(f"Added video link for video: {video.title}")
 
         # Handle profile link
         if message.include_profile:
@@ -190,7 +187,6 @@ def create_message(
                     "url": f"/profile/developer/{current_user.id}",
                 }
             )
-            print(f"Added profile link for user: {current_user.username}")
 
         # Commit all changes
         db.commit()
@@ -208,8 +204,6 @@ def create_message(
             if i < len(linked_content):
                 linked_content[i]["id"] = link.id
 
-        print(f"Final linked_content: {linked_content}")
-
         response = {
             "id": new_message.id,
             "conversation_id": new_message.conversation_id,
@@ -219,13 +213,12 @@ def create_message(
             "linked_content": linked_content,
         }
 
-        print(f"Returning response: {response}")
         return response
 
     except HTTPException as he:
         raise he
     except Exception as e:
-        print(f"Error occurred: {str(e)}")
+
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -237,12 +230,8 @@ def create_message(
 def list_user_conversations(
     request_id: int = None,
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(
-        oauth2.get_current_user
-    ),  # Change back to basic auth
+    current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    print(f"Fetching conversations for user {current_user.id}")
-
     query = db.query(models.Conversation).filter(
         or_(
             models.Conversation.starter_user_id == current_user.id,
@@ -254,11 +243,9 @@ def list_user_conversations(
         query = query.filter(models.Conversation.request_id == request_id)
 
     conversations = query.order_by(models.Conversation.created_at.desc()).all()
-    print(f"Found {len(conversations)} conversations")
 
     result = []
     for conv in conversations:
-        print(f"\nProcessing conversation {conv.id}")
         request = (
             db.query(models.Request)
             .filter(models.Request.id == conv.request_id)
@@ -266,29 +253,21 @@ def list_user_conversations(
         )
         messages = []
 
-        # Get all messages for this conversation
         conversation_messages = (
             db.query(models.ConversationMessage)
             .filter(models.ConversationMessage.conversation_id == conv.id)
             .all()
         )
-        print(f"Found {len(conversation_messages)} messages in conversation {conv.id}")
 
         for msg in conversation_messages:
-            print(f"\nProcessing message {msg.id}")
-            # Get content links for this message
             content_links = (
                 db.query(models.ConversationContentLink)
                 .filter(models.ConversationContentLink.message_id == msg.id)
                 .all()
             )
-            print(f"Found {len(content_links)} content links for message {msg.id}")
 
             linked_content = []
             for link in content_links:
-                print(
-                    f"Processing link: type={link.content_type}, id={link.content_id}"
-                )
                 if link.content_type == "video":
                     video = (
                         db.query(models.Video)
@@ -305,9 +284,6 @@ def list_user_conversations(
                                 "url": video.file_path,
                             }
                         )
-                        print(f"Added video link: {video.title}")
-                    else:
-                        print(f"Warning: Video {link.content_id} not found")
                 elif link.content_type == "profile":
                     user = (
                         db.query(models.User)
@@ -324,13 +300,7 @@ def list_user_conversations(
                                 "url": f"/profile/developer/{user.id}",
                             }
                         )
-                        print(f"Added profile link for: {user.username}")
-                    else:
-                        print(f"Warning: User {link.content_id} not found")
 
-            print(
-                f"Total linked content items for message {msg.id}: {len(linked_content)}"
-            )
             messages.append(
                 {
                     "id": msg.id,
@@ -364,9 +334,7 @@ def list_user_conversations(
             "request_title": request.title if request else "Unknown Request",
         }
         result.append(conv_data)
-        print(f"Completed processing conversation {conv.id}")
 
-    print(f"Returning {len(result)} conversations")
     return result
 
 

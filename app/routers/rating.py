@@ -48,7 +48,6 @@ async def create_showcase(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        logger.info(f"Creating showcase for user {current_user.id}")
 
         if image_file and not image_file.content_type.startswith("image/"):
             raise HTTPException(
@@ -77,11 +76,10 @@ async def create_showcase(
             readme_file=readme_file,
         )
 
-        logger.info(f"Successfully created showcase {showcase.id}")
         return showcase
 
     except Exception as e:
-        logger.error(f"Error creating showcase: {str(e)}")
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -133,7 +131,7 @@ async def get_developer_showcases(
         showcases = await get_developer_showcases(db, developer_id, skip, limit)
         return showcases or []
     except Exception as e:
-        logger.error(f"Error fetching developer showcases: {str(e)}")
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )

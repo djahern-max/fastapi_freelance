@@ -18,7 +18,9 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         )
 
     # Check if username already exists
-    existing_user = db.query(models.User).filter(models.User.username == user.username).first()
+    existing_user = (
+        db.query(models.User).filter(models.User.username == user.username).first()
+    )
 
     if existing_user:
         raise HTTPException(
@@ -26,7 +28,9 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         )
 
     # Check if email already exists
-    existing_email = db.query(models.User).filter(models.User.email == user.email).first()
+    existing_email = (
+        db.query(models.User).filter(models.User.email == user.email).first()
+    )
 
     if existing_email:
         raise HTTPException(
@@ -55,11 +59,6 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
 
     except Exception as e:
         db.rollback()
-        print(f"Error during registration: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during registration. Please try again.",
-        )
 
 
 @router.get("/users/{id}", response_model=schemas.UserOut)
@@ -68,7 +67,8 @@ def get_user(id: int, db: Session = Depends(database.get_db)):
     user = db.query(User).filter(User.id == id).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id: {id} does not exist"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id: {id} does not exist",
         )
 
     # Get profile information based on user type
@@ -80,7 +80,9 @@ def get_user(id: int, db: Session = Depends(database.get_db)):
         )
     elif user.user_type == models.UserType.client:
         user.client_profile = (
-            db.query(models.ClientProfile).filter(models.ClientProfile.user_id == user.id).first()
+            db.query(models.ClientProfile)
+            .filter(models.ClientProfile.user_id == user.id)
+            .first()
         )
 
     return user

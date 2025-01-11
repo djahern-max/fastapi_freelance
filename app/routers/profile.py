@@ -53,7 +53,9 @@ def get_profile(
             .first()
         )
         if developer_profile_obj:
-            developer_profile = schemas.DeveloperProfileOut.model_validate(developer_profile_obj)
+            developer_profile = schemas.DeveloperProfileOut.model_validate(
+                developer_profile_obj
+            )
 
     elif current_user.user_type == models.UserType.client:
         client_profile_obj = (
@@ -139,7 +141,9 @@ def get_client_profile(
 
 
 @router.post(
-    "/developer", response_model=schemas.DeveloperProfileOut, status_code=status.HTTP_201_CREATED
+    "/developer",
+    response_model=schemas.DeveloperProfileOut,
+    status_code=status.HTTP_201_CREATED,
 )
 def create_developer_profile(
     profile_data: schemas.DeveloperProfileCreate,
@@ -166,7 +170,12 @@ def create_developer_profile(
     # Initialize with default values for new fields
     profile_data_dict = profile_data.model_dump()
     profile_data_dict.update(
-        {"user_id": current_user.id, "rating": None, "total_projects": 0, "success_rate": 0.0}
+        {
+            "user_id": current_user.id,
+            "rating": None,
+            "total_projects": 0,
+            "success_rate": 0.0,
+        }
     )
 
     profile = models.DeveloperProfile(**profile_data_dict)
@@ -177,7 +186,9 @@ def create_developer_profile(
 
 
 @router.post(
-    "/client", response_model=schemas.ClientProfileOut, status_code=status.HTTP_201_CREATED
+    "/client",
+    response_model=schemas.ClientProfileOut,
+    status_code=status.HTTP_201_CREATED,
 )
 def create_client_profile(
     profile_data: schemas.ClientProfileCreate,
@@ -229,7 +240,9 @@ def update_developer_profile(
     )
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
+        )
 
     update_data = profile_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -249,7 +262,8 @@ def update_client_profile(
     """Update client profile"""
     if current_user.user_type != models.UserType.client:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Only clients can update client profiles"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients can update client profiles",
         )
 
     profile = (
@@ -259,7 +273,9 @@ def update_client_profile(
     )
 
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
+        )
 
     for key, value in profile_update.model_dump(exclude_unset=True).items():
         setattr(profile, key, value)
@@ -270,7 +286,9 @@ def update_client_profile(
 
 
 @router.post(
-    "/developer", response_model=schemas.DeveloperProfileOut, status_code=status.HTTP_201_CREATED
+    "/developer",
+    response_model=schemas.DeveloperProfileOut,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_developer_profile(
     profile_data: schemas.DeveloperProfileCreate = Depends(),
@@ -314,9 +332,7 @@ async def create_developer_profile(
                 ContentType=file.content_type,
             )
 
-            image_url = (
-                f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
-            )
+            image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
         finally:
@@ -348,7 +364,6 @@ async def upload_profile_image(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        logger.info(f"Starting image upload for user {current_user.id}")
 
         # Verify file is an image
         if not file.content_type.startswith("image/"):
@@ -359,15 +374,14 @@ async def upload_profile_image(
             file_content = await file.read()
             if not file_content:
                 raise ValueError("File content is empty")
-            logger.info(f"Successfully read file content, size: {len(file_content)} bytes")
+
         except Exception as e:
-            logger.error(f"Error reading file content: {str(e)}")
+
             raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
         # Generate unique filename
         file_extension = os.path.splitext(file.filename)[1]
         unique_filename = f"profile_images/{uuid.uuid4()}{file_extension}"
-        logger.info(f"Generated unique filename: {unique_filename}")
 
         # Upload to DO Spaces
         try:
@@ -378,16 +392,13 @@ async def upload_profile_image(
                 ACL="public-read",
                 ContentType=file.content_type,
             )
-            logger.info("Successfully uploaded image to DO Spaces")
+
         except Exception as e:
-            logger.error(f"Error uploading to DO Spaces: {str(e)}")
+
             raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
         # Generate image URL
-        image_url = (
-            f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
-        )
-        logger.info(f"Generated image URL: {image_url}")
+        image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
 
         # Update developer profile
         try:
@@ -398,21 +409,22 @@ async def upload_profile_image(
             )
 
             if not developer_profile:
-                raise HTTPException(status_code=404, detail="Developer profile not found")
+                raise HTTPException(
+                    status_code=404, detail="Developer profile not found"
+                )
 
             developer_profile.profile_image_url = image_url
             db.commit()
-            logger.info("Successfully updated profile with new image URL")
 
             return {"image_url": image_url}
         except Exception as e:
-            logger.error(f"Database error: {str(e)}")
+
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in upload_profile_image: {str(e)}")
+
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await file.seek(0)
@@ -426,7 +438,9 @@ def get_public_developers(db: Session = Depends(database.get_db)):
             db.query(models.DeveloperProfile)
             .join(models.User)  # Join with the User table
             .filter(models.DeveloperProfile.is_public == True)
-            .options(joinedload(models.DeveloperProfile.user))  # Fixed joinedload syntax
+            .options(
+                joinedload(models.DeveloperProfile.user)
+            )  # Fixed joinedload syntax
             .all()
         )
         return developers

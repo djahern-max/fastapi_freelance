@@ -9,17 +9,14 @@ from app.routers import (
     video_upload,
     display_videos,
     projects,
-    comments,
     conversations,
     profile,
-    agreements,
     public_profile,
     request as requests_router,
     feedback,
     payment,
     vote,
     snagged_requests,
-    marketplace,
     shared_videos,
     project_showcase,
     rating,
@@ -69,16 +66,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Add startup logging
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting RYZE.AI API")
-    logger.info(f"Environment: {os.getenv('ENV')}")
-    logger.info(f"Allowed origins: {os.getenv('ALLOWED_ORIGINS')}")
-    yield
-    logger.info("Shutting down RYZE.AI API")
-
-
 # Load environment variables
 load_dotenv()
 
@@ -121,16 +108,13 @@ routers_with_prefixes = [
     (video_upload.router, ""),
     (display_videos.router, ""),
     (requests_router.router, ""),
-    (comments.router, ""),
     (conversations.router, ""),
     (profile.router, ""),
-    (agreements.router, ""),
     (public_profile.router, ""),
     (feedback.router, ""),
     (payment.router, ""),
     (vote.router, ""),
     (snagged_requests.router, ""),
-    (marketplace.router, ""),
     (shared_videos.router, ""),
     (project_showcase.router, ""),
     (rating.router, ""),
@@ -141,16 +125,6 @@ routers_with_prefixes = [
 # Include all routers in this code
 for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
-
-
-@app.get("/debug")
-def debug_spaces():
-    return {
-        "SPACES_BUCKET": os.getenv("SPACES_BUCKET"),
-        "SPACES_REGION": os.getenv("SPACES_REGION"),
-        "SPACES_KEY": os.getenv("SPACES_KEY"),
-        "SPACES_SECRET": os.getenv("SPACES_SECRET"),
-    }
 
 
 @app.get("/test")
@@ -174,15 +148,6 @@ async def get_routes():
             )
     routes.sort(key=lambda x: x["path"])
     return {"routes": routes}
-
-
-# @app.get("/routes-text")
-# async def get_routes_text():
-#     routes = []
-#     for route in app.routes:
-#         if isinstance(route, APIRoute):
-#             routes.append(f"{', '.join(route.methods)} {route.path}")
-#     return PlainTextContent("\n".join(sorted(routes)))
 
 
 @app.get("/api-test")

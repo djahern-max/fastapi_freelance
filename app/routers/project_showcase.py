@@ -182,7 +182,7 @@ async def create_showcase(
         return db_showcase
 
     except Exception as e:
-        logger.error(f"Error creating showcase: {str(e)}")
+
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -219,7 +219,7 @@ async def get_developer_showcases_route(
         showcases = await get_developer_showcases_crud(db, developer_id, skip, limit)
         return showcases or []
     except Exception as e:
-        logger.error(f"Error fetching developer showcases: {str(e)}")
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )

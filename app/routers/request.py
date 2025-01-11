@@ -9,13 +9,6 @@ from ..oauth2 import get_current_user, get_optional_user
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.sql import func
 from sqlalchemy.exc import SQLAlchemyError
-import logging
-from datetime import datetime
-from sqlalchemy import and_
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/requests", tags=["Requests"])
@@ -25,7 +18,9 @@ router = APIRouter(prefix="/requests", tags=["Requests"])
 
 @router.get("/public", response_model=List[schemas.RequestOut])
 def get_public_requests(
-    skip: int = Query(0, ge=0), limit: int = Query(100, le=100), db: Session = Depends(get_db)
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, le=100),
+    db: Session = Depends(get_db),
 ):
     """Get public requests - no authentication required"""
     try:
@@ -40,7 +35,9 @@ def get_public_requests(
 
         result = []
         for request in requests:
-            owner = db.query(models.User).filter(models.User.id == request.user_id).first()
+            owner = (
+                db.query(models.User).filter(models.User.id == request.user_id).first()
+            )
             request_dict = {
                 "id": request.id,
                 "title": request.title,
@@ -60,7 +57,9 @@ def get_public_requests(
 
         return result
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.get("/shared-with-me", response_model=List[schemas.SharedRequestOut])
@@ -69,7 +68,9 @@ def get_shared_requests(
 ):
     """Get all requests shared with the current user."""
     if current_user.user_type != models.UserType.developer:
-        raise HTTPException(status_code=403, detail="Only developers can access shared requests")
+        raise HTTPException(
+            status_code=403, detail="Only developers can access shared requests"
+        )
 
     # Build the query with all necessary fields
     shared_requests = (
@@ -196,15 +197,8 @@ def get_requests(
             skip=skip,
             limit=limit,
         )
-
-        # Debug logging
-        for req in requests:
-            print(f"Request {req.id} shared_with: {req.shared_with}")
-
-        response_data = [schemas.SimpleRequestOut.from_orm(request) for request in requests]
-        return response_data
+        return [schemas.SimpleRequestOut.from_orm(request) for request in requests]
     except Exception as e:
-        print(f"Error in get_requests: {str(e)}")
         raise
 
 
@@ -215,14 +209,11 @@ def read_request(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get a specific request."""
-    logger.info(f"Fetching request {request_id} for user {current_user.id}")
 
     request = crud_request.get_request_by_id(db=db, request_id=request_id)
     if not request:
-        logger.error(f"Request {request_id} not found")
-        raise HTTPException(status_code=404, detail="Request not found")
 
-    logger.info(f"Request found. Owner: {request.user_id}, Current user: {current_user.id}")
+        raise HTTPException(status_code=404, detail="Request not found")
 
     # If user is owner or request is public, allow access
     if request.user_id == current_user.id or request.is_public:
@@ -234,8 +225,10 @@ def read_request(
     )
 
     if not is_shared:
-        logger.error(f"User {current_user.id} not authorized to access request {request_id}")
-        raise HTTPException(status_code=403, detail="Not authorized to access this request")
+
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this request"
+        )
 
     return request
 
@@ -248,13 +241,13 @@ def update_request(
     current_user: models.User = Depends(get_current_user),
 ):
     """Update a request."""
-    print(f"Updating request {request_id} with data: {request}")  # Add this
+
     if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can update requests")
     result = crud_request.update_request(
         db=db, request_id=request_id, request_update=request, user_id=current_user.id
     )
-    print(f"Update result: {result}")  # Add this
+
     return result
 
 
@@ -267,7 +260,9 @@ def delete_request(
     """Delete a request, limited to the owner."""
     if current_user.user_type != UserType.client:
         raise HTTPException(status_code=403, detail="Only clients can delete requests")
-    return crud_request.delete_request(db=db, request_id=request_id, user_id=current_user.id)
+    return crud_request.delete_request(
+        db=db, request_id=request_id, user_id=current_user.id
+    )
 
 
 # ------------------ Sharing Functionality ------------------
@@ -289,21 +284,27 @@ def get_request_shares(
         # Query the shared users
         shared_users = (
             db.query(models.User)
-            .join(models.RequestShare, models.RequestShare.shared_with_user_id == models.User.id)
+            .join(
+                models.RequestShare,
+                models.RequestShare.shared_with_user_id == models.User.id,
+            )
             .filter(models.RequestShare.request_id == request_id)
             .all()
         )
 
         # Convert to UserBasic schema
-        return [schemas.UserBasic(id=user.id, username=user.username) for user in shared_users]
+        return [
+            schemas.UserBasic(id=user.id, username=user.username)
+            for user in shared_users
+        ]
 
     except SQLAlchemyError as e:
-        logger.error(f"Database error in get_request_shares: {str(e)}")
+
         raise HTTPException(
             status_code=500, detail="Internal server error while fetching shared users"
         )
     except Exception as e:
-        logger.error(f"Unexpected error in get_request_shares: {str(e)}")
+
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -331,7 +332,9 @@ def remove_share(
 ):
     """Remove request sharing for a specific user."""
     if current_user.user_type != UserType.client:
-        raise HTTPException(status_code=403, detail="Only clients can modify request shares")
+        raise HTTPException(
+            status_code=403, detail="Only clients can modify request shares"
+        )
     return crud_request.remove_share(
         db=db, request_id=request_id, user_id=current_user.id, shared_user_id=user_id
     )
@@ -342,7 +345,9 @@ def remove_share(
 
 @router.get("/users/search", response_model=List[schemas.UserBasic])
 def search_users(
-    q: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Search users by username prefix."""
     if current_user.user_type == UserType.client:
@@ -377,7 +382,9 @@ def update_request_privacy(
 ):
     """Toggle a request's public/private status."""
     if current_user.user_type != UserType.client:
-        raise HTTPException(status_code=403, detail="Only clients can modify request privacy")
+        raise HTTPException(
+            status_code=403, detail="Only clients can modify request privacy"
+        )
     return crud_request.toggle_request_privacy(
         db=db, request_id=request_id, user_id=current_user.id, is_public=is_public
     )

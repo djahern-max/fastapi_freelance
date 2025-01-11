@@ -13,8 +13,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from jose import jwt, JWTError
 
 
-logger = logging.getLogger(__name__)
-
 # Define oauth2_scheme once, with auto_error=False for optional authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
@@ -43,7 +41,9 @@ def verify_access_token(token: str, credentials_exception):
         raise credentials_exception
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -63,19 +63,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if user is None:
             raise credentials_exception
 
-        # Debugging to confirm the user object and its fields
-        print(user.__dict__)  # Ensure 'user_type' is present
-
         return user
     except SQLAlchemyError as db_error:
-        print(f"Database error: {db_error}")
+
         raise HTTPException(status_code=500, detail="A database error occurred.")
     except JWTError:
         raise credentials_exception
 
 
 def get_optional_user(
-    token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(database.get_db)
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(database.get_db),
 ):
     if not token:
         return None  # No token provided, return None

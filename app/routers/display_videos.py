@@ -37,13 +37,6 @@ SPACES_BUCKET = os.getenv("SPACES_BUCKET")
 SPACES_KEY = os.getenv("SPACES_KEY")
 SPACES_SECRET = os.getenv("SPACES_SECRET")
 
-##This updated Mo FO!!!!!!!!!
-
-print(f"SPACES_NAME: {SPACES_NAME}")
-print(f"SPACES_REGION: {SPACES_REGION}")
-print(f"SPACES_BUCKET: {SPACES_BUCKET}")
-print(f"SPACES_KEY: {SPACES_KEY}")
-print(f"SPACES_SECRET: {SPACES_SECRET}")
 
 router = APIRouter(prefix="/video_display", tags=["Videos"])
 
@@ -70,11 +63,9 @@ def display_videos(
     current_user: Optional[models.User] = Depends(oauth2.get_optional_user),
 ):
     try:
-        logger.info("Starting video retrieval")
 
         # Get all videos
         videos = db.query(models.Video).all()
-        logger.info(f"Found {len(videos)} videos")
 
         # Process videos
         processed_videos = []
@@ -118,10 +109,8 @@ def display_videos(
                 processed_videos.append(video_out)
 
             except Exception as video_error:
-                logger.error(f"Error processing video {video.id}: {str(video_error)}")
-                continue
 
-        logger.info(f"Successfully processed {len(processed_videos)} videos")
+                continue
 
         return schemas.VideoResponse(
             user_videos=[],
@@ -129,7 +118,7 @@ def display_videos(
         )
 
     except Exception as e:
-        logger.error(f"Error in display_videos: {str(e)}")
+
         logger.exception("Full traceback:")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -149,7 +138,7 @@ def get_user_videos(
         )
         return schemas.VideoResponse(user_videos=user_videos, other_videos=other_videos)
     except Exception as e:
-        logger.error(f"Error retrieving user videos: {str(e)}")
+
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -219,7 +208,7 @@ async def list_spaces_videos(
         return list(videos.values())
 
     except ClientError as e:
-        logger.error(f"Error listing videos from Spaces: {str(e)}")
+
         raise HTTPException(status_code=500, detail=f"Error listing videos: {str(e)}")
 
 
@@ -227,10 +216,9 @@ async def list_spaces_videos(
 async def stream_video(
     request: Request, video_id: int = Path(...), db: Session = Depends(database.get_db)
 ):
-    logger.info(f"Attempting to stream video with ID: {video_id}")
+
     try:
         video = get_video_by_id(video_id, db)
-        logger.info(f"Video found: {video.title}, File path: {video.file_path}")
 
         is_spaces_video = video.file_path.startswith("https://")
 
@@ -260,18 +248,17 @@ async def stream_video(
                             headers=headers,
                         )
             except aiohttp.ClientError as e:
-                logger.error(f"Error streaming from Spaces: {str(e)}")
+
                 raise HTTPException(
                     status_code=500, detail="Error streaming video from cloud storage"
                 )
         else:
             # Local file streaming (unchanged)
             if not os.path.exists(video.file_path):
-                logger.error(f"Video file not found at path: {video.file_path}")
+
                 raise HTTPException(status_code=404, detail="Video file not found")
 
             file_size = os.path.getsize(video.file_path)
-            logger.info(f"Video file size: {file_size} bytes")
 
             range_header = request.headers.get("Range")
 
@@ -309,10 +296,10 @@ async def stream_video(
             )
 
     except HTTPException as he:
-        logger.error(f"HTTP Exception: {str(he)}")
+
         raise he
     except Exception as e:
-        logger.error(f"Error streaming video {video_id}: {str(e)}")
+
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

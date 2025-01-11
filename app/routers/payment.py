@@ -22,15 +22,6 @@ router = APIRouter(prefix="/payments", tags=["Payments"])
 stripe.api_key = settings.stripe_secret_key
 SUBSCRIPTION_PRICE_ID = settings.stripe_price_id
 
-logger.info("Starting payment service with configuration:")
-logger.info(
-    f"Stripe API Key configured: {'Yes' if settings.stripe_secret_key else 'No'}"
-)
-logger.info(
-    f"Webhook Secret configured: {'Yes' if settings.stripe_webhook_secret else 'No'}"
-)
-logger.info(f"Price ID configured: {'Yes' if settings.stripe_price_id else 'No'}")
-
 
 @router.post("/create-subscription")
 async def create_subscription(
@@ -72,7 +63,6 @@ async def create_subscription(
         return {"url": session.url}
 
     except stripe.error.StripeError as e:
-        print(f"Stripe error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -83,11 +73,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         sig_header = request.headers.get("stripe-signature")
         webhook_secret = settings.stripe_webhook_secret
 
-        logger.info(f"Processing webhook with signature: {sig_header}")
-
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-
-        logger.info(f"Webhook event type: {event['type']}")
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
@@ -97,10 +83,6 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 subscription = stripe.Subscription.retrieve(subscription_id)
                 customer_id = session["customer"]
                 user_id = int(session["metadata"]["user_id"])
-
-                logger.info(
-                    f"Processing subscription {subscription_id} for user {user_id}"
-                )
 
                 current_period_end = datetime.fromtimestamp(
                     subscription.current_period_end
@@ -128,18 +110,18 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                         db.add(db_subscription)
 
                     db.commit()
-                    logger.info(f"Successfully saved subscription for user {user_id}")
+
                 except SQLAlchemyError as e:
                     db.rollback()
-                    logger.error(f"Database error: {str(e)}")
+
                     raise HTTPException(status_code=500, detail="Database error")
 
         return {"status": "success"}
     except stripe.error.SignatureVerificationError as e:
-        logger.error(f"Signature verification failed: {str(e)}")
+
         raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
+
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -147,36 +129,26 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 async def get_subscription_status(
     db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
-    print("============= Subscription Status Check =============")
-    print(f"User ID: {current_user.id}")
-    print(f"Stripe Customer ID: {current_user.stripe_customer_id}")
-
     subscription = (
         db.query(models.Subscription)
         .filter(models.Subscription.user_id == current_user.id)
         .order_by(models.Subscription.created_at.desc())
         .first()
     )
-    print(f"Database subscription found: {subscription is not None}")
 
     if not subscription:
-        print("No subscription found in database")
-        # Let's check Stripe directly
+        # Check Stripe directly
         try:
             if current_user.stripe_customer_id:
                 stripe_subs = stripe.Subscription.list(
                     customer=current_user.stripe_customer_id, limit=1, status="active"
                 )
-                print(f"Stripe subscriptions found: {len(stripe_subs.data)}")
                 if stripe_subs.data:
-                    print("Active subscription found in Stripe but not in database!")
-                    # Could add logic here to sync the subscription
-        except Exception as e:
-            print(f"Error checking Stripe: {str(e)}")
+                    # Note: Could add logic here to sync the subscription
+                    pass
+        except Exception:
+            pass
         return {"status": "none"}
-
-    print(f"Subscription status from DB: {subscription.status}")
-    print(f"Subscription end date: {subscription.current_period_end}")
 
     # Make both datetimes timezone-aware for comparison
     current_time = datetime.now(timezone("UTC"))
@@ -186,9 +158,6 @@ async def get_subscription_status(
     if subscription_end.tzinfo is None:
         subscription_end = subscription_end.replace(tzinfo=timezone("UTC"))
 
-    print(f"Current time (UTC): {current_time}")
-    print(f"Subscription end (UTC): {subscription_end}")
-
     if subscription_end < current_time:
         print("Subscription has expired")
         subscription.status = "expired"
@@ -196,11 +165,9 @@ async def get_subscription_status(
             db.commit()
         except SQLAlchemyError as e:
             db.rollback()
-            print(f"Database error updating subscription status: {str(e)}")
-            logger.error(f"Database error updating subscription status: {str(e)}")
+
         return {"status": "expired"}
 
-    print(f"Returning status: {subscription.status}")
     return {"status": subscription.status, "current_period_end": subscription_end}
 
 
@@ -213,28 +180,17 @@ async def create_payment_intent(
     try:
         # Validate amount
         if amount <= 0:
-            logger.error(f"Invalid amount provided: {amount}")
-            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-        # Log the attempt
-        logger.info(
-            f"Creating payment intent - User: {current_user.id}, "
-            f"Amount: ${amount/100:.2f}, "
-            f"Customer ID: {current_user.stripe_customer_id}"
-        )
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
         # Verify customer exists in Stripe
         try:
             customer = stripe.Customer.retrieve(current_user.stripe_customer_id)
             if customer.get("deleted"):
-                logger.error(
-                    f"Stripe customer {current_user.stripe_customer_id} was deleted"
-                )
+
                 raise HTTPException(status_code=400, detail="Invalid customer account")
         except stripe.error.InvalidRequestError:
-            logger.error(
-                f"Invalid Stripe customer ID: {current_user.stripe_customer_id}"
-            )
+
             raise HTTPException(status_code=400, detail="Invalid customer account")
 
         # Create PaymentIntent with detailed metadata
@@ -257,13 +213,6 @@ async def create_payment_intent(
                 capture_method="automatic",
             )
 
-            logger.info(
-                f"Payment intent created successfully - "
-                f"ID: {intent.id}, "
-                f"Amount: ${intent.amount/100:.2f}, "
-                f"Status: {intent.status}"
-            )
-
             return {
                 "clientSecret": intent.client_secret,
                 "paymentIntentId": intent.id,
@@ -273,7 +222,7 @@ async def create_payment_intent(
 
         except stripe.error.CardError as e:
             # Card was declined
-            logger.error(f"Card error for user {current_user.id}: {str(e)}")
+
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -285,7 +234,7 @@ async def create_payment_intent(
 
         except stripe.error.InvalidRequestError as e:
             # Invalid parameters were supplied to Stripe's API
-            logger.error(f"Invalid Stripe request for user {current_user.id}: {str(e)}")
+
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -296,7 +245,7 @@ async def create_payment_intent(
 
         except stripe.error.AuthenticationError as e:
             # Authentication with Stripe's API failed
-            logger.error(f"Stripe authentication error: {str(e)}")
+
             raise HTTPException(
                 status_code=500,
                 detail={
@@ -307,7 +256,7 @@ async def create_payment_intent(
 
         except stripe.error.APIConnectionError as e:
             # Network communication with Stripe failed
-            logger.error(f"Stripe API connection error: {str(e)}")
+
             raise HTTPException(
                 status_code=503,
                 detail={
@@ -318,9 +267,7 @@ async def create_payment_intent(
 
         except stripe.error.StripeError as e:
             # Generic error
-            logger.error(
-                f"Unexpected Stripe error for user {current_user.id}: {str(e)}"
-            )
+
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -334,18 +281,11 @@ async def create_payment_intent(
 
     except Exception as e:
         # Catch any other unexpected errors
-        logger.error(
-            f"Critical error in create_payment_intent: {str(e)}\n"
-            f"Traceback: {traceback.format_exc()}"
-        )
+
         raise HTTPException(
             status_code=500,
             detail={"error": "server_error", "message": "An unexpected error occurred"},
         )
-
-    finally:
-        # Log the completion of the request
-        logger.info(f"Completed payment intent request for user {current_user.id}")
 
 
 @router.post("/confirm-payment")
@@ -494,5 +434,38 @@ async def purchase_product(
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Error creating checkout session: {str(e)}")
+
         raise HTTPException(status_code=500, detail="Failed to create checkout session")
+
+
+@router.get("/check-showcase-subscription")
+async def check_showcase_subscription(
+    db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    if current_user.user_type != "developer":  # Changed from userType to user_type
+        raise HTTPException(
+            status_code=403, detail="Only developers can create showcases"
+        )
+
+    subscription = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.user_id == current_user.id)
+        .order_by(models.Subscription.created_at.desc())
+        .first()
+    )
+
+    if not subscription:
+        raise HTTPException(status_code=402, detail="Subscription required")
+
+    # Make both datetimes timezone-aware for comparison
+    current_time = datetime.now(timezone("UTC"))
+    subscription_end = subscription.current_period_end
+
+    # Ensure subscription_end is timezone-aware
+    if subscription_end.tzinfo is None:
+        subscription_end = subscription_end.replace(tzinfo=timezone("UTC"))
+
+    if subscription_end < current_time or subscription.status != "active":
+        raise HTTPException(status_code=402, detail="Active subscription required")
+
+    return {"status": "active", "current_period_end": subscription_end}
