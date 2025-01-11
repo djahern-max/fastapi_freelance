@@ -6,7 +6,7 @@ from sqlalchemy import func, or_
 
 
 def create_product(db: Session, product: schemas.ProductCreate, developer_id: int):
-    """Create a new marketplace product."""
+    """Create a new marketplace product today."""
     db_product = models.MarketplaceProduct(
         **product.model_dump(exclude={"video_ids"}),
         developer_id=developer_id,
