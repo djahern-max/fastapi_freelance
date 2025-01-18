@@ -43,8 +43,9 @@ async def create_showcase(
     description: str = Form(...),
     project_url: Optional[str] = Form(None),
     repository_url: Optional[str] = Form(None),
+    demo_url: Optional[str] = Form(None),  # Add demo_url parameter
     selected_video_ids: Optional[str] = Form(None),
-    include_profile: Optional[bool] = Form(False),  # Added for profile linking
+    include_profile: Optional[bool] = Form(False),
     image_file: Optional[UploadFile] = File(None),
     readme_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -100,12 +101,13 @@ async def create_showcase(
 
             readme_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{readme_key}"
 
-        # Create showcase base data
+        # Create showcase base data including demo_url
         showcase_data = {
             "title": title,
             "description": description,
             "project_url": project_url,
             "repository_url": repository_url,
+            "demo_url": demo_url,  # Add demo_url to the showcase data
             "image_url": image_url,
             "readme_url": readme_url,
             "developer_id": current_user.id,
@@ -182,7 +184,6 @@ async def create_showcase(
         return db_showcase
 
     except Exception as e:
-
         raise HTTPException(status_code=500, detail=str(e))
 
 
