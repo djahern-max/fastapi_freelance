@@ -163,7 +163,7 @@ async def get_developer_showcases(
 def update_project_showcase(
     db: Session,
     showcase_id: int,
-    showcase: schemas.ProjectShowcaseCreate,
+    showcase: schemas.ProjectShowcaseUpdate,
     developer_id: int,
 ):
     """Update a project showcase"""
@@ -175,12 +175,21 @@ def update_project_showcase(
             status_code=403, detail="Not authorized to update this showcase"
         )
 
-    for key, value in showcase.dict(exclude_unset=True).items():
-        setattr(db_showcase, key, value)
+    # Use model_dump() instead of dict() for Pydantic v2 compatibility
+    update_data = showcase.model_dump(exclude_unset=True)
 
-    db.commit()
-    db.refresh(db_showcase)
-    return db_showcase
+    # Update each field if it exists in the update data
+    for field, value in update_data.items():
+        if hasattr(db_showcase, field):
+            setattr(db_showcase, field, value)
+
+    try:
+        db.commit()
+        db.refresh(db_showcase)
+        return db_showcase
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def delete_project_showcase(db: Session, showcase_id: int, developer_id: int):

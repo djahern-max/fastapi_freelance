@@ -520,8 +520,6 @@ class RequestCreate(RequestBase):
     developer_id: Optional[int] = None  # Add this field
     video_id: Optional[int] = None  # Add this field
 
-    project_id: Optional[int] = None
-
 
 class RequestUpdate(BaseModel):
     title: Optional[str] = None
@@ -1023,9 +1021,9 @@ class ProjectShowcaseUpdate(BaseModel):
     description: Optional[str] = None
     project_url: Optional[str] = None
     repository_url: Optional[str] = None
-    selected_video_ids: Optional[List[int]] = []
+    demo_url: Optional[str] = None
 
-    @field_validator("project_url", "repository_url")
+    @field_validator("project_url", "repository_url", "demo_url")
     def validate_urls(cls, v):
         if v is not None and not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")

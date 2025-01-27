@@ -16,6 +16,7 @@ from .. import schemas, models
 from ..database import get_db
 from ..oauth2 import get_current_user
 from ..models import Showcase, ShowcaseRating
+from datetime import datetime
 from ..crud.project_showcase import (
     create_project_showcase,
     get_project_showcase,
@@ -242,7 +243,7 @@ async def get_developer_showcases_crud(
 @router.put("/{showcase_id}", response_model=schemas.ProjectShowcase)
 async def update_showcase(
     showcase_id: int,
-    showcase_data: schemas.ProjectShowcaseUpdate,  # Create this schema
+    showcase_data: schemas.ProjectShowcaseUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -256,9 +257,11 @@ async def update_showcase(
         )
 
     # Update the fields
-    for field, value in showcase_data.dict(exclude_unset=True).items():
+    update_data = showcase_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
         setattr(showcase, field, value)
 
+    showcase.updated_at = datetime.utcnow()  # Add this line to update the timestamp
     db.commit()
     db.refresh(showcase)
     return showcase
@@ -599,8 +602,9 @@ async def update_showcase_videos(
 
 
 @router.put("/{showcase_id}/profile", response_model=schemas.ProjectShowcase)
-async def link_profile_to_showcase(
+async def toggle_profile_link(
     showcase_id: int,
+    include_profile: bool = True,  # Add parameter to control linking/unlinking
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -613,18 +617,118 @@ async def link_profile_to_showcase(
             status_code=403, detail="Not authorized to update this showcase"
         )
 
-    # Link the developer's profile
-    developer_profile = (
-        db.query(models.DeveloperProfile)
-        .filter(models.DeveloperProfile.user_id == current_user.id)
-        .first()
-    )
+    try:
+        if include_profile:
+            # Link the developer's profile
+            developer_profile = (
+                db.query(models.DeveloperProfile)
+                .filter(models.DeveloperProfile.user_id == current_user.id)
+                .first()
+            )
 
-    if not developer_profile:
-        raise HTTPException(status_code=404, detail="Developer profile not found")
+            if not developer_profile:
+                raise HTTPException(
+                    status_code=404, detail="Developer profile not found"
+                )
 
-    showcase.developer_profile_id = developer_profile.id
-    db.commit()
-    db.refresh(showcase)
+            showcase.developer_profile_id = developer_profile.id
 
-    return showcase
+            # Add content link if it doesn't exist
+            existing_link = (
+                db.query(models.ShowcaseContentLink)
+                .filter(
+                    models.ShowcaseContentLink.showcase_id == showcase_id,
+                    models.ShowcaseContentLink.content_type == "profile",
+                )
+                .first()
+            )
+
+            if not existing_link:
+                profile_content_link = models.ShowcaseContentLink(
+                    showcase_id=showcase_id,
+                    content_type="profile",
+                    content_id=current_user.id,
+                )
+                db.add(profile_content_link)
+        else:
+            # Unlink profile
+            showcase.developer_profile_id = None
+
+            # Remove any existing profile content links
+            db.query(models.ShowcaseContentLink).filter(
+                models.ShowcaseContentLink.showcase_id == showcase_id,
+                models.ShowcaseContentLink.content_type == "profile",
+            ).delete()
+
+        db.commit()
+        db.refresh(showcase)
+        return showcase
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{showcase_id}/videos")
+async def update_showcase_videos(
+    showcase_id: int,
+    video_ids: Optional[List[int]] = None,  # Make optional to allow removing all videos
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if showcase.developer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this showcase"
+        )
+
+    try:
+        # Clear existing video relationships and content links
+        showcase.videos = []
+        db.query(models.ShowcaseContentLink).filter(
+            models.ShowcaseContentLink.showcase_id == showcase_id,
+            models.ShowcaseContentLink.content_type == "video",
+        ).delete()
+
+        if video_ids:
+            # Get all videos that belong to the user
+            videos = (
+                db.query(models.Video)
+                .filter(
+                    models.Video.id.in_(video_ids),
+                    models.Video.user_id == current_user.id,
+                )
+                .all()
+            )
+
+            if len(videos) != len(video_ids):
+                raise HTTPException(
+                    status_code=400,
+                    detail="One or more video IDs are invalid or don't belong to you",
+                )
+
+            # Add new video relationships
+            showcase.videos = videos
+
+            # Add new content links
+            for video in videos:
+                video_content_link = models.ShowcaseContentLink(
+                    showcase_id=showcase_id,
+                    content_type="video",
+                    content_id=video.id,
+                )
+                db.add(video_content_link)
+
+        db.commit()
+        db.refresh(showcase)
+        return {
+            "message": "Videos updated successfully",
+            "video_count": len(showcase.videos),
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
