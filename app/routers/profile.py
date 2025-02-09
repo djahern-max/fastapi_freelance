@@ -15,6 +15,22 @@ from fastapi.responses import JSONResponse
 
 # Initialize logger
 logger = logging.getLogger(__name__)
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Create handlers
+file_handler = logging.FileHandler("app.log")
+console_handler = logging.StreamHandler()
+
+# Create formatters and add it to handlers
+log_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+file_handler.setFormatter(log_format)
+console_handler.setFormatter(log_format)
+
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 # Load environment variables
 SPACES_NAME = os.getenv("SPACES_NAME")
@@ -285,103 +301,51 @@ def update_client_profile(
     return profile
 
 
-@router.post(
-    "/developer",
-    response_model=schemas.DeveloperProfileOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_developer_profile(
-    profile_data: schemas.DeveloperProfileCreate = Depends(),
-    file: UploadFile = File(None),
-    current_user: models.User = Depends(oauth2.get_current_user),
-    db: Session = Depends(database.get_db),
-):
-    """Create a new developer profile with optional image upload"""
-    if current_user.user_type != models.UserType.developer:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only developers can create developer profiles",
-        )
-
-    existing_profile = (
-        db.query(models.DeveloperProfile)
-        .filter(models.DeveloperProfile.user_id == current_user.id)
-        .first()
-    )
-    if existing_profile:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists"
-        )
-
-    # Handle image upload if provided
-    image_url = None
-    if file:
-        try:
-            if not file.content_type.startswith("image/"):
-                raise HTTPException(status_code=400, detail="File must be an image")
-
-            file_content = await file.read()
-            file_extension = os.path.splitext(file.filename)[1]
-            unique_filename = f"profile_images/{uuid.uuid4()}{file_extension}"
-
-            s3.put_object(
-                Bucket=SPACES_BUCKET,
-                Key=unique_filename,
-                Body=file_content,
-                ACL="public-read",
-                ContentType=file.content_type,
-            )
-
-            image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            await file.seek(0)
-
-    # Initialize with default values
-    profile_data_dict = profile_data.model_dump()
-    profile_data_dict.update(
-        {
-            "user_id": current_user.id,
-            "rating": None,
-            "total_projects": 0,
-            "success_rate": 0.0,
-            "profile_image_url": image_url,
-        }
-    )
-
-    profile = models.DeveloperProfile(**profile_data_dict)
-    db.add(profile)
-    db.commit()
-    db.refresh(profile)
-    return profile
-
-
 @router.post("/developer/image")
 async def upload_profile_image(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
 ):
+    """Upload and update developer profile image"""
     try:
+        # First verify that the user is a developer
+        if current_user.user_type != models.UserType.developer:
+            logger.error(
+                f"User {current_user.id} attempted to upload image but is not a developer"
+            )
+            raise HTTPException(
+                status_code=403, detail="Only developers can upload profile images"
+            )
+
+        # Log file details
+        logger.info(f"Starting image upload for user {current_user.id}")
+        logger.debug(
+            f"File details - filename: {file.filename}, content_type: {file.content_type}"
+        )
 
         # Verify file is an image
         if not file.content_type.startswith("image/"):
+            logger.error(f"Invalid file type attempted: {file.content_type}")
             raise HTTPException(status_code=400, detail="File must be an image")
 
         # Read file content
         try:
             file_content = await file.read()
             if not file_content:
+                logger.error("File content is empty")
                 raise ValueError("File content is empty")
-
         except Exception as e:
-
+            logger.error(f"Error reading file: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
         # Generate unique filename
         file_extension = os.path.splitext(file.filename)[1]
         unique_filename = f"profile_images/{uuid.uuid4()}{file_extension}"
+        logger.info(f"Generated unique filename: {unique_filename}")
+
+        # Log S3 configuration
+        logger.debug(f"S3 Config - Bucket: {SPACES_BUCKET}, Region: {SPACES_REGION}")
 
         # Upload to DO Spaces
         try:
@@ -392,39 +356,48 @@ async def upload_profile_image(
                 ACL="public-read",
                 ContentType=file.content_type,
             )
-
+            logger.info("Successfully uploaded to Digital Ocean Spaces")
         except Exception as e:
-
+            logger.error(f"Upload to Digital Ocean Spaces failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
         # Generate image URL
         image_url = f"https://{SPACES_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{unique_filename}"
+        logger.info(f"Generated image URL: {image_url}")
 
-        # Update developer profile
+        # Update database
         try:
             developer_profile = (
-                db.query(DeveloperProfile)
-                .filter(DeveloperProfile.user_id == current_user.id)
+                db.query(models.DeveloperProfile)
+                .filter(models.DeveloperProfile.user_id == current_user.id)
                 .first()
             )
 
-            if not developer_profile:
-                raise HTTPException(
-                    status_code=404, detail="Developer profile not found"
+            if developer_profile:
+                logger.debug(
+                    f"Current profile image URL: {developer_profile.profile_image_url}"
                 )
+                developer_profile.profile_image_url = image_url
+                db.commit()
+                db.refresh(developer_profile)
+                logger.info(
+                    f"Updated profile with new image URL: {developer_profile.profile_image_url}"
+                )
+            else:
+                logger.warning(f"No developer profile found for user {current_user.id}")
 
-            developer_profile.profile_image_url = image_url
-            db.commit()
-
-            return {"image_url": image_url}
         except Exception as e:
+            logger.error(f"Database update failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Database update failed: {str(e)}"
+            )
 
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        return {"image_url": image_url}
 
     except HTTPException:
         raise
     except Exception as e:
-
+        logger.error(f"Unexpected error in upload_profile_image: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await file.seek(0)
