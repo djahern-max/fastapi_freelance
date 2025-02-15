@@ -55,6 +55,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         db.commit()
         db.refresh(new_user)
 
+        print("DEBUG:", type(new_user), new_user.__dict__ if hasattr(new_user, '__dict__') else new_user)
+
         return new_user
 
     except Exception as e:
