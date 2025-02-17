@@ -15,40 +15,13 @@ async def require_active_subscription(
     db: Session = Depends(get_db),
 ):
     """
-    Middleware to check if a developer has an active subscription.
-    Clients are allowed through without a subscription check.
-    Raises HTTPException if a developer doesn't have an active subscription.
+    Middleware modified to allow all users through without subscription check.
+    Kept for future reimplementation.
+
+    TODO: When reactivating subscriptions:
+    1. Re-implement subscription validation
+    2. Add subscription status check
+    3. Add period_end validation
+    4. Restore client/developer differentiation
     """
-    # If user is a client, no subscription needed
-    if current_user.user_type == models.UserType.client:
-        return current_user
-
-    # For developers, check subscription status
-    subscription = (
-        db.query(models.Subscription)
-        .filter(models.Subscription.user_id == current_user.id)
-        .order_by(models.Subscription.created_at.desc())
-        .first()
-    )
-
-    if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Active subscription required to engage with clients",
-        )
-
-    # Check if subscription is active and not expired
-    current_time = datetime.now(pytz.UTC)
-
-    # Ensure subscription_end is timezone-aware
-    subscription_end = subscription.current_period_end
-    if subscription_end.tzinfo is None:
-        subscription_end = pytz.UTC.localize(subscription_end)
-
-    if subscription.status != "active" or current_time > subscription_end:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Your subscription has expired. Please renew to continue engaging with clients",
-        )
-
     return current_user

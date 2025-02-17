@@ -84,22 +84,7 @@ def create_message(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    try:
-        # Only check subscription for developers
-        if current_user.user_type == models.UserType.developer:
-            subscription = (
-                db.query(models.Subscription)
-                .filter(models.Subscription.user_id == current_user.id)
-                .order_by(models.Subscription.created_at.desc())
-                .first()
-            )
-
-            if not subscription or subscription.status != "active":
-                raise HTTPException(
-                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                    detail="Active subscription required for developers to send messages",
-                )
-
+    try:  # Add this try block
         print(
             f"Creating message with video_ids: {message.video_ids} and include_profile: {message.include_profile}"
         )

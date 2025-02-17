@@ -469,3 +469,38 @@ async def check_showcase_subscription(
         raise HTTPException(status_code=402, detail="Active subscription required")
 
     return {"status": "active", "current_period_end": subscription_end}
+
+
+@router.post("/tip")
+async def create_tip_payment(
+    amount: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    try:
+        # Ensure customer exists in Stripe
+        if not current_user.stripe_customer_id:
+            customer = stripe.Customer.create(
+                email=current_user.email, metadata={"user_id": str(current_user.id)}
+            )
+            current_user.stripe_customer_id = customer.id
+            db.commit()
+
+        # Create PaymentIntent for tip
+        intent = stripe.PaymentIntent.create(
+            amount=amount,
+            currency="usd",
+            customer=current_user.stripe_customer_id,
+            metadata={
+                "type": "tip",
+                "user_id": str(current_user.id),
+                "email": current_user.email,
+            },
+            description=f"Tip from {current_user.email}",
+            statement_descriptor_suffix="TIP",
+        )
+
+        return {"clientSecret": intent.client_secret, "amount": amount}
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
