@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.oauth2 import get_current_user
@@ -11,7 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from pytz import timezone
 import traceback
 from ..config import settings
-import json
+import jwt
+
 
 import logging
 
@@ -561,9 +562,12 @@ async def create_tip_payment(
 
 
 @router.post("/create-donation-session")
-async def create_donation_session(request: Request, db: Session = Depends(get_db)):
+async def create_donation_session(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str = Header(None, alias="Authorization"),  # Optional auth token
+):
     try:
-        # Parse the request body
         body = await request.json()
         amount = body.get("amount")
         currency = body.get("currency", "usd")
@@ -571,7 +575,24 @@ async def create_donation_session(request: Request, db: Session = Depends(get_db
         if not amount or amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-        # Create Stripe Checkout Session for donation
+        # Try to get user_id from token if it exists
+        user_id = None
+        if token and token.startswith("Bearer "):
+            try:
+                token = token.split(" ")[1]
+                payload = jwt.decode(
+                    token, settings.secret_key, algorithms=[settings.algorithm]
+                )
+                user_id = payload.get("user_id")
+            except:
+                # If token is invalid, just proceed with anonymous donation
+                pass
+
+        # Create Stripe Checkout Session
+        metadata = {"type": "donation"}
+        if user_id:
+            metadata["user_id"] = str(user_id)
+
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[
@@ -590,16 +611,26 @@ async def create_donation_session(request: Request, db: Session = Depends(get_db
             mode="payment",
             success_url=f"{settings.frontend_url}/donation/success",
             cancel_url=f"{settings.frontend_url}/donation/cancel",
-            metadata={"type": "donation"},
+            metadata=metadata,
             submit_type="donate",
         )
 
-        # Save anonymous donation record
-        donation = models.Donation(
-            amount=amount, stripe_session_id=session.id, status="pending"
-        )
-        db.add(donation)
-        db.commit()
+        try:
+            # Create donation record with user_id if available
+            donation = models.Donation(
+                user_id=user_id,  # Will be None for anonymous donations
+                amount=amount,
+                stripe_session_id=session.id,
+                status="pending",
+            )
+            db.add(donation)
+            db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Database error creating donation: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail="Error creating donation record"
+            )
 
         return {"url": session.url}
 
@@ -607,8 +638,44 @@ async def create_donation_session(request: Request, db: Session = Depends(get_db
         logger.error(f"Stripe error in donation: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error in donation: {str(e)}")
+        logger.error(
+            f"Unexpected error in donation: {str(e)}\n{traceback.format_exc()}"
+        )
         raise HTTPException(
             status_code=500,
             detail={"error": "server_error", "message": "An unexpected error occurred"},
         )
+
+
+@router.get("/donations")
+async def get_donations(db: Session = Depends(get_db)):
+    donations = (
+        db.query(models.Donation).order_by(models.Donation.created_at.desc()).all()
+    )
+
+    # For each donation with a user_id, include the user information
+    results = []
+    for donation in donations:
+        donation_data = {
+            "id": donation.id,
+            "amount": donation.amount,
+            "status": donation.status,
+            "created_at": donation.created_at,
+            "completed_at": donation.completed_at,
+            "user": None,
+        }
+
+        if donation.user_id:
+            user = (
+                db.query(models.User).filter(models.User.id == donation.user_id).first()
+            )
+            if user:
+                donation_data["user"] = {
+                    "id": user.id,
+                    "email": user.email,
+                    # Add other user fields you want to include
+                }
+
+        results.append(donation_data)
+
+    return results
