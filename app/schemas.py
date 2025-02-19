@@ -208,6 +208,7 @@ class DeveloperProfileUpdate(BaseModel):
     bio: Optional[str] = None
     is_public: Optional[bool] = None
     profile_image_url: Optional[str] = None
+    total_projects: Optional[int] = Field(None, ge=0)
 
 
 class DeveloperProfilePublic(BaseModel):
