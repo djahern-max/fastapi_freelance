@@ -564,10 +564,9 @@ async def create_tip_payment(
 async def create_donation_session(
     request: Request,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),  # This ensures auth
 ):
     try:
-        # Parse the request body
         body = await request.json()
         amount = body.get("amount")
         currency = body.get("currency", "usd")
