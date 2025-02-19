@@ -77,52 +77,106 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-            subscription_id = session.get("subscription")
+            metadata = session.get("metadata", {})
+            session_type = metadata.get("type")
 
-            if subscription_id:
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                customer_id = session["customer"]
-                user_id = int(session["metadata"]["user_id"])
+            # Handle subscriptions
+            if session.get("subscription"):
+                await handle_subscription_completion(session, db)
 
-                current_period_end = datetime.fromtimestamp(
-                    subscription.current_period_end
-                ).replace(tzinfo=timezone("UTC"))
-
-                try:
-                    existing_subscription = (
-                        db.query(models.Subscription)
-                        .filter(models.Subscription.user_id == user_id)
-                        .first()
-                    )
-
-                    if existing_subscription:
-                        existing_subscription.stripe_subscription_id = subscription_id
-                        existing_subscription.status = "active"
-                        existing_subscription.current_period_end = current_period_end
-                    else:
-                        db_subscription = models.Subscription(
-                            user_id=user_id,
-                            stripe_subscription_id=subscription_id,
-                            stripe_customer_id=customer_id,
-                            status="active",
-                            current_period_end=current_period_end,
-                        )
-                        db.add(db_subscription)
-
-                    db.commit()
-
-                except SQLAlchemyError as e:
-                    db.rollback()
-
-                    raise HTTPException(status_code=500, detail="Database error")
+            # Handle donations
+            elif session_type == "donation":
+                await handle_donation_completion(session, db)
 
         return {"status": "success"}
     except stripe.error.SignatureVerificationError as e:
-
+        logger.error(f"Stripe signature verification failed: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
-
+        logger.error(f"Webhook error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+async def handle_subscription_completion(session: dict, db: Session):
+    try:
+        subscription_id = session.get("subscription")
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        customer_id = session["customer"]
+        user_id = int(session["metadata"]["user_id"])
+
+        current_period_end = datetime.fromtimestamp(
+            subscription.current_period_end
+        ).replace(tzinfo=timezone("UTC"))
+
+        existing_subscription = (
+            db.query(models.Subscription)
+            .filter(models.Subscription.user_id == user_id)
+            .first()
+        )
+
+        if existing_subscription:
+            existing_subscription.stripe_subscription_id = subscription_id
+            existing_subscription.status = "active"
+            existing_subscription.current_period_end = current_period_end
+        else:
+            db_subscription = models.Subscription(
+                user_id=user_id,
+                stripe_subscription_id=subscription_id,
+                stripe_customer_id=customer_id,
+                status="active",
+                current_period_end=current_period_end,
+            )
+            db.add(db_subscription)
+
+        db.commit()
+        logger.info(
+            f"Successfully processed subscription completion for user {user_id}"
+        )
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error processing subscription: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+async def handle_donation_completion(session: dict, db: Session):
+    try:
+        user_id = int(session["metadata"]["user_id"])
+        session_id = session["id"]
+        amount = session["amount_total"]
+
+        # Update donation status
+        donation = (
+            db.query(models.Donation)
+            .filter(models.Donation.stripe_session_id == session_id)
+            .first()
+        )
+
+        if donation:
+            donation.status = "completed"
+            donation.completed_at = datetime.now(timezone("UTC"))
+            donation.amount = amount  # Update with actual amount paid
+            db.commit()
+            logger.info(
+                f"Successfully processed donation completion for user {user_id}"
+            )
+        else:
+            # Create donation record if it doesn't exist
+            new_donation = models.Donation(
+                user_id=user_id,
+                amount=amount,
+                stripe_session_id=session_id,
+                status="completed",
+                completed_at=datetime.now(timezone("UTC")),
+            )
+            db.add(new_donation)
+            db.commit()
+            logger.info(f"Created new donation record for user {user_id}")
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error processing donation: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")
 
 
 @router.get("/subscription-status")
@@ -556,6 +610,16 @@ async def create_donation_session(
             },
             submit_type="donate",
         )
+
+        # Save donation record in database
+        donation = models.Donation(
+            user_id=current_user.id,
+            amount=amount,
+            stripe_session_id=session.id,
+            status="pending",
+        )
+        db.add(donation)
+        db.commit()
 
         return {"url": session.url}
 
