@@ -561,12 +561,9 @@ async def create_tip_payment(
 
 
 @router.post("/create-donation-session")
-async def create_donation_session(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),  # This ensures auth
-):
+async def create_donation_session(request: Request, db: Session = Depends(get_db)):
     try:
+        # Parse the request body
         body = await request.json()
         amount = body.get("amount")
         currency = body.get("currency", "usd")
@@ -574,17 +571,8 @@ async def create_donation_session(
         if not amount or amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-        # Ensure customer exists in Stripe
-        if not current_user.stripe_customer_id:
-            customer = stripe.Customer.create(
-                email=current_user.email, metadata={"user_id": str(current_user.id)}
-            )
-            current_user.stripe_customer_id = customer.id
-            db.commit()
-
         # Create Stripe Checkout Session for donation
         session = stripe.checkout.Session.create(
-            customer=current_user.stripe_customer_id,
             payment_method_types=["card"],
             line_items=[
                 {
@@ -602,20 +590,13 @@ async def create_donation_session(
             mode="payment",
             success_url=f"{settings.frontend_url}/donation/success",
             cancel_url=f"{settings.frontend_url}/donation/cancel",
-            metadata={
-                "type": "donation",
-                "user_id": str(current_user.id),
-                "email": current_user.email,
-            },
+            metadata={"type": "donation"},
             submit_type="donate",
         )
 
-        # Save donation record in database
+        # Save anonymous donation record
         donation = models.Donation(
-            user_id=current_user.id,
-            amount=amount,
-            stripe_session_id=session.id,
-            status="pending",
+            amount=amount, stripe_session_id=session.id, status="pending"
         )
         db.add(donation)
         db.commit()

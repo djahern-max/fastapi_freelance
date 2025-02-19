@@ -688,18 +688,17 @@ class Donation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    amount = Column(Integer, nullable=False)  # Amount in cents
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )  # Make nullable
+    amount = Column(Integer, nullable=False)
     stripe_session_id = Column(String, unique=True, nullable=False)
-    status = Column(String, nullable=False)  # 'completed', 'pending', 'failed'
+    status = Column(String, nullable=False)
     created_at = Column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )
     completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
-    # Relationships
-    user = relationship("User")
+    user = relationship("User", back_populates="donations")
 
     __table_args__ = (CheckConstraint("amount > 0", name="check_positive_amount"),)
 
