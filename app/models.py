@@ -138,6 +138,10 @@ class User(Base):
         foreign_keys="[ShowcaseRating.rater_id]",
     )
 
+    donations = relationship(
+        "Donation", back_populates="user", cascade="all, delete-orphan"
+    )
+
 
 # ------------------ Video Model ------------------
 
@@ -674,6 +678,30 @@ class Vote(Base):
     # Relationships
     user = relationship("User")
     video = relationship("Video", back_populates="votes")
+
+
+# ------------------ Denations ------------------
+
+
+class Donation(Base):
+    __tablename__ = "donations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    amount = Column(Integer, nullable=False)  # Amount in cents
+    stripe_session_id = Column(String, unique=True, nullable=False)
+    status = Column(String, nullable=False)  # 'completed', 'pending', 'failed'
+    created_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Relationships
+    user = relationship("User")
+
+    __table_args__ = (CheckConstraint("amount > 0", name="check_positive_amount"),)
 
 
 # ------------------ Developer Rating System ------------------

@@ -1077,3 +1077,27 @@ class ProjectShowcase(ProjectShowcaseBase):
     developer_profile: Optional[DeveloperProfilePublic] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DonationCreate(BaseModel):
+    amount: int
+    currency: str = "usd"
+
+    @field_validator("amount")
+    def amount_must_be_positive(cls, v):
+        if v <= 0:
+            raise ValueError("Amount must be greater than 0")
+        return v
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DonationOut(BaseModel):
+    id: int
+    user_id: int
+    amount: int
+    status: str
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

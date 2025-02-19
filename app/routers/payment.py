@@ -504,3 +504,67 @@ async def create_tip_payment(
 
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/create-donation-session")
+async def create_donation_session(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    try:
+        # Parse the request body
+        body = await request.json()
+        amount = body.get("amount")
+        currency = body.get("currency", "usd")
+
+        if not amount or amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
+        # Ensure customer exists in Stripe
+        if not current_user.stripe_customer_id:
+            customer = stripe.Customer.create(
+                email=current_user.email, metadata={"user_id": str(current_user.id)}
+            )
+            current_user.stripe_customer_id = customer.id
+            db.commit()
+
+        # Create Stripe Checkout Session for donation
+        session = stripe.checkout.Session.create(
+            customer=current_user.stripe_customer_id,
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": currency,
+                        "unit_amount": amount,
+                        "product_data": {
+                            "name": "Donation to RYZE.ai",
+                            "description": "Thank you for supporting RYZE.ai!",
+                        },
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",
+            success_url=f"{settings.frontend_url}/donation/success",
+            cancel_url=f"{settings.frontend_url}/donation/cancel",
+            metadata={
+                "type": "donation",
+                "user_id": str(current_user.id),
+                "email": current_user.email,
+            },
+            submit_type="donate",
+        )
+
+        return {"url": session.url}
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error in donation: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in donation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "server_error", "message": "An unexpected error occurred"},
+        )
