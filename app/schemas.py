@@ -1082,6 +1082,7 @@ class ProjectShowcase(ProjectShowcaseBase):
 class DonationCreate(BaseModel):
     amount: int
     currency: str = "usd"
+    is_anonymous: bool = False
 
     @field_validator("amount")
     def amount_must_be_positive(cls, v):

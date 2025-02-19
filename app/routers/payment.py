@@ -565,19 +565,22 @@ async def create_tip_payment(
 async def create_donation_session(
     request: Request,
     db: Session = Depends(get_db),
-    token: str = Header(None, alias="Authorization"),  # Optional auth token
+    token: str = Header(None, alias="Authorization"),
 ):
     try:
         body = await request.json()
         amount = body.get("amount")
         currency = body.get("currency", "usd")
+        is_anonymous = body.get("isAnonymous", False)  # Get the anonymous flag
 
         if not amount or amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-        # Try to get user_id from token if it exists
+        # Try to get user_id from token if it exists and donation is not anonymous
         user_id = None
-        if token and token.startswith("Bearer "):
+        if (
+            token and token.startswith("Bearer ") and not is_anonymous
+        ):  # Only set user_id if not anonymous
             try:
                 token = token.split(" ")[1]
                 payload = jwt.decode(
@@ -589,7 +592,10 @@ async def create_donation_session(
                 pass
 
         # Create Stripe Checkout Session
-        metadata = {"type": "donation"}
+        metadata = {
+            "type": "donation",
+            "is_anonymous": str(is_anonymous),  # Add anonymous status to metadata
+        }
         if user_id:
             metadata["user_id"] = str(user_id)
 
@@ -616,9 +622,11 @@ async def create_donation_session(
         )
 
         try:
-            # Create donation record with user_id if available
+            # Create donation record with user_id if available and not anonymous
             donation = models.Donation(
-                user_id=user_id,  # Will be None for anonymous donations
+                user_id=(
+                    user_id if not is_anonymous else None
+                ),  # Force None if anonymous
                 amount=amount,
                 stripe_session_id=session.id,
                 status="pending",
@@ -641,10 +649,7 @@ async def create_donation_session(
         logger.error(
             f"Unexpected error in donation: {str(e)}\n{traceback.format_exc()}"
         )
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "server_error", "message": "An unexpected error occurred"},
-        )
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.get("/donations")
