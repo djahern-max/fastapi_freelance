@@ -110,22 +110,10 @@ def get_requests_by_user(
     skip: int = 0,
     limit: int = 100,
 ):
-    """Get requests for a specific user with optional project filtering, including shared requests."""
-    query = (
-        db.query(models.Request)
-        .join(models.User, models.Request.user_id == models.User.id)
-        .options(contains_eager(models.Request.user))
-        .options(
-            joinedload(models.Request.shared_with).joinedload(models.RequestShare.user)
-        )
-        .filter(models.Request.user_id == user_id)
-    )
-
-    if project_id:
-        query = query.filter(models.Request.project_id == project_id)
-
-    if include_shared:
-        shared_requests_query = (
+    """Get requests for a specific user with optional project filtering"""
+    try:
+        # Base query for user's own requests
+        query = (
             db.query(models.Request)
             .join(models.User, models.Request.user_id == models.User.id)
             .options(contains_eager(models.Request.user))
@@ -134,37 +122,36 @@ def get_requests_by_user(
                     models.RequestShare.user
                 )
             )
-            .join(
-                models.RequestShare, models.Request.id == models.RequestShare.request_id
-            )
-            .filter(models.RequestShare.shared_with_user_id == user_id)
+            .filter(
+                models.Request.user_id == user_id
+            )  # Get all user's requests regardless of public status
         )
 
         if project_id:
-            shared_requests_query = shared_requests_query.filter(
-                models.Request.project_id == project_id
-            )
+            query = query.filter(models.Request.project_id == project_id)
 
-        query = query.union(shared_requests_query)
+        requests = query.offset(skip).limit(limit).all()
 
-    requests = query.offset(skip).limit(limit).all()
+        # Transform the requests
+        for request in requests:
+            # Always set owner_username regardless of public status
+            request.owner_username = request.user.username
+            # Create shared_with_info list for each request
+            request.shared_with_info = []
+            for share in request.shared_with:
+                if hasattr(share, "user"):
+                    request.shared_with_info.append(
+                        {
+                            "user_id": share.user.id,
+                            "username": share.user.username,
+                            "can_edit": share.can_edit,
+                        }
+                    )
 
-    # Transform the requests
-    for request in requests:
-        request.owner_username = request.user.username
-        # Create a new attribute for transformed shared_with data
-        request.shared_with_info = []
-        for share in request.shared_with:
-            if hasattr(share, "user"):
-                request.shared_with_info.append(
-                    {
-                        "user_id": share.user.id,
-                        "username": share.user.username,
-                        "can_edit": share.can_edit,
-                    }
-                )
-
-    return requests
+        return requests
+    except Exception as e:
+        print(f"Error in get_requests_by_user: {str(e)}")
+        raise
 
 
 def get_public_requests(
