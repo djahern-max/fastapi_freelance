@@ -38,25 +38,35 @@ def get_public_requests(
             owner = (
                 db.query(models.User).filter(models.User.id == request.user_id).first()
             )
+            # Match the exact schema fields
             request_dict = {
                 "id": request.id,
                 "title": request.title,
                 "content": request.content,
-                "project_id": request.project_id,
-                "user_id": request.user_id,
-                "owner_username": owner.username if owner else "Unknown",
-                "is_public": request.is_public,
-                "status": request.status,
                 "estimated_budget": request.estimated_budget,
+                "is_public": request.is_public,
+                "contains_sensitive_data": request.contains_sensitive_data,
+                "is_idea": request.is_idea,
+                "seeks_collaboration": request.seeks_collaboration,
+                "collaboration_details": request.collaboration_details,
+                "user_id": request.user_id,
+                "status": (
+                    request.status.value
+                    if hasattr(request.status, "value")
+                    else request.status
+                ),  # Handle enum
+                "project_id": request.project_id,
+                "added_to_project_at": request.added_to_project_at,
                 "created_at": request.created_at,
                 "updated_at": request.updated_at,
-                "contains_sensitive_data": request.contains_sensitive_data,
-                "shared_with_info": [],
+                "owner_username": owner.username if owner else "Unknown",
+                "shared_with_info": [],  # Empty list as it's public
             }
             result.append(request_dict)
 
         return result
     except Exception as e:
+        print(f"Error in get_public_requests: {str(e)}")  # Add logging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )

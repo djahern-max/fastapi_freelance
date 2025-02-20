@@ -68,6 +68,10 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
         is_public=request.is_public,
         contains_sensitive_data=request.contains_sensitive_data,
         estimated_budget=request.estimated_budget,
+        # Add the new fields here
+        is_idea=request.is_idea,
+        seeks_collaboration=request.seeks_collaboration,
+        collaboration_details=request.collaboration_details,
     )
 
     db.add(db_request)
@@ -252,6 +256,9 @@ def update_request(
             "updated_at": request.updated_at,
             "owner_username": owner.username,
             "shared_with_info": [],
+            "is_idea": request.is_idea,  # Add this
+            "seeks_collaboration": request.seeks_collaboration,  # Add this
+            "collaboration_details": request.collaboration_details,  # Add this too for completeness
         }
 
         return response_dict

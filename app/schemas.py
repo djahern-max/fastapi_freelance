@@ -498,9 +498,9 @@ class RequestOut(BaseModel):
     estimated_budget: Optional[float] = None
     is_public: bool
     contains_sensitive_data: bool
-    is_idea: bool
-    seeks_collaboration: bool
-    collaboration_details: Optional[str] = None
+    is_idea: bool  # New field missing in endpoint
+    seeks_collaboration: bool  # New field missing in endpoint
+    collaboration_details: Optional[str] = None  # New field missing in endpoint
     user_id: int
     status: RequestStatus
     project_id: Optional[int] = None
@@ -534,10 +534,12 @@ class RequestUpdate(BaseModel):
     is_public: Optional[bool] = None
     contains_sensitive_data: Optional[bool] = None
     status: Optional[RequestStatus] = None
+    is_idea: Optional[bool] = None  # Add this
+    seeks_collaboration: Optional[bool] = None  # Add this
 
     model_config = {
         "from_attributes": True,
-        "use_enum_values": True,  # This ensures enum values are used directly
+        "use_enum_values": True,
     }
 
 
