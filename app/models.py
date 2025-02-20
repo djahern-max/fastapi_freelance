@@ -446,6 +446,15 @@ class Request(Base, TimestampMixin):
     estimated_budget = Column(Float, nullable=True)
     agreed_amount = Column(Float, nullable=True)
 
+    # New fields for idea/collaboration feature
+    is_idea = Column(Boolean, default=False)  # Indicates if this is "Just an Idea"
+    seeks_collaboration = Column(
+        Boolean, default=False
+    )  # Indicates if owner wants to collaborate
+    collaboration_details = Column(
+        Text, nullable=True
+    )  # Optional details about desired collaboration
+
     # Relationships
     user = relationship("User", back_populates="requests")
     project = relationship("Project", back_populates="requests")
@@ -458,7 +467,6 @@ class Request(Base, TimestampMixin):
     comments = relationship(
         "RequestComment", back_populates="request", cascade="all, delete-orphan"
     )
-
     videos = relationship("Video", back_populates="request")
 
 

@@ -460,6 +460,9 @@ class RequestBase(BaseModel):
     estimated_budget: Optional[float] = None
     is_public: bool = False
     contains_sensitive_data: bool = False
+    is_idea: bool = False
+    seeks_collaboration: bool = False
+    collaboration_details: Optional[str] = None
 
 
 class RequestShareInfo(BaseModel):
@@ -495,6 +498,9 @@ class RequestOut(BaseModel):
     estimated_budget: Optional[float] = None
     is_public: bool
     contains_sensitive_data: bool
+    is_idea: bool
+    seeks_collaboration: bool
+    collaboration_details: Optional[str] = None
     user_id: int
     status: RequestStatus
     project_id: Optional[int] = None
@@ -515,11 +521,9 @@ class RequestOut(BaseModel):
 
 
 class RequestCreate(RequestBase):
-    """Schema for creating a new request - project_id is optional"""
-
     project_id: Optional[int] = None
-    developer_id: Optional[int] = None  # Add this field
-    video_id: Optional[int] = None  # Add this field
+    developer_id: Optional[int] = None
+    video_id: Optional[int] = None
 
 
 class RequestUpdate(BaseModel):
