@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: 487913ada978
+Revision ID: 04810c9d73aa
 Revises: 
-Create Date: 2025-02-15 09:21:45.870775
+Create Date: 2025-02-21 17:37:39.001583
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '487913ada978'
+revision: str = '04810c9d73aa'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -78,6 +78,20 @@ def upgrade() -> None:
     sa.UniqueConstraint('user_id')
     )
     op.create_index(op.f('ix_developer_profiles_id'), 'developer_profiles', ['id'], unique=False)
+    op.create_table('donations',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('amount', sa.Integer(), nullable=False),
+    sa.Column('stripe_session_id', sa.String(), nullable=False),
+    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('completed_at', sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.CheckConstraint('amount > 0', name='check_positive_amount'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('stripe_session_id')
+    )
+    op.create_index(op.f('ix_donations_id'), 'donations', ['id'], unique=False)
     op.create_table('projects',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
@@ -133,6 +147,9 @@ def upgrade() -> None:
     sa.Column('contains_sensitive_data', sa.Boolean(), nullable=True),
     sa.Column('estimated_budget', sa.Float(), nullable=True),
     sa.Column('agreed_amount', sa.Float(), nullable=True),
+    sa.Column('is_idea', sa.Boolean(), nullable=True),
+    sa.Column('seeks_collaboration', sa.Boolean(), nullable=True),
+    sa.Column('collaboration_details', sa.Text(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='SET NULL'),
@@ -371,6 +388,8 @@ def downgrade() -> None:
     op.drop_table('subscriptions')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
+    op.drop_index(op.f('ix_donations_id'), table_name='donations')
+    op.drop_table('donations')
     op.drop_index(op.f('ix_developer_profiles_id'), table_name='developer_profiles')
     op.drop_table('developer_profiles')
     op.drop_index(op.f('ix_client_profiles_id'), table_name='client_profiles')
