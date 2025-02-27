@@ -22,6 +22,7 @@ from app.routers import (
     rating,
     developer_metrics,
     video_ratings,
+    financial,  # Add this import
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -120,16 +121,12 @@ routers_with_prefixes = [
     (rating.router, ""),
     (video_ratings.router, ""),
     (developer_metrics.router, ""),
+    (financial.router, ""),
 ]
 
 # Include all routers in this code
 for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
-
-
-@app.get("/test")
-def test():
-    return {"message": "Server is running"}
 
 
 @app.get("/routes")
@@ -192,3 +189,8 @@ async def get_routes_simple():
             routes.append(f"{methods}: {route.path}")
 
     return "\n".join(routes)
+
+
+@app.get("/test")
+async def test_route():
+    return {"message": "API is working"}
