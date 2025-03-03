@@ -323,6 +323,96 @@ def list_user_conversations(
     return result
 
 
+@router.get(
+    "/{conversation_id}/messages", response_model=List[schemas.ConversationMessageOut]
+)
+def get_conversation_messages(
+    conversation_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    # Check if conversation exists and user has access
+    conversation = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.id == conversation_id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if current_user.id not in [
+        conversation.starter_user_id,
+        conversation.recipient_user_id,
+    ]:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view this conversation"
+        )
+
+    # Get messages for this conversation
+    messages = (
+        db.query(models.ConversationMessage)
+        .filter(models.ConversationMessage.conversation_id == conversation_id)
+        .order_by(models.ConversationMessage.created_at)
+        .all()
+    )
+
+    result = []
+    for msg in messages:
+        content_links = (
+            db.query(models.ConversationContentLink)
+            .filter(models.ConversationContentLink.message_id == msg.id)
+            .all()
+        )
+
+        linked_content = []
+        for link in content_links:
+            if link.content_type == "video":
+                video = (
+                    db.query(models.Video)
+                    .filter(models.Video.id == link.content_id)
+                    .first()
+                )
+                if video:
+                    linked_content.append(
+                        {
+                            "id": link.id,
+                            "type": "video",
+                            "content_id": video.id,
+                            "title": video.title,
+                            "url": video.file_path,
+                        }
+                    )
+            elif link.content_type == "profile":
+                user = (
+                    db.query(models.User)
+                    .filter(models.User.id == link.content_id)
+                    .first()
+                )
+                if user:
+                    linked_content.append(
+                        {
+                            "id": link.id,
+                            "type": "profile",
+                            "content_id": user.id,
+                            "title": f"{user.username}'s Profile",
+                            "url": f"/profile/developer/{user.id}",
+                        }
+                    )
+
+        result.append(
+            {
+                "id": msg.id,
+                "conversation_id": msg.conversation_id,
+                "user_id": msg.user_id,
+                "content": msg.content,
+                "created_at": msg.created_at,
+                "linked_content": linked_content,
+            }
+        )
+
+    return result
+
+
 @router.patch("/{id}", response_model=schemas.ConversationOut)
 def update_conversation(
     id: int,
