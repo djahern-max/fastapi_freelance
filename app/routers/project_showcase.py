@@ -732,3 +732,51 @@ async def update_showcase_videos(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/{showcase_id}/link-video/{video_id}", response_model=schemas.ProjectShowcase
+)
+async def link_video_to_showcase(
+    showcase_id: int,
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Link a specific video to a showcase."""
+    # Check if showcase exists and belongs to user
+    showcase = get_project_showcase(db, showcase_id)
+    if not showcase:
+        raise HTTPException(status_code=404, detail="Showcase not found")
+
+    if showcase.developer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to update this showcase"
+        )
+
+    # Check if video exists and belongs to user
+    video = db.query(models.Video).filter(models.Video.id == video_id).first()
+
+    if not video:
+        raise HTTPException(status_code=400, detail="Video not found")
+
+    # Check if video is already linked to showcase
+    if video in showcase.videos:
+        return showcase  # No changes needed
+
+    # Add video to showcase
+    showcase.videos.append(video)
+
+    # Also create content link for consistency
+    video_content_link = models.ShowcaseContentLink(
+        showcase_id=showcase_id,
+        content_type="video",
+        content_id=video_id,
+    )
+    db.add(video_content_link)
+
+    # Save changes
+    db.commit()
+    db.refresh(showcase)
+
+    return showcase
