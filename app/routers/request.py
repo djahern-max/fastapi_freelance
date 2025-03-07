@@ -147,31 +147,6 @@ def mark_share_viewed(
     return {"success": True}
 
 
-@router.post("/shared-with-me/{share_id}/mark-viewed")
-def mark_share_viewed(
-    share_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    """Mark a shared request as viewed."""
-    share = (
-        db.query(models.RequestShare)
-        .filter(
-            models.RequestShare.id == share_id,
-            models.RequestShare.shared_with_user_id == current_user.id,
-        )
-        .first()
-    )
-
-    if not share:
-        raise HTTPException(status_code=404, detail="Share not found")
-
-    share.viewed_at = func.now()
-    db.commit()
-
-    return {"success": True}
-
-
 # ------------------ CRUD Operations ------------------
 
 
@@ -187,7 +162,7 @@ def create_request(
     return crud_request.create_request(db=db, request=request, user_id=current_user.id)
 
 
-# Add this to your get_requests endpoint in request.py
+# Updated get_requests endpoint with improved error handling and documentation
 @router.get("/", response_model=List[schemas.SimpleRequestOut])
 def get_requests(
     request: Request,
@@ -198,6 +173,18 @@ def get_requests(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    """
+    Get all requests owned by the authenticated user.
+
+    Parameters:
+    - project_id: Optional filter for requests belonging to a specific project
+    - include_shared: Whether to include requests shared with the user (default: True)
+    - skip: Number of items to skip (pagination)
+    - limit: Maximum number of items to return (pagination)
+
+    Returns:
+    - List of requests with basic information
+    """
     try:
         requests = crud_request.get_requests_by_user(
             db=db,
@@ -207,9 +194,69 @@ def get_requests(
             skip=skip,
             limit=limit,
         )
-        return [schemas.SimpleRequestOut.from_orm(request) for request in requests]
+        return [schemas.SimpleRequestOut.from_orm(req) for req in requests]
+    except SQLAlchemyError as e:
+        print(f"Database error in get_requests: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while retrieving requests",
+        )
     except Exception as e:
-        raise
+        print(f"Unexpected error in get_requests: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while retrieving requests",
+        )
+
+
+@router.get("/user/{user_id}", response_model=List[schemas.SimpleRequestOut])
+def get_requests_by_user_id(
+    user_id: int,
+    project_id: Optional[int] = None,
+    include_shared: bool = True,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, le=100),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Get all requests owned by a specific user.
+
+    Parameters:
+    - user_id: ID of the user whose requests to retrieve
+    - project_id: Optional filter for requests belonging to a specific project
+    - include_shared: Whether to include requests shared with the user (default: True)
+    - skip: Number of items to skip (pagination)
+    - limit: Maximum number of items to return (pagination)
+
+    Returns:
+    - List of requests with basic information
+    """
+    # Check if current user is accessing their own requests
+    if current_user.id != user_id:
+        # Check permissions - for now, only allow users to see their own requests
+        # If you have admin users, you could add a check here
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own requests",
+        )
+
+    try:
+        requests = crud_request.get_requests_by_user(
+            db=db,
+            user_id=user_id,
+            project_id=project_id,
+            include_shared=include_shared,
+            skip=skip,
+            limit=limit,
+        )
+        return [schemas.SimpleRequestOut.from_orm(req) for req in requests]
+    except Exception as e:
+        print(f"Error in get_requests_by_user_id: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while retrieving requests",
+        )
 
 
 @router.get("/{request_id}", response_model=schemas.RequestOut)

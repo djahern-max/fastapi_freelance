@@ -102,58 +102,6 @@ def create_request(db: Session, request: schemas.RequestCreate, user_id: int):
     return db_request
 
 
-def get_requests_by_user(
-    db: Session,
-    user_id: int,
-    project_id: Optional[int] = None,
-    include_shared: bool = True,
-    skip: int = 0,
-    limit: int = 100,
-):
-    """Get requests for a specific user with optional project filtering"""
-    try:
-        # Base query for user's own requests
-        query = (
-            db.query(models.Request)
-            .join(models.User, models.Request.user_id == models.User.id)
-            .options(contains_eager(models.Request.user))
-            .options(
-                joinedload(models.Request.shared_with).joinedload(
-                    models.RequestShare.user
-                )
-            )
-            .filter(
-                models.Request.user_id == user_id
-            )  # Get all user's requests regardless of public status
-        )
-
-        if project_id:
-            query = query.filter(models.Request.project_id == project_id)
-
-        requests = query.offset(skip).limit(limit).all()
-
-        # Transform the requests
-        for request in requests:
-            # Always set owner_username regardless of public status
-            request.owner_username = request.user.username
-            # Create shared_with_info list for each request
-            request.shared_with_info = []
-            for share in request.shared_with:
-                if hasattr(share, "user"):
-                    request.shared_with_info.append(
-                        {
-                            "user_id": share.user.id,
-                            "username": share.user.username,
-                            "can_edit": share.can_edit,
-                        }
-                    )
-
-        return requests
-    except Exception as e:
-        print(f"Error in get_requests_by_user: {str(e)}")
-        raise
-
-
 def get_public_requests(
     db: Session, skip: int = 0, limit: int = 100, developer_id: Optional[int] = None
 ):
@@ -448,3 +396,122 @@ def is_request_shared_with_user(db: Session, request_id: int, user_id: int) -> b
         .first()
     )
     return share is not None
+
+
+def get_requests_by_user(
+    db: Session,
+    user_id: int,
+    project_id: Optional[int] = None,
+    include_shared: bool = True,
+    skip: int = 0,
+    limit: int = 100,
+):
+    """
+    Get requests for a specific user with optional project filtering.
+
+    Parameters:
+    - db: Database session
+    - user_id: ID of the user whose requests to retrieve
+    - project_id: Optional filter for requests belonging to a specific project
+    - include_shared: Whether to include requests shared with the user
+    - skip: Number of items to skip (pagination)
+    - limit: Maximum number of items to return (pagination)
+
+    Returns:
+    - List of Request objects with additional attributes (owner_username, shared_with_info)
+    """
+    try:
+        # Base query for user's own requests
+        query = (
+            db.query(models.Request)
+            .join(models.User, models.Request.user_id == models.User.id)
+            .options(contains_eager(models.Request.user))
+            .options(
+                joinedload(models.Request.shared_with).joinedload(
+                    models.RequestShare.user
+                )
+            )
+            .filter(
+                models.Request.user_id == user_id
+            )  # Get all user's requests regardless of public status
+        )
+
+        if project_id:
+            query = query.filter(models.Request.project_id == project_id)
+
+        # Add ordering for consistent results
+        query = query.order_by(models.Request.created_at.desc())
+
+        requests = query.offset(skip).limit(limit).all()
+
+        # Transform the requests
+        for request in requests:
+            # Always set owner_username regardless of public status
+            request.owner_username = request.user.username
+            # Create shared_with_info list for each request
+            request.shared_with_info = []
+            for share in request.shared_with:
+                if hasattr(share, "user"):
+                    request.shared_with_info.append(
+                        {
+                            "user_id": share.user.id,
+                            "username": share.user.username,
+                            "can_edit": share.can_edit,
+                        }
+                    )
+
+        # If include_shared is True, also get requests shared with the user
+        if include_shared:
+            shared_requests = (
+                db.query(models.Request)
+                .join(
+                    models.RequestShare,
+                    models.Request.id == models.RequestShare.request_id,
+                )
+                .join(models.User, models.Request.user_id == models.User.id)
+                .options(contains_eager(models.Request.user))
+                .options(
+                    joinedload(models.Request.shared_with).joinedload(
+                        models.RequestShare.user
+                    )
+                )
+                .filter(models.RequestShare.shared_with_user_id == user_id)
+                .order_by(models.Request.created_at.desc())
+                .all()
+            )
+
+            # Transform the shared requests
+            for request in shared_requests:
+                # Set owner_username
+                request.owner_username = request.user.username
+
+                # Create shared_with_info list for each request
+                request.shared_with_info = []
+                for share in request.shared_with:
+                    if hasattr(share, "user"):
+                        request.shared_with_info.append(
+                            {
+                                "user_id": share.user.id,
+                                "username": share.user.username,
+                                "can_edit": share.can_edit,
+                            }
+                        )
+
+            # We need to avoid duplicates if the user has shared a request with themselves
+            shared_request_ids = {r.id for r in requests}
+            unique_shared_requests = [
+                r for r in shared_requests if r.id not in shared_request_ids
+            ]
+            requests.extend(unique_shared_requests)
+
+            # Re-sort the combined list
+            requests.sort(key=lambda r: r.created_at, reverse=True)
+
+            # Apply limit after combining (if we're not beyond it already)
+            if len(requests) > limit:
+                requests = requests[:limit]
+
+        return requests
+    except Exception as e:
+        print(f"Error in get_requests_by_user: {str(e)}")
+        raise
