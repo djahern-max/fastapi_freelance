@@ -30,6 +30,7 @@ from starlette.types import ASGIApp
 import logging
 import sys
 from app.routers import oauth
+from starlette.middleware.sessions import SessionMiddleware
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -88,6 +89,10 @@ app = FastAPI(
 
 # Retrieve allowed origins from the environment
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+
+app.add_middleware(
+    SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecretkey")
+)
 
 # Set up CORS middleware
 app.add_middleware(
