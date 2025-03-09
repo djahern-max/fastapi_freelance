@@ -29,6 +29,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 import logging
 import sys
+from app.routers import oauth
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -125,6 +126,9 @@ routers_with_prefixes = [
 # Include all routers in this code
 for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
+
+# Include OAuth router
+app.include_router(oauth.router, prefix="/api")
 
 
 @app.get("/routes")

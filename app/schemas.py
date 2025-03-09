@@ -112,6 +112,20 @@ class UserOut(UserBasicInfo):
     is_active: bool
     user_type: UserType
     created_at: datetime
+    google_id: Optional[str] = None
+    github_id: Optional[str] = None
+    linkedin_id: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OAuthUserCreate(BaseModel):
+    email: EmailStr
+    full_name: Optional[str] = None
+    google_id: Optional[str] = None
+    github_id: Optional[str] = None
+    linkedin_id: Optional[str] = None
+    user_type: UserType = UserType.client  # Default to client
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -272,6 +286,9 @@ class TokenData(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    provider: Optional[str] = None  # 'google', 'github', 'linkedin'
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ------------------ Video Schemas ------------------

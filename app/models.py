@@ -81,13 +81,21 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
-    password = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # Hashed password
     is_active = Column(Boolean, default=True)
     user_type = Column(SQLAlchemyEnum(UserType), nullable=False)
     terms_accepted = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )
+
+    # Add this line to store JWT token (Optional, based on your auth method)
+    token = Column(String, nullable=True)  # Stores JWT token if needed
+
+    # OAuth Users (if using external authentication)
+    google_id = Column(String, unique=True, nullable=True)
+    github_id = Column(String, unique=True, nullable=True)
+    linkedin_id = Column(String, unique=True, nullable=True)
     stripe_customer_id = Column(String, nullable=True)
 
     # Relationships
@@ -141,6 +149,24 @@ class User(Base):
     donations = relationship(
         "Donation", back_populates="user", cascade="all, delete-orphan"
     )
+
+
+# ------------------ OAuth ------------------
+
+
+class UserToken(Base):
+    __tablename__ = "user_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    provider = Column(String, nullable=False)  # e.g., 'google', 'github', 'linkedin'
+    access_token = Column(Text, nullable=False)  # OAuth access token
+    refresh_token = Column(Text, nullable=True)  # Optional refresh token
+    expires_at = Column(DateTime, nullable=True)  # Expiration timestamp
+
+    user = relationship("User", backref="tokens")
 
 
 # ------------------ Video Model ------------------
