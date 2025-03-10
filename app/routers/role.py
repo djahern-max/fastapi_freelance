@@ -20,7 +20,7 @@ class RoleSelection(schemas.BaseModel):
 
 
 # In your routes file (e.g., auth.py)
-@router.post("/auth/set-role", response_model=schemas.User)
+@router.post("/auth/select-role", response_model=schemas.User)
 async def set_user_role(
     role: schemas.UserRoleSelect,
     db: Session = Depends(get_db),
