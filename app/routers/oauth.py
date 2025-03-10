@@ -574,16 +574,62 @@ def check_role(email: str, db: Session = Depends(database.get_db)):
 
 
 @router.post("/auth/set-role")
-def set_user_role(data: schemas.RoleSelection, db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.email == data.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+def set_user_role(
+    data: schemas.UserTypeUpdate,
+    current_user: models.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    """Set or update the user's role/type"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
-    user.user_type = data.user_type
-    user.needs_role_selection = False
-    db.commit()
+    logger.info(f"Setting role for user ID {current_user.id} to {data.user_type}")
 
-    return {"message": "Role updated successfully"}
+    # Update the user's type and mark role selection as complete
+    current_user.user_type = data.user_type
+    current_user.needs_role_selection = False
+
+    try:
+        db.commit()
+        logger.info(f"Role updated successfully for user ID {current_user.id}")
+
+        # Create appropriate profile if it doesn't exist
+        if data.user_type == "client":
+            client_profile = (
+                db.query(models.ClientProfile)
+                .filter(models.ClientProfile.user_id == current_user.id)
+                .first()
+            )
+
+            if not client_profile:
+                new_profile = models.ClientProfile(
+                    user_id=current_user.id,
+                    # Add any default values you want for new client profiles
+                )
+                db.add(new_profile)
+                db.commit()
+
+        elif data.user_type == "developer":
+            dev_profile = (
+                db.query(models.DeveloperProfile)
+                .filter(models.DeveloperProfile.user_id == current_user.id)
+                .first()
+            )
+
+            if not dev_profile:
+                new_profile = models.DeveloperProfile(
+                    user_id=current_user.id,
+                    # Add any default values you want for new developer profiles
+                )
+                db.add(new_profile)
+                db.commit()
+
+        return {"message": "Role updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating role: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating role: {str(e)}")
 
 
 @router.get("/auth/user-by-oauth/{provider}/{provider_id}")
@@ -654,3 +700,46 @@ async def get_role_selection(
         return RedirectResponse(
             url=f"{frontend_url}/login?error=token_validation_failed"
         )
+
+
+@router.get("/auth/get-user")
+def get_user(
+    email: str = None,
+    google_id: str = None,
+    github_id: str = None,
+    linkedin_id: str = None,
+    db: Session = Depends(database.get_db),
+):
+    """Retrieve user based on email or any OAuth provider ID"""
+    query = db.query(models.User)
+
+    if email:
+        user = query.filter(models.User.email == email).first()
+    elif google_id:
+        user = query.filter(models.User.google_id == google_id).first()
+    elif github_id:
+        user = query.filter(models.User.github_id == github_id).first()
+    elif linkedin_id:
+        user = query.filter(models.User.linkedin_id == linkedin_id).first()
+    else:
+        raise HTTPException(
+            status_code=400, detail="At least one identifier must be provided"
+        )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Return user data without sensitive information
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+        "user_type": user.user_type,
+        "created_at": user.created_at,
+        "google_id": user.google_id,
+        "github_id": user.github_id,
+        "linkedin_id": user.linkedin_id,
+        "needs_role_selection": user.needs_role_selection,
+    }

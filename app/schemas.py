@@ -153,7 +153,27 @@ from pydantic import BaseModel
 
 class RoleSelection(BaseModel):
     email: str
-    user_type: str  # "client" or "developer"
+    user_type: str
+
+    class Config:
+        orm_mode = True
+        schema_extra = {"example": {"email": "user@example.com", "user_type": "client"}}
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+
+    class Config:
+        orm_mode = True
+        schema_extra = {"example": {"code": "4/P7q7W91a-oMsCeLvIaQm6bTrgtp7"}}
+
+
+class UserTypeUpdate(BaseModel):
+    user_type: str
+
+    class Config:
+        orm_mode = True
+        schema_extra = {"example": {"user_type": "client"}}  # or "developer"
 
 
 # ------------------ Developer Rating ------------------
