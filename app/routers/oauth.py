@@ -8,6 +8,9 @@ import uuid  # For generating unique state
 from app import models, schemas, database, oauth2
 import requests
 import logging
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import User
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -561,3 +564,33 @@ def set_user_role(data: schemas.RoleSelection, db: Session = Depends(database.ge
     db.commit()
 
     return {"message": "Role updated successfully"}
+
+
+@router.get("/auth/user-by-oauth/{provider}/{provider_id}")
+def get_user_by_oauth(provider: str, provider_id: str, db: Session = Depends(get_db)):
+    """Retrieve user based on OAuth provider ID"""
+    if provider == "google":
+        user = db.query(User).filter(User.google_id == provider_id).first()
+    elif provider == "github":
+        user = db.query(User).filter(User.github_id == provider_id).first()
+    elif provider == "linkedin":
+        user = db.query(User).filter(User.linkedin_id == provider_id).first()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid provider")
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+        "user_type": user.user_type,
+        "created_at": user.created_at,
+        "google_id": user.google_id,
+        "github_id": user.github_id,
+        "linkedin_id": user.linkedin_id,
+        "needs_role_selection": user.needs_role_selection,
+    }
