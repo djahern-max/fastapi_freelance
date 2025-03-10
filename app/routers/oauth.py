@@ -67,6 +67,10 @@ async def login(provider: str, request: Request):
     )
 
 
+# Fix for app/routers/oauth.py
+# In the auth_callback function, fix the error with dashboard_path variable
+
+
 @router.get("/auth/{provider}/callback")
 async def auth_callback(
     provider: str, request: Request, db: Session = Depends(database.get_db)
@@ -109,6 +113,7 @@ async def auth_callback(
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         is_new_user = False
 
+        # --- Google OAuth Processing ---
         if provider == "google":
             # Direct implementation for Google
             token_data = {
@@ -233,22 +238,12 @@ async def auth_callback(
             app_access_token = oauth2.create_access_token(data={"sub": user_id})
 
             # Determine redirect path based on user state
-            if is_new_user or not user.user_type or user.needs_role_selection:
-                redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
-            else:
-                # User already has a role
-                dashboard_path = (
-                    "client-dashboard"
-                    if user.user_type == "client"
-                    else "developer-dashboard"
-                )
-                redirect_url = (
-                    f"{frontend_url}/{dashboard_path}?token={app_access_token}"
-                )
-
+            # SIMPLIFIED APPROACH: Always redirect to oauth-success first
+            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
             logger.info(f"Redirecting to: {redirect_url}")
             return RedirectResponse(url=redirect_url)
 
+        # --- GitHub OAuth Processing ---
         elif provider == "github":
             # Implement GitHub OAuth
             token_data = {
@@ -374,21 +369,11 @@ async def auth_callback(
             # Create access token
             app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
 
-            # Determine redirect path
-            if is_new_user or not user.user_type or user.needs_role_selection:
-                redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
-            else:
-                dashboard_path = (
-                    "client-dashboard"
-                    if user.user_type == "client"
-                    else "developer-dashboard"
-                )
-                redirect_url = (
-                    f"{frontend_url}/{dashboard_path}?token={app_access_token}"
-                )
-
+            # SIMPLIFIED APPROACH: Always redirect to oauth-success first
+            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
             return RedirectResponse(url=redirect_url)
 
+        # --- LinkedIn OAuth Processing ---
         elif provider == "linkedin":
             # Direct implementation for LinkedIn
             token_data = {
@@ -536,19 +521,8 @@ async def auth_callback(
             # Create access token
             app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
 
-            # Determine where to redirect
-            if is_new_user or not user.user_type or user.needs_role_selection:
-                redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
-            else:
-                dashboard_path = (
-                    "client-dashboard"
-                    if user.user_type == "client"
-                    else "developer-dashboard"
-                )
-                redirect_url = (
-                    f"{frontend_url}/{dashboard_path}?token={app_access_token}"
-                )
-
+            # SIMPLIFIED APPROACH: Always redirect to oauth-success first
+            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
             return RedirectResponse(url=redirect_url)
 
         else:
