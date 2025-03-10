@@ -78,21 +78,38 @@ def get_me(
     db: Session = Depends(database.get_db),
 ):
     """Get current user information"""
-    # Get profile information based on user type
-    if current_user.user_type == models.UserType.developer:
-        current_user.developer_profile = (
-            db.query(models.DeveloperProfile)
-            .filter(models.DeveloperProfile.user_id == current_user.id)
-            .first()
-        )
-    elif current_user.user_type == models.UserType.client:
-        current_user.client_profile = (
-            db.query(models.ClientProfile)
-            .filter(models.ClientProfile.user_id == current_user.id)
-            .first()
-        )
+    try:
+        print(f"DEBUG: /me endpoint called for user ID: {current_user.id}")
+        print(f"DEBUG: Current user type: {current_user.user_type}")
 
-    return current_user
+        # Get profile information based on user type only if the type is set
+        if current_user.user_type:
+            if current_user.user_type == models.UserType.developer:
+                current_user.developer_profile = (
+                    db.query(models.DeveloperProfile)
+                    .filter(models.DeveloperProfile.user_id == current_user.id)
+                    .first()
+                )
+            elif current_user.user_type == models.UserType.client:
+                current_user.client_profile = (
+                    db.query(models.ClientProfile)
+                    .filter(models.ClientProfile.user_id == current_user.id)
+                    .first()
+                )
+
+        # If user_type is None but needs_role_selection is False, set it to True
+        if current_user.user_type is None and not getattr(
+            current_user, "needs_role_selection", True
+        ):
+            # Update the user in the database
+            current_user.needs_role_selection = True
+            db.commit()
+
+        return current_user
+    except Exception as e:
+        print(f"DEBUG: Error in /me endpoint: {str(e)}")
+        # Re-raise the exception to get the proper error response
+        raise
 
 
 @router.post("/select-role", status_code=status.HTTP_200_OK)
