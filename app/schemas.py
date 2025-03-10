@@ -148,6 +148,14 @@ class UserBasic(UserBase):
     pass
 
 
+from pydantic import BaseModel
+
+
+class RoleSelection(BaseModel):
+    email: str
+    user_type: str  # "client" or "developer"
+
+
 # ------------------ Developer Rating ------------------
 
 

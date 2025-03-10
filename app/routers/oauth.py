@@ -536,3 +536,28 @@ async def auth_callback(
         return RedirectResponse(
             url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/oauth-error?error={str(e)}&provider={provider}"
         )
+
+
+@router.get("/auth/check-role")
+def check_role(email: str, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "needs_role_selection": user.needs_role_selection,
+        "user_type": user.user_type,
+    }
+
+
+@router.post("/auth/set-role")
+def set_user_role(data: schemas.RoleSelection, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == data.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.user_type = data.user_type
+    user.needs_role_selection = False
+    db.commit()
+
+    return {"message": "Role updated successfully"}
