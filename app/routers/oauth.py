@@ -387,17 +387,23 @@ async def auth_callback(
             access_token = oauth2.create_access_token(data={"sub": str(user.id)})
 
             # Redirect to frontend with token
+            # Redirect to frontend with token
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-            redirect_url = (
-                f"{frontend_url}/oauth-success?token={access_token}&provider=linkedin"
-            )
-            return RedirectResponse(url=redirect_url)
 
+            # Check if user needs to select a role
+            if is_new_user or user.needs_role_selection:
+                redirect_url = (
+                    f"{frontend_url}/select-role?token={access_token}&provider=google"
+                )
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported provider: {provider}",
-            )
+            # If user already has a role, redirect directly to the appropriate dashboard
+            if user.user_type == "client":
+                dashboard_path = "client-dashboard"
+            else:
+                dashboard_path = "developer-dashboard"
+        redirect_url = f"{frontend_url}/{dashboard_path}?token={access_token}"
+
+        return RedirectResponse(url=redirect_url)
 
     except HTTPException as http_exc:
         print(f"DEBUG: HTTP Exception in {provider} OAuth: {http_exc.detail}")
