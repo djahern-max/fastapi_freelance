@@ -395,16 +395,18 @@ async def auth_callback(
                 redirect_url = (
                     f"{frontend_url}/select-role?token={access_token}&provider=google"
                 )
-        else:
-            # If user already has a role, redirect directly to the appropriate dashboard
-            if user.user_type == "client":
-                dashboard_path = "client-dashboard"
             else:
-                dashboard_path = "developer-dashboard"
-        redirect_url = f"{frontend_url}/{dashboard_path}?token={access_token}"
+                # Directly create the redirect URL without using a separate variable
+                if user.user_type == "client":
+                    redirect_url = (
+                        f"{frontend_url}/client-dashboard?token={access_token}"
+                    )
+                else:
+                    redirect_url = (
+                        f"{frontend_url}/developer-dashboard?token={access_token}"
+                    )
 
-        return RedirectResponse(url=redirect_url)
-
+            return RedirectResponse(url=redirect_url)
     except HTTPException as http_exc:
         print(f"DEBUG: HTTP Exception in {provider} OAuth: {http_exc.detail}")
         raise http_exc
