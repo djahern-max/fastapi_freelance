@@ -613,3 +613,11 @@ def get_user_by_oauth(provider: str, provider_id: str, db: Session = Depends(get
         "linkedin_id": user.linkedin_id,
         "needs_role_selection": user.needs_role_selection,
     }
+
+
+@router.get("/auth/select-role")
+def get_role_selection(token: str = None):
+    """Handle GET requests to role selection page"""
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    # Redirect to the frontend select-role page with the token
+    return RedirectResponse(url=f"{frontend_url}/select-role?token={token}")
