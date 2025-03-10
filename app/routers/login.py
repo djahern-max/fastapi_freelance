@@ -92,3 +92,57 @@ def get_me(
         )
 
     return current_user
+
+
+@router.post("/select-role")
+def select_role(
+    role_data: schemas.UserRoleSelect,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    """Set the role for a user after OAuth registration"""
+
+    try:
+        # Update user type
+        current_user.user_type = role_data.user_type
+
+        # Create appropriate profile based on role
+        if role_data.user_type == models.UserType.developer:
+            # Check if profile already exists
+            existing_profile = (
+                db.query(models.DeveloperProfile)
+                .filter(models.DeveloperProfile.user_id == current_user.id)
+                .first()
+            )
+
+            if not existing_profile:
+                developer_profile = models.DeveloperProfile(
+                    user_id=current_user.id,
+                )
+                db.add(developer_profile)
+        else:  # client
+            # Check if profile already exists
+            existing_profile = (
+                db.query(models.ClientProfile)
+                .filter(models.ClientProfile.user_id == current_user.id)
+                .first()
+            )
+
+            if not existing_profile:
+                client_profile = models.ClientProfile(
+                    user_id=current_user.id,
+                )
+                db.add(client_profile)
+
+        db.commit()
+
+        return {
+            "message": "User role set successfully",
+            "user_type": role_data.user_type,
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to set user role: {str(e)}"
+        )

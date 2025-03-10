@@ -83,7 +83,7 @@ class User(Base):
     full_name = Column(String, nullable=False)
     password = Column(String, nullable=False)  # Hashed password
     is_active = Column(Boolean, default=True)
-    user_type = Column(SQLAlchemyEnum(UserType), nullable=False)
+    user_type = Column(SQLAlchemyEnum(UserType), nullable=True)
     terms_accepted = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
@@ -96,6 +96,7 @@ class User(Base):
     google_id = Column(String, unique=True, nullable=True)
     github_id = Column(String, unique=True, nullable=True)
     linkedin_id = Column(String, unique=True, nullable=True)
+    needs_role_selection = Column(Boolean, default=False)
     stripe_customer_id = Column(String, nullable=True)
 
     # Relationships

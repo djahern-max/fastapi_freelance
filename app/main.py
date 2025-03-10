@@ -201,3 +201,15 @@ async def get_routes_simple():
 @app.get("/test")
 async def test_route():
     return {"message": "API is working"}
+
+
+@app.get("/auth/test-config")
+async def test_oauth_config():
+    """Test endpoint to check if OAuth environment variables are properly loaded"""
+    return {
+        "google_client_id_set": bool(os.getenv("GOOGLE_CLIENT_ID")),
+        "github_client_id_set": bool(os.getenv("GITHUB_CLIENT_ID")),
+        "linkedin_client_id_set": bool(os.getenv("LINKEDIN_CLIENT_ID")),
+        "base_url": os.getenv("BASE_URL"),
+        "allowed_origins": allowed_origins,
+    }

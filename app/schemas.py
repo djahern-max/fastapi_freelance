@@ -13,6 +13,10 @@ class UserType(str, Enum):
     developer = "developer"
 
 
+class UserRoleSelect(BaseModel):
+    user_type: UserType
+
+
 class RequestStatus(str, Enum):
     open = "open"
     in_progress = "in_progress"

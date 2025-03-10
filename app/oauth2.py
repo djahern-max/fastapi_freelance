@@ -10,8 +10,6 @@ from .config import settings
 from typing import Optional
 from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.exc import SQLAlchemyError
-from jose import jwt, JWTError
-
 
 # Define oauth2_scheme once, with auto_error=False for optional authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
@@ -22,6 +20,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 
 def create_access_token(data: dict):
+    print(f"DEBUG: Creating access token with data: {data}")
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
@@ -36,8 +35,16 @@ def verify_access_token(token: str, credentials_exception):
         if id is None:
             raise credentials_exception
         token_data = schemas.TokenData(id=id)
+
+        # Add a debug check
+        if not hasattr(token_data, "id") or token_data.id is None:
+            raise ValueError("TokenData missing id attribute")
+
         return token_data
     except JWTError:
+        raise credentials_exception
+    except Exception as e:
+        print(f"DEBUG: Token verification error: {str(e)}")
         raise credentials_exception
 
 
@@ -65,7 +72,6 @@ def get_current_user(
 
         return user
     except SQLAlchemyError as db_error:
-
         raise HTTPException(status_code=500, detail="A database error occurred.")
     except JWTError:
         raise credentials_exception
@@ -87,7 +93,7 @@ def get_optional_user(
     try:
         # Use the local verify_access_token function
         token_data = verify_access_token(token, credentials_exception)
-        user_id: int = token_data.id  # Use token_data.id instead of payload.get("sub")
+        user_id = token_data.id  # Use token_data.id instead of payload.get("sub")
 
         if not user_id:
             return None
