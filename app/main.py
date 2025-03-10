@@ -133,7 +133,7 @@ for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
 
 # Include OAuth router
-app.include_router(oauth.router)
+app.include_router(oauth.router, prefix="/api")
 
 
 @app.get("/routes")
