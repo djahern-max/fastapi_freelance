@@ -179,7 +179,7 @@ async def auth_callback(
                         full_name=user_info.get("name", ""),
                         password="",  # No password for OAuth users
                         google_id=user_info.get("sub"),
-                        # user_type is deliberately left out
+                        needs_role_selection=True,
                         is_active=True,
                         terms_accepted=True,  # Assume terms accepted for OAuth
                     )
@@ -214,6 +214,7 @@ async def auth_callback(
             access_token = oauth2.create_access_token(data={"sub": user_id})
 
             # Redirect to frontend with token
+            # Redirect to frontend with token
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
             # Check if user needs to select a role
@@ -222,9 +223,13 @@ async def auth_callback(
                     f"{frontend_url}/select-role?token={access_token}&provider=google"
                 )
             else:
-                redirect_url = (
-                    f"{frontend_url}/oauth-success?token={access_token}&provider=google"
+                # If user already has a role, redirect directly to the appropriate dashboard
+                dashboard_path = (
+                    "client-dashboard"
+                    if user.user_type == "client"
+                    else "developer-dashboard"
                 )
+            redirect_url = f"{frontend_url}/{dashboard_path}?token={access_token}"
 
             return RedirectResponse(url=redirect_url)
 
