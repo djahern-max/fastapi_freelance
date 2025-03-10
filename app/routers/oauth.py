@@ -243,9 +243,7 @@ async def auth_callback(
             # Check if user needs role selection
             if user.needs_role_selection:
                 # Redirect to select-role endpoint with token
-                redirect_url = (
-                    f"{frontend_url}/api/auth/select-role?token={app_access_token}"
-                )
+                redirect_url = f"{frontend_url}/select-role?token={app_access_token}"
             else:
                 # Redirect to oauth-success with token
                 redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
@@ -382,15 +380,14 @@ async def auth_callback(
             # Check if user needs role selection
             if user.needs_role_selection:
                 # Redirect to select-role endpoint with token
-                redirect_url = (
-                    f"{frontend_url}/api/auth/select-role?token={app_access_token}"
-                )
+                redirect_url = f"{frontend_url}/select-role?token={app_access_token}"
             else:
                 # Redirect to oauth-success with token
                 redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
 
             logger.info(f"Redirecting to: {redirect_url}")
             return RedirectResponse(url=redirect_url)
+
         # --- LinkedIn OAuth Processing ---
         elif provider == "linkedin":
             # Direct implementation for LinkedIn
@@ -542,9 +539,7 @@ async def auth_callback(
             # Check if user needs role selection
             if user.needs_role_selection:
                 # Redirect to select-role endpoint with token
-                redirect_url = (
-                    f"{frontend_url}/api/auth/select-role?token={app_access_token}"
-                )
+                redirect_url = f"{frontend_url}/select-role?token={app_access_token}"
             else:
                 # Redirect to oauth-success with token
                 redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
