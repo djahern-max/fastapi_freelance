@@ -240,9 +240,16 @@ async def auth_callback(
             logger.info(f"Creating access token for user id: {user_id}")
             app_access_token = oauth2.create_access_token(data={"sub": user_id})
 
-            # Determine redirect path based on user state
-            # SIMPLIFIED APPROACH: Always redirect to oauth-success first
-            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
+            # Check if user needs role selection
+            if user.needs_role_selection:
+                # Redirect to select-role endpoint with token
+                redirect_url = (
+                    f"{frontend_url}/api/auth/select-role?token={app_access_token}"
+                )
+            else:
+                # Redirect to oauth-success with token
+                redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
+
             logger.info(f"Redirecting to: {redirect_url}")
             return RedirectResponse(url=redirect_url)
 
@@ -372,10 +379,18 @@ async def auth_callback(
             # Create access token
             app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
 
-            # SIMPLIFIED APPROACH: Always redirect to oauth-success first
-            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
-            return RedirectResponse(url=redirect_url)
+            # Check if user needs role selection
+            if user.needs_role_selection:
+                # Redirect to select-role endpoint with token
+                redirect_url = (
+                    f"{frontend_url}/api/auth/select-role?token={app_access_token}"
+                )
+            else:
+                # Redirect to oauth-success with token
+                redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
 
+            logger.info(f"Redirecting to: {redirect_url}")
+            return RedirectResponse(url=redirect_url)
         # --- LinkedIn OAuth Processing ---
         elif provider == "linkedin":
             # Direct implementation for LinkedIn
@@ -524,8 +539,17 @@ async def auth_callback(
             # Create access token
             app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
 
-            # SIMPLIFIED APPROACH: Always redirect to oauth-success first
-            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
+            # Check if user needs role selection
+            if user.needs_role_selection:
+                # Redirect to select-role endpoint with token
+                redirect_url = (
+                    f"{frontend_url}/api/auth/select-role?token={app_access_token}"
+                )
+            else:
+                # Redirect to oauth-success with token
+                redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
+
+            logger.info(f"Redirecting to: {redirect_url}")
             return RedirectResponse(url=redirect_url)
 
         else:
