@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -616,8 +617,40 @@ def get_user_by_oauth(provider: str, provider_id: str, db: Session = Depends(get
 
 
 @router.get("/auth/select-role")
-def get_role_selection(token: str = None):
+async def get_role_selection(
+    request: Request, token: str = None, db: Session = Depends(database.get_db)
+):
     """Handle GET requests to role selection page"""
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    # Redirect to the frontend select-role page with the token
-    return RedirectResponse(url=f"{frontend_url}/select-role?token={token}")
+
+    if not token:
+        # If no token is provided, redirect to login
+        return RedirectResponse(url=f"{frontend_url}/login")
+
+    try:
+        # Decode the token to get the user ID
+        payload = oauth2.verify_access_token(token)
+        user_id = payload.get("sub")
+
+        if not user_id:
+            return RedirectResponse(url=f"{frontend_url}/login?error=invalid_token")
+
+        # Get the user from the database
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+
+        if not user:
+            return RedirectResponse(url=f"{frontend_url}/login?error=user_not_found")
+
+        # Check if the user needs role selection
+        if user.needs_role_selection:
+            # Redirect to the frontend select-role page with the token
+            return RedirectResponse(url=f"{frontend_url}/select-role?token={token}")
+        else:
+            # User already has a role, redirect to dashboard
+            return RedirectResponse(url=f"{frontend_url}/oauth-success?token={token}")
+
+    except Exception as e:
+        logger.error(f"Error in GET role selection: {str(e)}")
+        return RedirectResponse(
+            url=f"{frontend_url}/login?error=token_validation_failed"
+        )
