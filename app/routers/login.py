@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app import database, models, utils, schemas, oauth2
 from app.models import User
 from app.oauth2 import get_current_user
+from app.database import get_db
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -94,69 +95,57 @@ def get_me(
     return current_user
 
 
-@router.post("/select-role")
-def select_role(
-    role_data: schemas.UserRoleSelect,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(database.get_db),
+@router.post("/select-role", status_code=status.HTTP_200_OK)
+def select_user_role(
+    user_role: schemas.UserRoleSelect,
+    current_user: models.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Set the role for a user after OAuth registration"""
-
+    """
+    Set or update the user role for a registered user.
+    This is used especially after OAuth registration where the
+    user needs to select their role after successful authentication.
+    """
     try:
-        # Add extensive logging
-        print(
-            f"DEBUG: Setting role for user {current_user.id} to {role_data.user_type}"
-        )
-        print(f"DEBUG: Current user data: {current_user}")
+        # Get the current user from the database to ensure we're working with up-to-date data
+        user = db.query(models.User).filter(models.User.id == current_user.id).first()
 
-        # Update user type
-        current_user.user_type = role_data.user_type
-        current_user.needs_role_selection = False  # Mark as completed role selection
-
-        # Create appropriate profile based on role
-        if role_data.user_type == models.UserType.developer:
-            # Check if profile already exists
-            existing_profile = (
-                db.query(models.DeveloperProfile)
-                .filter(models.DeveloperProfile.user_id == current_user.id)
-                .first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
-            if not existing_profile:
-                developer_profile = models.DeveloperProfile(
-                    user_id=current_user.id,
-                )
-                db.add(developer_profile)
-        else:  # client
-            # Check if profile already exists
-            existing_profile = (
-                db.query(models.ClientProfile)
-                .filter(models.ClientProfile.user_id == current_user.id)
-                .first()
-            )
+        # Update user's type and role selection flag
+        user.user_type = user_role.user_type
+        user.needs_role_selection = False
 
-            if not existing_profile:
-                client_profile = models.ClientProfile(
-                    user_id=current_user.id,
-                )
-                db.add(client_profile)
+        # Create appropriate profile based on user type
+        if user_role.user_type == "developer" and not user.developer_profile:
+            # Create an empty developer profile
+            developer_profile = models.DeveloperProfile(
+                user_id=user.id, skills="", experience_years=0, bio="", is_public=False
+            )
+            db.add(developer_profile)
+
+        elif user_role.user_type == "client" and not user.client_profile:
+            # Create an empty client profile
+            client_profile = models.ClientProfile(user_id=user.id)
+            db.add(client_profile)
 
         # Commit the changes
         db.commit()
-        db.refresh(current_user)
 
-        print(f"DEBUG: Updated user data: {current_user}")
-        print(f"DEBUG: User role set successfully to {current_user.user_type}")
+        logger.info(f"User {user.id} selected role: {user_role.user_type}")
 
-        # Return success response with user type
         return {
-            "message": "User role set successfully",
-            "user_type": current_user.user_type,
+            "message": "User role updated successfully",
+            "user_type": user.user_type,
+            "needs_role_selection": user.needs_role_selection,
         }
-
     except Exception as e:
         db.rollback()
-        print(f"DEBUG: Error setting user role: {str(e)}")
+        logger.error(f"Error updating user role: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to set user role: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user role: {str(e)}",
         )
