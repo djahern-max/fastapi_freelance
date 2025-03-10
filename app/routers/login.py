@@ -103,8 +103,15 @@ def select_role(
     """Set the role for a user after OAuth registration"""
 
     try:
+        # Add extensive logging
+        print(
+            f"DEBUG: Setting role for user {current_user.id} to {role_data.user_type}"
+        )
+        print(f"DEBUG: Current user data: {current_user}")
+
         # Update user type
         current_user.user_type = role_data.user_type
+        current_user.needs_role_selection = False  # Mark as completed role selection
 
         # Create appropriate profile based on role
         if role_data.user_type == models.UserType.developer:
@@ -134,15 +141,22 @@ def select_role(
                 )
                 db.add(client_profile)
 
+        # Commit the changes
         db.commit()
+        db.refresh(current_user)
 
+        print(f"DEBUG: Updated user data: {current_user}")
+        print(f"DEBUG: User role set successfully to {current_user.user_type}")
+
+        # Return success response with user type
         return {
             "message": "User role set successfully",
-            "user_type": role_data.user_type,
+            "user_type": current_user.user_type,
         }
 
     except Exception as e:
         db.rollback()
+        print(f"DEBUG: Error setting user role: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Failed to set user role: {str(e)}"
         )
