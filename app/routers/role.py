@@ -19,7 +19,7 @@ class RoleSelection(schemas.BaseModel):
     user_type: UserType
 
 
-# In your routes file (e.g., auth.py)
+# In your routes file (e.g., auth.py) add the following:
 @router.post("/auth/select-role", response_model=schemas.User)
 async def set_user_role(
     role: schemas.UserRoleSelect,
