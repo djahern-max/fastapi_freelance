@@ -44,7 +44,7 @@ oauth.register(
 )
 
 
-@router.get("/auth/{provider}")
+@router.get("/api/auth/{provider}")
 async def login(provider: str, request: Request):
     """Start OAuth login and ensure fresh session state"""
     redirect_uri = request.url_for("auth_callback", provider=provider)
@@ -61,7 +61,7 @@ async def login(provider: str, request: Request):
     )
 
 
-@router.get("/auth/{provider}/callback")
+@router.get("/api/auth/{provider}/callback")
 async def auth_callback(
     provider: str, request: Request, db: Session = Depends(database.get_db)
 ):
