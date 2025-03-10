@@ -61,7 +61,7 @@ async def login(provider: str, request: Request):
     )
 
 
-@router.get("/auth/{provider}/callback")
+@router.get("/api/auth/{provider}/callback")
 async def auth_callback(
     provider: str, request: Request, db: Session = Depends(database.get_db)
 ):
