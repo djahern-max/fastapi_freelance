@@ -98,6 +98,7 @@ class User(Base):
     linkedin_id = Column(String, unique=True, nullable=True)
     needs_role_selection = Column(Boolean, default=False)
     stripe_customer_id = Column(String, nullable=True)
+    needs_role_selection = Column(Boolean, default=True)
 
     # Relationships
     videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")

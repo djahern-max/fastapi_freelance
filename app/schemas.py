@@ -176,6 +176,13 @@ class UserTypeUpdate(BaseModel):
         schema_extra = {"example": {"user_type": "client"}}  # or "developer"
 
 
+# In schemas.py
+class UserRoleSelect(BaseModel):
+    user_type: UserType
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ------------------ Developer Rating ------------------
 
 
