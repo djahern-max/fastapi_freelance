@@ -129,8 +129,43 @@ async def auth_callback(
         )
 
     try:
-        # Exchange code for token
-        token = await oauth.create_client(provider).authorize_access_token(request)
+        # Exchange code for token with explicit client_secret for LinkedIn
+        if provider == "linkedin":
+            # Get client instance
+            client = oauth.create_client(provider)
+
+            # Add explicit parameters for token exchange
+            token_params = {
+                "client_id": os.getenv("LINKEDIN_CLIENT_ID"),
+                "client_secret": os.getenv("LINKEDIN_CLIENT_SECRET"),
+                "code": code,
+                "redirect_uri": str(
+                    request.url_for("auth_callback", provider=provider)
+                ),
+                "grant_type": "authorization_code",
+            }
+
+            # Make the token request manually
+            token_endpoint = "https://www.linkedin.com/oauth/v2/accessToken"
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+            token_response = requests.post(
+                token_endpoint, data=token_params, headers=headers
+            )
+            debug_log(
+                f"LinkedIn token response: {token_response.status_code} - {token_response.text}"
+            )
+
+            if token_response.status_code != 200:
+                logger.error(f"LinkedIn token error: {token_response.text}")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=token_failed&provider={provider}"
+                )
+
+            token = token_response.json()
+        else:
+            # Use standard flow for other providers
+            token = await oauth.create_client(provider).authorize_access_token(request)
 
         # Get user info based on provider
         user_info = None
