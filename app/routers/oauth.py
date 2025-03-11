@@ -47,7 +47,7 @@ oauth.register(
     client_secret=os.getenv("LINKEDIN_CLIENT_SECRET"),
     authorize_url="https://www.linkedin.com/oauth/v2/authorization",
     access_token_url="https://www.linkedin.com/oauth/v2/accessToken",
-    client_kwargs={"scope": "openid profile email"},
+    client_kwargs={"scope": "r_liteprofile r_emailaddress"},
 )
 
 
@@ -170,52 +170,63 @@ async def auth_callback(
         elif provider == "linkedin":
             # Get user data from LinkedIn
             access_token = token.get("access_token")
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "X-Restli-Protocol-Version": "2.0.0",
-            }
-
-            # Try OpenID Connect userinfo endpoint
-            user_response = requests.get(
-                "https://api.linkedin.com/v2/userinfo", headers=headers
+            logger.info(
+                f"LinkedIn access token obtained: {access_token[:10]}... (truncated)"
             )
 
-            if user_response.status_code == 200:
-                user_info = user_response.json()
-                email = user_info.get("email")
-                provider_id = user_info.get("sub")
-                first_name = user_info.get("given_name", "")
-                last_name = user_info.get("family_name", "")
-                full_name = f"{first_name} {last_name}".strip()
-            else:
-                # Fall back to profile API
-                profile_response = requests.get(
-                    "https://api.linkedin.com/v2/me?projection=(id,firstName,lastName)",
-                    headers=headers,
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "X-Restli-Protocol-Version": "2.0.0",  # Important for LinkedIn API v2
+                "Content-Type": "application/json",
+            }
+
+            # Step 1: Get basic profile data
+            profile_url = "https://api.linkedin.com/v2/me"
+            logger.info(f"Requesting LinkedIn profile from: {profile_url}")
+
+            profile_response = requests.get(profile_url, headers=headers)
+            logger.info(
+                f"LinkedIn profile response status: {profile_response.status_code}"
+            )
+
+            if profile_response.status_code != 200:
+                logger.error(f"LinkedIn profile error: {profile_response.text}")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=profile_failed&provider={provider}"
                 )
 
-                if profile_response.status_code != 200:
-                    logger.error(f"LinkedIn profile error: {profile_response.text}")
-                    return RedirectResponse(
-                        url=f"{frontend_url}/oauth-error?error=profile_failed&provider={provider}"
-                    )
+            # Log the full response for debugging
+            profile_info = profile_response.json()
+            logger.info(f"LinkedIn profile data: {profile_info}")
 
-                email_response = requests.get(
-                    "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
-                    headers=headers,
+            # Step 2: Get email address
+            email_url = "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))"
+            logger.info(f"Requesting LinkedIn email from: {email_url}")
+
+            email_response = requests.get(email_url, headers=headers)
+            logger.info(f"LinkedIn email response status: {email_response.status_code}")
+
+            if email_response.status_code != 200:
+                logger.error(f"LinkedIn email error: {email_response.text}")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=email_failed&provider={provider}"
                 )
 
-                if email_response.status_code != 200:
-                    logger.error(f"LinkedIn email error: {email_response.text}")
-                    return RedirectResponse(
-                        url=f"{frontend_url}/oauth-error?error=email_failed&provider={provider}"
-                    )
+            # Log the full response for debugging
+            email_info = email_response.json()
+            logger.info(f"LinkedIn email data: {email_info}")
 
-                profile_info = profile_response.json()
-                email_info = email_response.json()
+            # Extract provider ID (should always be available)
+            provider_id = profile_info.get("id")
+            if not provider_id:
+                logger.error("LinkedIn profile missing ID field")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=no_id&provider={provider}"
+                )
 
-                provider_id = profile_info.get("id")
-
+            # Extract email
+            email = None
+            try:
                 if "elements" in email_info and email_info["elements"]:
                     email_element = email_info["elements"][0]
                     if (
@@ -223,17 +234,30 @@ async def auth_callback(
                         and "emailAddress" in email_element["handle~"]
                     ):
                         email = email_element["handle~"]["emailAddress"]
+            except Exception as e:
+                logger.error(f"Error extracting LinkedIn email: {str(e)}")
 
-                first_name = ""
-                if (
-                    "firstName" in profile_info
-                    and "localized" in profile_info["firstName"]
-                ):
+            if not email:
+                logger.error("Failed to extract email from LinkedIn response")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=no_email&provider={provider}"
+                )
+
+            # Extract name fields
+            first_name = ""
+            last_name = ""
+
+            # Newer LinkedIn API structure (check both possibilities)
+            if "localizedFirstName" in profile_info:
+                first_name = profile_info.get("localizedFirstName", "")
+                last_name = profile_info.get("localizedLastName", "")
+            # Older LinkedIn API structure
+            elif "firstName" in profile_info:
+                if "localized" in profile_info["firstName"]:
                     locales = list(profile_info["firstName"]["localized"].values())
                     if locales:
                         first_name = locales[0]
 
-                last_name = ""
                 if (
                     "lastName" in profile_info
                     and "localized" in profile_info["lastName"]
@@ -242,7 +266,10 @@ async def auth_callback(
                     if locales:
                         last_name = locales[0]
 
-                full_name = f"{first_name} {last_name}".strip()
+            full_name = f"{first_name} {last_name}".strip()
+            logger.info(
+                f"Extracted LinkedIn data - Name: '{full_name}', Email: '{email}', ID: '{provider_id}'"
+            )
 
         # Verify we have required user info
         if not email:
@@ -335,7 +362,7 @@ async def auth_callback(
     except Exception as e:
         logger.error(f"Exception in {provider} OAuth: {str(e)}")
         return RedirectResponse(
-            url=f"{frontend_url}/oauth-error?error={str(e)}&provider={provider}"
+            url=f"{frontend_url}/oauth-error?error=user_info_failed&provider={provider}"
         )
 
 
