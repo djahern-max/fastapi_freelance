@@ -565,7 +565,7 @@ async def auth_callback(
 # This endpoint specifically handles GitHub token exchange without state validation
 
 
-@router.post("/auth/github/token")
+@router.get("/auth/github/token")
 async def github_token(code: str, db: Session = Depends(database.get_db)):
     """
     Exchange GitHub authorization code for access token and user info
@@ -607,6 +607,9 @@ async def github_token(code: str, db: Session = Depends(database.get_db)):
             raise HTTPException(
                 status_code=400, detail="No access token received from GitHub"
             )
+
+        # Rest of the function remains the same as in the previous version...
+        # Get user data, create/update user, generate app token, etc.
 
         # Get user data
         headers = {
