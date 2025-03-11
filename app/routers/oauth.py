@@ -41,6 +41,15 @@ oauth.register(
     client_kwargs={"scope": "user:email"},
 )
 
+oauth.register(
+    name="linkedin",
+    client_id=os.getenv("LINKEDIN_CLIENT_ID"),
+    client_secret=os.getenv("LINKEDIN_CLIENT_SECRET"),
+    authorize_url="https://www.linkedin.com/oauth/v2/authorization",
+    access_token_url="https://www.linkedin.com/oauth/v2/accessToken",
+    client_kwargs={"scope": "openid profile email"},
+)
+
 
 @router.get("/auth/{provider}")
 async def login(provider: str, request: Request):
@@ -75,6 +84,9 @@ async def auth_callback(
     logger.info(f"Handling callback for {provider}")
     logger.info(f"Query params: {dict(request.query_params)}")
 
+    # Define frontend URL for redirects
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
     # Get state and code
     received_state = request.query_params.get("state")
     stored_state = request.session.get("oauth_state", None)
@@ -86,7 +98,7 @@ async def auth_callback(
     if error:
         logger.error(f"OAuth Error: {error}")
         return RedirectResponse(
-            url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/oauth-error?error={error}&provider={provider}"
+            url=f"{frontend_url}/oauth-error?error={error}&provider={provider}"
         )
 
     if received_state != stored_state:
@@ -94,13 +106,236 @@ async def auth_callback(
             f"CSRF Warning! State mismatch: received={received_state}, stored={stored_state}"
         )
         return RedirectResponse(
-            url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/oauth-error?error=state_mismatch&provider={provider}"
+            url=f"{frontend_url}/oauth-error?error=state_mismatch&provider={provider}"
         )
 
     if not code:
         logger.error("Missing authorization code")
         return RedirectResponse(
-            url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/oauth-error?error=missing_code&provider={provider}"
+            url=f"{frontend_url}/oauth-error?error=missing_code&provider={provider}"
+        )
+
+    try:
+        # Exchange code for token
+        token = await oauth.create_client(provider).authorize_access_token(request)
+
+        # Get user info based on provider
+        user_info = None
+        email = None
+        provider_id = None
+        full_name = ""
+
+        if provider == "google":
+            user_info = token.get("userinfo", {})
+            email = user_info.get("email")
+            provider_id = user_info.get("sub")
+            full_name = user_info.get("name", "")
+
+        elif provider == "github":
+            # Get user data from GitHub
+            access_token = token.get("access_token")
+            headers = {
+                "Authorization": f"token {access_token}",
+                "Accept": "application/json",
+            }
+
+            # Get user profile
+            user_response = requests.get("https://api.github.com/user", headers=headers)
+            if user_response.status_code != 200:
+                logger.error(f"GitHub user info error: {user_response.text}")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=profile_failed&provider={provider}"
+                )
+
+            user_info = user_response.json()
+            provider_id = user_info.get("id")
+            full_name = user_info.get("name", "")
+
+            # Get user email
+            email_response = requests.get(
+                "https://api.github.com/user/emails", headers=headers
+            )
+            if email_response.status_code != 200:
+                logger.error(f"GitHub email error: {email_response.text}")
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=email_failed&provider={provider}"
+                )
+
+            emails = email_response.json()
+            for email_obj in emails:
+                if email_obj.get("primary") and email_obj.get("verified"):
+                    email = email_obj.get("email")
+                    break
+
+        elif provider == "linkedin":
+            # Get user data from LinkedIn
+            access_token = token.get("access_token")
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "X-Restli-Protocol-Version": "2.0.0",
+            }
+
+            # Try OpenID Connect userinfo endpoint
+            user_response = requests.get(
+                "https://api.linkedin.com/v2/userinfo", headers=headers
+            )
+
+            if user_response.status_code == 200:
+                user_info = user_response.json()
+                email = user_info.get("email")
+                provider_id = user_info.get("sub")
+                first_name = user_info.get("given_name", "")
+                last_name = user_info.get("family_name", "")
+                full_name = f"{first_name} {last_name}".strip()
+            else:
+                # Fall back to profile API
+                profile_response = requests.get(
+                    "https://api.linkedin.com/v2/me?projection=(id,firstName,lastName)",
+                    headers=headers,
+                )
+
+                if profile_response.status_code != 200:
+                    logger.error(f"LinkedIn profile error: {profile_response.text}")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=profile_failed&provider={provider}"
+                    )
+
+                email_response = requests.get(
+                    "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
+                    headers=headers,
+                )
+
+                if email_response.status_code != 200:
+                    logger.error(f"LinkedIn email error: {email_response.text}")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=email_failed&provider={provider}"
+                    )
+
+                profile_info = profile_response.json()
+                email_info = email_response.json()
+
+                provider_id = profile_info.get("id")
+
+                if "elements" in email_info and email_info["elements"]:
+                    email_element = email_info["elements"][0]
+                    if (
+                        "handle~" in email_element
+                        and "emailAddress" in email_element["handle~"]
+                    ):
+                        email = email_element["handle~"]["emailAddress"]
+
+                first_name = ""
+                if (
+                    "firstName" in profile_info
+                    and "localized" in profile_info["firstName"]
+                ):
+                    locales = list(profile_info["firstName"]["localized"].values())
+                    if locales:
+                        first_name = locales[0]
+
+                last_name = ""
+                if (
+                    "lastName" in profile_info
+                    and "localized" in profile_info["lastName"]
+                ):
+                    locales = list(profile_info["lastName"]["localized"].values())
+                    if locales:
+                        last_name = locales[0]
+
+                full_name = f"{first_name} {last_name}".strip()
+
+        # Verify we have required user info
+        if not email:
+            logger.error(f"Could not get email from {provider}")
+            return RedirectResponse(
+                url=f"{frontend_url}/oauth-error?error=no_email&provider={provider}"
+            )
+
+        if not provider_id:
+            logger.error(f"Could not get ID from {provider}")
+            return RedirectResponse(
+                url=f"{frontend_url}/oauth-error?error=no_id&provider={provider}"
+            )
+
+        # Check if user exists
+        user = db.query(models.User).filter(models.User.email == email).first()
+        is_new_user = False
+
+        if not user:
+            is_new_user = True
+            logger.info(f"Creating new user for {provider} email: {email}")
+
+            # Generate username
+            username = email.split("@")[0]
+            base_username = username
+
+            # Ensure username is unique
+            counter = 1
+            while (
+                db.query(models.User).filter(models.User.username == username).first()
+            ):
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            try:
+                # Create new user
+                new_user = models.User(
+                    email=email,
+                    username=username,
+                    full_name=full_name,
+                    password="",  # No password for OAuth users
+                    is_active=True,
+                    needs_role_selection=True,
+                    terms_accepted=True,  # Assume terms accepted for OAuth
+                )
+
+                # Set the provider-specific ID
+                if provider == "google":
+                    new_user.google_id = str(provider_id)
+                elif provider == "github":
+                    new_user.github_id = str(provider_id)
+                elif provider == "linkedin":
+                    new_user.linkedin_id = str(provider_id)
+
+                db.add(new_user)
+                db.commit()
+                db.refresh(new_user)
+                user = new_user
+
+            except Exception as e:
+                logger.error(f"Error creating {provider} user: {str(e)}")
+                db.rollback()
+                return RedirectResponse(
+                    url=f"{frontend_url}/oauth-error?error=user_creation_failed&provider={provider}"
+                )
+        else:
+            # Update provider ID if not set
+            if provider == "google" and not user.google_id:
+                user.google_id = str(provider_id)
+                db.commit()
+            elif provider == "github" and not user.github_id:
+                user.github_id = str(provider_id)
+                db.commit()
+            elif provider == "linkedin" and not user.linkedin_id:
+                user.linkedin_id = str(provider_id)
+                db.commit()
+
+        # Create app access token
+        app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
+
+        # Determine redirect based on role selection
+        if user.needs_role_selection:
+            redirect_url = f"{frontend_url}/select-role?token={app_access_token}"
+        else:
+            redirect_url = f"{frontend_url}/oauth-success?token={app_access_token}"
+
+        logger.info(f"{provider} login successful. Redirecting to: {redirect_url}")
+        return RedirectResponse(url=redirect_url)
+
+    except Exception as e:
+        logger.error(f"Exception in {provider} OAuth: {str(e)}")
+        return RedirectResponse(
+            url=f"{frontend_url}/oauth-error?error={str(e)}&provider={provider}"
         )
 
 

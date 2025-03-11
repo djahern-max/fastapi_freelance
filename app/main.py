@@ -30,7 +30,6 @@ from starlette.types import ASGIApp
 import logging
 import sys
 from app.routers import oauth
-from app.routers import linkedin_oauth
 from starlette.middleware.sessions import SessionMiddleware
 
 
@@ -136,7 +135,6 @@ for router, prefix in routers_with_prefixes:
 # Include OAuth router
 app.include_router(oauth.router, prefix="/api")
 # Add this line to include the LinkedIn OAuth router
-app.include_router(linkedin_oauth.router, prefix="/api")
 
 
 @app.get("/routes")
