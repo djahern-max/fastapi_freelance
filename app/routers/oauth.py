@@ -425,41 +425,34 @@ async def auth_callback(
             }
 
             # Get profile data
-            user_response = requests.get(
-                "https://api.linkedin.com/v2/me",
-                headers=headers,
-                params={"projection": "(id,firstName,lastName,profilePicture)"},
+
+        # Get profile and email data in one request using the userinfo endpoint
+        user_response = requests.get(
+            "https://api.linkedin.com/v2/userinfo", headers=headers
+        )
+        if user_response.status_code != 200:
+            logger.error(f"LinkedIn user info error: {user_response.text}")
+            return RedirectResponse(
+                url=f"{frontend_url}/oauth-error?error=user_info_failed&provider={provider}"
             )
-            if user_response.status_code != 200:
-                logger.error(f"LinkedIn user info error: {user_response.text}")
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=user_info_failed&provider={provider}"
-                )
 
-            user_info = user_response.json()
+        user_info = user_response.json()
+        logger.info(f"LinkedIn user info: {user_info}")
 
-            # Get email address
-            email_response = requests.get(
-                "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
-                headers=headers,
+        # Extract email directly from userinfo response
+        email = user_info.get("email")
+        if not email:
+            logger.error(f"Could not get email from LinkedIn userinfo response")
+            return RedirectResponse(
+                url=f"{frontend_url}/oauth-error?error=no_email&provider={provider}"
             )
-            if email_response.status_code != 200:
-                logger.error(f"LinkedIn email error: {email_response.text}")
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=email_fetch_failed&provider={provider}"
-                )
 
-            email_data = email_response.json()
-
-            # Extract email from LinkedIn's nested response format
-            email = None
-            if "elements" in email_data and len(email_data["elements"]) > 0:
-                email_element = email_data["elements"][0]
-                if (
-                    "handle~" in email_element
-                    and "emailAddress" in email_element["handle~"]
-                ):
-                    email = email_element["handle~"]["emailAddress"]
+        # Extract name - the format is simpler in userinfo response
+        first_name = user_info.get("given_name", "")
+        last_name = user_info.get("family_name", "")
+        full_name = f"{first_name} {last_name}".strip()
+        if not full_name:
+            full_name = user_info.get("name", "")
 
             if not email:
                 logger.error("Could not get email from LinkedIn")
