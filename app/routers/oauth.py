@@ -559,3 +559,165 @@ async def auth_callback(
         return RedirectResponse(
             url=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/oauth-error?error={str(e)}&provider={provider}"
         )
+
+
+# Add this new endpoint to your existing oauth.py file
+# This endpoint specifically handles GitHub token exchange without state validation
+
+
+@router.post("/auth/github/token")
+async def github_token(code: str, db: Session = Depends(database.get_db)):
+    """
+    Exchange GitHub authorization code for access token and user info
+    This endpoint is designed for client-side OAuth flow where the state parameter
+    is handled by the frontend.
+    """
+    logger.info(f"GitHub token exchange initiated with code")
+
+    try:
+        # Define frontend URL
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+        # Exchange code for token
+        token_data = {
+            "client_id": os.getenv("GITHUB_CLIENT_ID"),
+            "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
+            "code": code,
+        }
+
+        # Exchange code for token
+        token_response = requests.post(
+            "https://github.com/login/oauth/access_token",
+            data=token_data,
+            headers={"Accept": "application/json"},
+        )
+
+        if token_response.status_code != 200:
+            logger.error(f"GitHub token error: {token_response.text}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to exchange GitHub code: {token_response.text}",
+            )
+
+        token_json = token_response.json()
+        access_token = token_json.get("access_token")
+
+        if not access_token:
+            logger.error("No access token in GitHub response")
+            raise HTTPException(
+                status_code=400, detail="No access token received from GitHub"
+            )
+
+        # Get user data
+        headers = {
+            "Authorization": f"token {access_token}",
+            "Accept": "application/json",
+        }
+
+        # Get user profile
+        user_response = requests.get("https://api.github.com/user", headers=headers)
+        if user_response.status_code != 200:
+            logger.error(f"GitHub user info error: {user_response.text}")
+            raise HTTPException(
+                status_code=400, detail="Failed to get user info from GitHub"
+            )
+
+        user_info = user_response.json()
+
+        # Get user email (might be private)
+        email_response = requests.get(
+            "https://api.github.com/user/emails", headers=headers
+        )
+        if email_response.status_code != 200:
+            logger.error(f"GitHub email error: {email_response.text}")
+            raise HTTPException(
+                status_code=400, detail="Failed to get email from GitHub"
+            )
+
+        emails = email_response.json()
+
+        # Find primary email
+        email = None
+        for email_obj in emails:
+            if email_obj.get("primary") and email_obj.get("verified"):
+                email = email_obj.get("email")
+                break
+
+        if not email:
+            logger.error("No verified primary email found")
+            raise HTTPException(
+                status_code=400, detail="No verified email found on GitHub account"
+            )
+
+        # Check if user exists
+        user = db.query(models.User).filter(models.User.email == email).first()
+        is_new_user = False
+
+        if not user:
+            is_new_user = True
+            logger.info(f"Creating new user for GitHub email: {email}")
+
+            # Generate username
+            username = user_info.get("login") or email.split("@")[0]
+            base_username = username
+
+            # Check if username exists
+            counter = 1
+            while (
+                db.query(models.User).filter(models.User.username == username).first()
+            ):
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            try:
+                new_user = models.User(
+                    email=email,
+                    username=username,
+                    full_name=user_info.get("name", ""),
+                    password="",  # No password for OAuth users
+                    github_id=str(user_info.get("id")),
+                    needs_role_selection=True,
+                    is_active=True,
+                    terms_accepted=True,  # Assume terms accepted for OAuth
+                )
+
+                db.add(new_user)
+                db.commit()
+                db.refresh(new_user)
+                user = new_user
+
+            except Exception as e:
+                logger.error(f"Error creating GitHub user: {str(e)}")
+                db.rollback()
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to create user: {str(e)}"
+                )
+        else:
+            # Update GitHub ID if not set
+            if not user.github_id:
+                user.github_id = str(user_info.get("id"))
+                db.commit()
+
+        # Create access token
+        app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
+
+        # Return user data and token
+        return {
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+                "user_type": user.user_type,
+                "created_at": user.created_at,
+                "needs_role_selection": user.needs_role_selection,
+            },
+            "provider_id": user_info.get("id"),
+            "access_token": app_access_token,
+            "token_type": "bearer",
+        }
+
+    except Exception as e:
+        logger.error(f"Exception in GitHub OAuth token exchange: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"OAuth error: {str(e)}")
