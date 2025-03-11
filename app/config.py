@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
-
     # Digital Ocean Spaces configuration
     spaces_name: str
     spaces_region: str
@@ -21,13 +20,14 @@ class Settings(BaseSettings):
     spaces_bucket: str
     spaces_key: str
     spaces_secret: str
-
     # Add Stripe configuration
     stripe_secret_key: str
     stripe_public_key: str
     stripe_webhook_secret: str
     stripe_price_id: str
     frontend_url: str
+    # Add local video upload directory with a default value
+    local_video_upload_dir: Optional[str] = "/home/dane/app/uploads/videos"
 
     class Config:
         env_file = os.getenv("ENV_FILE", ".env")
