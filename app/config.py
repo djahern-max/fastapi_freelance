@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 import os
 from typing import Optional
+import tempfile
 
 
 class Settings(BaseSettings):
@@ -26,8 +27,8 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str
     stripe_price_id: str
     frontend_url: str
-    # Add local video upload directory with a default value
-    local_video_upload_dir: Optional[str] = "/home/dane/app/uploads/videos"
+    # Add local video upload directory with a temporary directory
+    local_video_upload_dir: Optional[str] = tempfile.gettempdir()
 
     class Config:
         env_file = os.getenv("ENV_FILE", ".env")
