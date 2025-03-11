@@ -486,3 +486,8 @@ async def linkedin_token_exchange(
     except Exception as e:
         logger.error(f"Exception in LinkedIn token exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=f"LinkedIn OAuth error: {str(e)}")
+
+
+@router.get("/auth/linkedin-test")
+async def linkedin_test():
+    return {"message": "LinkedIn OAuth route is working"}
