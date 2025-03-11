@@ -180,96 +180,137 @@ async def auth_callback(
                 "Content-Type": "application/json",
             }
 
-            # Step 1: Get basic profile data
-            profile_url = "https://api.linkedin.com/v2/me"
-            logger.info(f"Requesting LinkedIn profile from: {profile_url}")
+            # Try OpenID Connect userinfo endpoint first
+            userinfo_url = "https://api.linkedin.com/v2/userinfo"
+            logger.info(f"Requesting LinkedIn userinfo from: {userinfo_url}")
 
-            profile_response = requests.get(profile_url, headers=headers)
+            userinfo_response = requests.get(userinfo_url, headers=headers)
             logger.info(
-                f"LinkedIn profile response status: {profile_response.status_code}"
+                f"LinkedIn userinfo response status: {userinfo_response.status_code}"
             )
+            logger.info(f"LinkedIn userinfo response: {userinfo_response.text}")
 
-            if profile_response.status_code != 200:
-                logger.error(f"LinkedIn profile error: {profile_response.text}")
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=profile_failed&provider={provider}"
+            # If userinfo endpoint works, use it
+            if userinfo_response.status_code == 200:
+                user_info = userinfo_response.json()
+                logger.info(f"LinkedIn userinfo data: {user_info}")
+
+                # Extract data from OpenID userinfo response
+                email = user_info.get("email")
+                provider_id = user_info.get("sub")
+                full_name = user_info.get("name", "")
+                first_name = user_info.get("given_name", "")
+                last_name = user_info.get("family_name", "")
+
+                # If we got what we needed, skip the other API calls
+                if email and provider_id:
+                    logger.info("Successfully retrieved user info from OpenID endpoint")
+                    # Full name fallback if needed
+                    if not full_name and first_name and last_name:
+                        full_name = f"{first_name} {last_name}".strip()
+                else:
+                    logger.info(
+                        "OpenID endpoint missing email or ID, falling back to API"
+                    )
+                    # Fall back to API endpoints
+
+            else:
+                logger.info("OpenID endpoint failed, falling back to API")
+
+            # If OpenID didn't provide what we need, use the API endpoints
+            if not (userinfo_response.status_code == 200 and email and provider_id):
+                # Step 1: Get basic profile data
+                profile_url = "https://api.linkedin.com/v2/me"
+                logger.info(f"Requesting LinkedIn profile from: {profile_url}")
+
+                profile_response = requests.get(profile_url, headers=headers)
+                logger.info(
+                    f"LinkedIn profile response status: {profile_response.status_code}"
                 )
 
-            # Log the full response for debugging
-            profile_info = profile_response.json()
-            logger.info(f"LinkedIn profile data: {profile_info}")
+                if profile_response.status_code != 200:
+                    logger.error(f"LinkedIn profile error: {profile_response.text}")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=profile_failed&provider={provider}"
+                    )
 
-            # Step 2: Get email address
-            email_url = "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))"
-            logger.info(f"Requesting LinkedIn email from: {email_url}")
+                # Log the full response for debugging
+                profile_info = profile_response.json()
+                logger.info(f"LinkedIn profile data: {profile_info}")
 
-            email_response = requests.get(email_url, headers=headers)
-            logger.info(f"LinkedIn email response status: {email_response.status_code}")
+                # Step 2: Get email address
+                email_url = "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))"
+                logger.info(f"Requesting LinkedIn email from: {email_url}")
 
-            if email_response.status_code != 200:
-                logger.error(f"LinkedIn email error: {email_response.text}")
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=email_failed&provider={provider}"
+                email_response = requests.get(email_url, headers=headers)
+                logger.info(
+                    f"LinkedIn email response status: {email_response.status_code}"
                 )
 
-            # Log the full response for debugging
-            email_info = email_response.json()
-            logger.info(f"LinkedIn email data: {email_info}")
+                if email_response.status_code != 200:
+                    logger.error(f"LinkedIn email error: {email_response.text}")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=email_failed&provider={provider}"
+                    )
 
-            # Extract provider ID (should always be available)
-            provider_id = profile_info.get("id")
-            if not provider_id:
-                logger.error("LinkedIn profile missing ID field")
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=no_id&provider={provider}"
-                )
+                # Log the full response for debugging
+                email_info = email_response.json()
+                logger.info(f"LinkedIn email data: {email_info}")
 
-            # Extract email
-            email = None
-            try:
-                if "elements" in email_info and email_info["elements"]:
-                    email_element = email_info["elements"][0]
+                # Extract provider ID (should always be available)
+                provider_id = profile_info.get("id")
+                if not provider_id:
+                    logger.error("LinkedIn profile missing ID field")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=no_id&provider={provider}"
+                    )
+
+                # Extract email
+                email = None
+                try:
+                    if "elements" in email_info and email_info["elements"]:
+                        email_element = email_info["elements"][0]
+                        if (
+                            "handle~" in email_element
+                            and "emailAddress" in email_element["handle~"]
+                        ):
+                            email = email_element["handle~"]["emailAddress"]
+                except Exception as e:
+                    logger.error(f"Error extracting LinkedIn email: {str(e)}")
+
+                if not email:
+                    logger.error("Failed to extract email from LinkedIn response")
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=no_email&provider={provider}"
+                    )
+
+                # Extract name fields
+                first_name = ""
+                last_name = ""
+
+                # Newer LinkedIn API structure (check both possibilities)
+                if "localizedFirstName" in profile_info:
+                    first_name = profile_info.get("localizedFirstName", "")
+                    last_name = profile_info.get("localizedLastName", "")
+                # Older LinkedIn API structure
+                elif "firstName" in profile_info:
+                    if "localized" in profile_info["firstName"]:
+                        locales = list(profile_info["firstName"]["localized"].values())
+                        if locales:
+                            first_name = locales[0]
+
                     if (
-                        "handle~" in email_element
-                        and "emailAddress" in email_element["handle~"]
+                        "lastName" in profile_info
+                        and "localized" in profile_info["lastName"]
                     ):
-                        email = email_element["handle~"]["emailAddress"]
-            except Exception as e:
-                logger.error(f"Error extracting LinkedIn email: {str(e)}")
+                        locales = list(profile_info["lastName"]["localized"].values())
+                        if locales:
+                            last_name = locales[0]
 
-            if not email:
-                logger.error("Failed to extract email from LinkedIn response")
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=no_email&provider={provider}"
+                full_name = f"{first_name} {last_name}".strip()
+                logger.info(
+                    f"Extracted LinkedIn data - Name: '{full_name}', Email: '{email}', ID: '{provider_id}'"
                 )
-
-            # Extract name fields
-            first_name = ""
-            last_name = ""
-
-            # Newer LinkedIn API structure (check both possibilities)
-            if "localizedFirstName" in profile_info:
-                first_name = profile_info.get("localizedFirstName", "")
-                last_name = profile_info.get("localizedLastName", "")
-            # Older LinkedIn API structure
-            elif "firstName" in profile_info:
-                if "localized" in profile_info["firstName"]:
-                    locales = list(profile_info["firstName"]["localized"].values())
-                    if locales:
-                        first_name = locales[0]
-
-                if (
-                    "lastName" in profile_info
-                    and "localized" in profile_info["lastName"]
-                ):
-                    locales = list(profile_info["lastName"]["localized"].values())
-                    if locales:
-                        last_name = locales[0]
-
-            full_name = f"{first_name} {last_name}".strip()
-            logger.info(
-                f"Extracted LinkedIn data - Name: '{full_name}', Email: '{email}', ID: '{provider_id}'"
-            )
 
         # Verify we have required user info
         if not email:
