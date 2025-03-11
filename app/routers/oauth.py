@@ -86,6 +86,12 @@ async def login(provider: str, request: Request):
 async def auth_callback(
     provider: str, request: Request, db: Session = Depends(database.get_db)
 ):
+
+    try:
+        debug_log(f"Auth callback started for provider: {provider}")
+    except Exception as e:
+        logger.error(f"Debug logging failed: {str(e)}")
+
     """Handle OAuth callback and validate state"""
     # Log incoming request for debugging
     logger.info(f"Handling callback for {provider}")
