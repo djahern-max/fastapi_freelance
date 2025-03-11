@@ -491,3 +491,11 @@ async def linkedin_token_exchange(
 @router.get("/auth/linkedin-test")
 async def linkedin_test():
     return {"message": "LinkedIn OAuth route is working"}
+
+
+@router.get("/auth/linkedin-env-test")
+async def env_test():
+    return {
+        "LINKEDIN_CLIENT_ID": os.getenv("LINKEDIN_CLIENT_ID") is not None,
+        "LINKEDIN_CLIENT_SECRET": os.getenv("LINKEDIN_CLIENT_SECRET") is not None,
+    }
