@@ -11,7 +11,7 @@ import logging
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-
+import datetime
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 oauth = OAuth()
+
+
+# Add this function at the top of your file
+def debug_log(message):
+    with open("/home/dane/linkedin_debug.log", "a") as f:
+        f.write(f"{datetime.datetime.now()}: {message}\n")
+
 
 # Register OAuth providers
 oauth.register(
@@ -168,8 +175,10 @@ async def auth_callback(
                     break
 
         elif provider == "linkedin":
+            debug_log("Starting LinkedIn OAuth flow")
             # Get user data from LinkedIn
             access_token = token.get("access_token")
+            debug_log(f"LinkedIn access token: {access_token[:10]}...")
             logger.info(
                 f"LinkedIn access token obtained: {access_token[:10]}... (truncated)"
             )
@@ -185,6 +194,9 @@ async def auth_callback(
             logger.info(f"Requesting LinkedIn userinfo from: {userinfo_url}")
 
             userinfo_response = requests.get(userinfo_url, headers=headers)
+            debug_log(
+                f"LinkedIn userinfo response: {userinfo_response.status_code} - {userinfo_response.text}"
+            )
             logger.info(
                 f"LinkedIn userinfo response status: {userinfo_response.status_code}"
             )
