@@ -116,6 +116,7 @@ class UserOut(UserBasicInfo):
     is_active: bool
     user_type: UserType
     created_at: datetime
+    needs_role_selection: Optional[bool] = False
     google_id: Optional[str] = None
     github_id: Optional[str] = None
     linkedin_id: Optional[str] = None

@@ -6,6 +6,7 @@ from app import database, models, utils, schemas, oauth2
 from app.models import User
 from app.oauth2 import get_current_user
 from app.database import get_db
+from typing import Optional
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -105,6 +106,11 @@ def get_me(
             current_user.needs_role_selection = True
             db.commit()
 
+        # Add additional debugging for OAuth IDs
+        print(
+            f"DEBUG: OAuth IDs - Google: {current_user.google_id}, GitHub: {current_user.github_id}, LinkedIn: {current_user.linkedin_id}"
+        )
+
         return current_user
     except Exception as e:
         print(f"DEBUG: Error in /me endpoint: {str(e)}")
@@ -166,3 +172,30 @@ def select_user_role(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update user role: {str(e)}",
         )
+
+
+@router.get("/get-user", response_model=schemas.UserOut)
+def get_user_by_oauth(
+    google_id: Optional[str] = None,
+    github_id: Optional[str] = None,
+    linkedin_id: Optional[str] = None,
+    db: Session = Depends(database.get_db),
+):
+    """Fetch user by OAuth provider ID"""
+    user = None
+
+    if google_id:
+        user = db.query(models.User).filter(models.User.google_id == google_id).first()
+    elif github_id:
+        user = db.query(models.User).filter(models.User.github_id == github_id).first()
+    elif linkedin_id:
+        user = (
+            db.query(models.User).filter(models.User.linkedin_id == linkedin_id).first()
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    return user
