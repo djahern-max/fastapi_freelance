@@ -7,6 +7,8 @@ from sqlalchemy import or_
 from ..middleware import require_active_subscription
 from ..database import get_db
 from fastapi import status
+from sqlalchemy.sql import func
+from typing import Dict
 
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
@@ -319,6 +321,27 @@ def list_user_conversations(
             "request_title": request.title if request else "Unknown Request",
         }
         result.append(conv_data)
+
+    return result
+
+
+@router.get("/request/conversation-counts", response_model=Dict[int, int])
+def get_conversation_counts(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    # Query to get counts of conversations grouped by request_id
+    conversation_counts = (
+        db.query(
+            models.Conversation.request_id,
+            func.count(models.Conversation.id).label("count"),
+        )
+        .group_by(models.Conversation.request_id)
+        .all()
+    )
+
+    # Convert to dictionary format {request_id: count}
+    result = {conv.request_id: conv.count for conv in conversation_counts}
 
     return result
 
