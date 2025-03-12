@@ -152,6 +152,8 @@ class User(Base):
         "Donation", back_populates="user", cascade="all, delete-orphan"
     )
 
+    oauth_connections = relationship("OAuthConnection", back_populates="user")
+
 
 # ------------------ OAuth ------------------
 
@@ -169,6 +171,21 @@ class UserToken(Base):
     expires_at = Column(DateTime, nullable=True)  # Expiration timestamp
 
     user = relationship("User", backref="tokens")
+
+
+class OAuthConnection(Base):
+    __tablename__ = "oauth_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    provider = Column(String)  # "google", "github", "linkedin"
+    provider_user_id = Column(String)  # ID from the provider
+    access_token = Column(String, nullable=True)
+    refresh_token = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="oauth_connections")
 
 
 # ------------------ Video Model ------------------

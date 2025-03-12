@@ -86,7 +86,6 @@ async def login(provider: str, request: Request):
 async def auth_callback(
     provider: str, request: Request, db: Session = Depends(database.get_db)
 ):
-
     try:
         debug_log(f"Auth callback started for provider: {provider}")
     except Exception as e:
@@ -378,68 +377,136 @@ async def auth_callback(
                 url=f"{frontend_url}/oauth-error?error=no_id&provider={provider}"
             )
 
-        # Check if user exists
-        user = db.query(models.User).filter(models.User.email == email).first()
-        is_new_user = False
+        # Check if an existing OAuth connection exists for this provider/ID
+        existing_connection = (
+            db.query(models.OAuthConnection)
+            .filter(
+                models.OAuthConnection.provider == provider,
+                models.OAuthConnection.provider_user_id == str(provider_id),
+            )
+            .first()
+        )
 
-        if not user:
-            is_new_user = True
-            logger.info(f"Creating new user for {provider} email: {email}")
+        # User has logged in with this provider before
+        if existing_connection:
+            user = existing_connection.user
+            logger.info(
+                f"Recognized existing {provider} connection for user {user.email}"
+            )
 
-            # Generate username
-            username = email.split("@")[0]
-            base_username = username
+            # Update the access token
+            existing_connection.access_token = token.get("access_token")
+            if token.get("refresh_token"):
+                existing_connection.refresh_token = token.get("refresh_token")
+            if token.get("expires_at") or token.get("expires_in"):
+                # Calculate expiration if available
+                expires_in = token.get("expires_in")
+                if expires_in:
+                    expires_at = datetime.datetime.utcnow() + datetime.timedelta(
+                        seconds=int(expires_in)
+                    )
+                    existing_connection.expires_at = expires_at
 
-            # Ensure username is unique
-            counter = 1
-            while (
-                db.query(models.User).filter(models.User.username == username).first()
-            ):
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            try:
-                # Create new user
-                new_user = models.User(
-                    email=email,
-                    username=username,
-                    full_name=full_name,
-                    password="",  # No password for OAuth users
-                    is_active=True,
-                    needs_role_selection=True,
-                    terms_accepted=True,  # Assume terms accepted for OAuth
-                )
-
-                # Set the provider-specific ID
-                if provider == "google":
-                    new_user.google_id = str(provider_id)
-                elif provider == "github":
-                    new_user.github_id = str(provider_id)
-                elif provider == "linkedin":
-                    new_user.linkedin_id = str(provider_id)
-
-                db.add(new_user)
-                db.commit()
-                db.refresh(new_user)
-                user = new_user
-
-            except Exception as e:
-                logger.error(f"Error creating {provider} user: {str(e)}")
-                db.rollback()
-                return RedirectResponse(
-                    url=f"{frontend_url}/oauth-error?error=user_creation_failed&provider={provider}"
-                )
+            db.commit()
         else:
-            # Update provider ID if not set
-            if provider == "google" and not user.google_id:
-                user.google_id = str(provider_id)
+            # Check if user exists by email
+            user = db.query(models.User).filter(models.User.email == email).first()
+
+            if user:
+                # User exists but hasn't used this provider before - link accounts
+                logger.info(f"Linking {provider} account to existing user {user.email}")
+
+                new_connection = models.OAuthConnection(
+                    user_id=user.id,
+                    provider=provider,
+                    provider_user_id=str(provider_id),
+                    access_token=token.get("access_token"),
+                    refresh_token=token.get("refresh_token"),
+                )
+
+                # Calculate expiration if available
+                expires_in = token.get("expires_in")
+                if expires_in:
+                    expires_at = datetime.datetime.utcnow() + datetime.timedelta(
+                        seconds=int(expires_in)
+                    )
+                    new_connection.expires_at = expires_at
+
+                db.add(new_connection)
                 db.commit()
-            elif provider == "github" and not user.github_id:
-                user.github_id = str(provider_id)
-                db.commit()
-            elif provider == "linkedin" and not user.linkedin_id:
-                user.linkedin_id = str(provider_id)
-                db.commit()
+
+                # Also update legacy field for backward compatibility
+                update_legacy_provider_id(db, user, provider, provider_id)
+            else:
+                # New user - create user account and OAuth connection
+                is_new_user = True
+                logger.info(f"Creating new user for {provider} email: {email}")
+
+                # Generate username
+                username = email.split("@")[0]
+                base_username = username
+
+                # Ensure username is unique
+                counter = 1
+                while (
+                    db.query(models.User)
+                    .filter(models.User.username == username)
+                    .first()
+                ):
+                    username = f"{base_username}{counter}"
+                    counter += 1
+
+                try:
+                    # Create new user
+                    new_user = models.User(
+                        email=email,
+                        username=username,
+                        full_name=full_name,
+                        password="",  # No password for OAuth users
+                        is_active=True,
+                        needs_role_selection=True,
+                        terms_accepted=True,  # Assume terms accepted for OAuth
+                    )
+
+                    # Set legacy provider ID for backward compatibility
+                    if provider == "google":
+                        new_user.google_id = str(provider_id)
+                    elif provider == "github":
+                        new_user.github_id = str(provider_id)
+                    elif provider == "linkedin":
+                        new_user.linkedin_id = str(provider_id)
+
+                    db.add(new_user)
+                    db.flush()  # Get the ID without full commit
+
+                    # Create OAuth connection
+                    new_connection = models.OAuthConnection(
+                        user_id=new_user.id,
+                        provider=provider,
+                        provider_user_id=str(provider_id),
+                        access_token=token.get("access_token"),
+                        refresh_token=token.get("refresh_token"),
+                    )
+
+                    # Calculate expiration if available
+                    expires_in = token.get("expires_in")
+                    if expires_in:
+                        expires_at = datetime.datetime.utcnow() + datetime.timedelta(
+                            seconds=int(expires_in)
+                        )
+                        new_connection.expires_at = expires_at
+
+                    db.add(new_connection)
+                    db.commit()
+                    db.refresh(new_user)
+                    user = new_user
+
+                except Exception as e:
+                    logger.error(f"Error creating {provider} user: {str(e)}")
+                    db.rollback()
+                    return RedirectResponse(
+                        url=f"{frontend_url}/oauth-error?error=user_creation_failed&provider={provider}"
+                    )
 
         # Create app access token
         app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
@@ -458,6 +525,23 @@ async def auth_callback(
         return RedirectResponse(
             url=f"{frontend_url}/oauth-error?error=user_info_failed&provider={provider}"
         )
+
+
+# Helper function to update legacy provider ID fields
+def update_legacy_provider_id(db, user, provider, provider_id):
+    """Updates the legacy provider ID fields for backward compatibility"""
+    try:
+        if provider == "google" and not user.google_id:
+            user.google_id = str(provider_id)
+            db.commit()
+        elif provider == "github" and not user.github_id:
+            user.github_id = str(provider_id)
+            db.commit()
+        elif provider == "linkedin" and not user.linkedin_id:
+            user.linkedin_id = str(provider_id)
+            db.commit()
+    except Exception as e:
+        logger.error(f"Error updating legacy provider ID: {str(e)}")
 
 
 @router.get("/auth/github/token")
@@ -503,9 +587,6 @@ async def github_token(code: str, db: Session = Depends(database.get_db)):
                 status_code=400, detail="No access token received from GitHub"
             )
 
-        # Rest of the function remains the same as in the previous version...
-        # Get user data, create/update user, generate app token, etc.
-
         # Get user data
         headers = {
             "Authorization": f"token {access_token}",
@@ -521,6 +602,7 @@ async def github_token(code: str, db: Session = Depends(database.get_db)):
             )
 
         user_info = user_response.json()
+        provider_id = str(user_info.get("id"))
 
         # Get user email (might be private)
         email_response = requests.get(
@@ -547,54 +629,100 @@ async def github_token(code: str, db: Session = Depends(database.get_db)):
                 status_code=400, detail="No verified email found on GitHub account"
             )
 
-        # Check if user exists
-        user = db.query(models.User).filter(models.User.email == email).first()
-        is_new_user = False
+        # Check if this OAuth connection already exists
+        existing_connection = (
+            db.query(models.OAuthConnection)
+            .filter(
+                models.OAuthConnection.provider == "github",
+                models.OAuthConnection.provider_user_id == provider_id,
+            )
+            .first()
+        )
 
-        if not user:
-            is_new_user = True
-            logger.info(f"Creating new user for GitHub email: {email}")
+        if existing_connection:
+            # User has logged in with GitHub before
+            user = existing_connection.user
+            logger.info(f"Recognized existing GitHub connection for user {user.email}")
 
-            # Generate username
-            username = user_info.get("login") or email.split("@")[0]
-            base_username = username
-
-            # Check if username exists
-            counter = 1
-            while (
-                db.query(models.User).filter(models.User.username == username).first()
-            ):
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            try:
-                new_user = models.User(
-                    email=email,
-                    username=username,
-                    full_name=user_info.get("name", ""),
-                    password="",  # No password for OAuth users
-                    github_id=str(user_info.get("id")),
-                    needs_role_selection=True,
-                    is_active=True,
-                    terms_accepted=True,  # Assume terms accepted for OAuth
-                )
-
-                db.add(new_user)
-                db.commit()
-                db.refresh(new_user)
-                user = new_user
-
-            except Exception as e:
-                logger.error(f"Error creating GitHub user: {str(e)}")
-                db.rollback()
-                raise HTTPException(
-                    status_code=500, detail=f"Failed to create user: {str(e)}"
-                )
+            # Update the access token
+            existing_connection.access_token = access_token
+            db.commit()
         else:
-            # Update GitHub ID if not set
-            if not user.github_id:
-                user.github_id = str(user_info.get("id"))
+            # Check if user exists by email
+            user = db.query(models.User).filter(models.User.email == email).first()
+
+            if user:
+                # User exists but hasn't used GitHub before - link accounts
+                logger.info(f"Linking GitHub account to existing user {user.email}")
+
+                new_connection = models.OAuthConnection(
+                    user_id=user.id,
+                    provider="github",
+                    provider_user_id=provider_id,
+                    access_token=access_token,
+                )
+
+                db.add(new_connection)
                 db.commit()
+
+                # Also update legacy field for backward compatibility
+                if not user.github_id:
+                    user.github_id = provider_id
+                    db.commit()
+            else:
+                # New user - create account and connection
+                is_new_user = True
+                logger.info(f"Creating new user for GitHub email: {email}")
+
+                # Generate username
+                username = user_info.get("login") or email.split("@")[0]
+                base_username = username
+
+                # Check if username exists
+                counter = 1
+                while (
+                    db.query(models.User)
+                    .filter(models.User.username == username)
+                    .first()
+                ):
+                    username = f"{base_username}{counter}"
+                    counter += 1
+
+                try:
+                    # Create new user
+                    new_user = models.User(
+                        email=email,
+                        username=username,
+                        full_name=user_info.get("name", ""),
+                        password="",  # No password for OAuth users
+                        github_id=provider_id,  # Legacy field
+                        needs_role_selection=True,
+                        is_active=True,
+                        terms_accepted=True,  # Assume terms accepted for OAuth
+                    )
+
+                    db.add(new_user)
+                    db.flush()  # Get ID without full commit
+
+                    # Create OAuth connection
+                    new_connection = models.OAuthConnection(
+                        user_id=new_user.id,
+                        provider="github",
+                        provider_user_id=provider_id,
+                        access_token=access_token,
+                    )
+
+                    db.add(new_connection)
+                    db.commit()
+                    db.refresh(new_user)
+                    user = new_user
+
+                except Exception as e:
+                    logger.error(f"Error creating GitHub user: {str(e)}")
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=500, detail=f"Failed to create user: {str(e)}"
+                    )
 
         # Create access token
         app_access_token = oauth2.create_access_token(data={"sub": str(user.id)})
@@ -611,7 +739,7 @@ async def github_token(code: str, db: Session = Depends(database.get_db)):
                 "created_at": user.created_at,
                 "needs_role_selection": user.needs_role_selection,
             },
-            "provider_id": user_info.get("id"),
+            "provider_id": provider_id,
             "access_token": app_access_token,
             "token_type": "bearer",
         }

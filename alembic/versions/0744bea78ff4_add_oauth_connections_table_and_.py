@@ -1,8 +1,8 @@
-"""Add nullable user_type and needs_role_selection flag
+"""Add oauth_connections table and relationship
 
-Revision ID: f18487be8795
+Revision ID: 0744bea78ff4
 Revises: 
-Create Date: 2025-03-09 17:26:58.490985
+Create Date: 2025-03-11 19:09:36.501085
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f18487be8795'
+revision: str = '0744bea78ff4'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -100,6 +100,19 @@ def upgrade() -> None:
     sa.UniqueConstraint('stripe_session_id')
     )
     op.create_index(op.f('ix_donations_id'), 'donations', ['id'], unique=False)
+    op.create_table('oauth_connections',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('provider', sa.String(), nullable=True),
+    sa.Column('provider_user_id', sa.String(), nullable=True),
+    sa.Column('access_token', sa.String(), nullable=True),
+    sa.Column('refresh_token', sa.String(), nullable=True),
+    sa.Column('expires_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_oauth_connections_id'), 'oauth_connections', ['id'], unique=False)
     op.create_table('projects',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
@@ -409,6 +422,8 @@ def downgrade() -> None:
     op.drop_table('subscriptions')
     op.drop_index(op.f('ix_projects_id'), table_name='projects')
     op.drop_table('projects')
+    op.drop_index(op.f('ix_oauth_connections_id'), table_name='oauth_connections')
+    op.drop_table('oauth_connections')
     op.drop_index(op.f('ix_donations_id'), table_name='donations')
     op.drop_table('donations')
     op.drop_index(op.f('ix_developer_profiles_id'), table_name='developer_profiles')
