@@ -900,10 +900,9 @@ async def get_ranked_showcases(
         )
 
         # Execute the query
-        result = db.execute(sql_query, {"limit": limit})
-
-        # Convert the result to a list of Showcase objects
-        showcase_ids = [row.id for row in result]
+        result = db.execute(sql_query, {"limit": limit}).fetchall()
+        showcase_id_to_rank = {row.id: idx for idx, row in enumerate(result)}
+        showcase_ids = list(showcase_id_to_rank.keys())
 
         # Handle case where no results were found
         if not showcase_ids:
@@ -916,7 +915,7 @@ async def get_ranked_showcases(
 
         # Sort by the order of IDs from the ranked query
         id_to_position = {id: idx for idx, id in enumerate(showcase_ids)}
-        showcases.sort(key=lambda x: id_to_position.get(x.id, float("inf")))
+        showcases.sort(key=lambda x: showcase_id_to_rank.get(x.id, float("inf")))
 
         return showcases
 
