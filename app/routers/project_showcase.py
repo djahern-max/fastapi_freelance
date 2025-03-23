@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
 from typing import Optional, List
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 import logging
 import os
@@ -10,13 +10,12 @@ import httpx
 import markdown
 import bleach
 import json
-import math
 from sqlalchemy.orm import joinedload
 from ..models import User
 from .. import schemas, models
 from ..database import get_db
 from ..oauth2 import get_current_user
-from ..models import Showcase
+from ..models import Showcase, ShowcaseRating
 from datetime import datetime
 from ..crud.project_showcase import (
     get_project_showcase,
@@ -787,60 +786,56 @@ async def link_video_to_showcase(
 async def get_ranked_showcases(limit: int = 10, db: Session = Depends(get_db)):
     """Get showcases ranked by an algorithm considering ratings, recency, and engagement"""
     try:
-        # Use SQLAlchemy ORM instead of raw SQL for better compatibility
-        showcases = db.query(models.Showcase).all()
-
-        # Calculate ranking scores in Python
-        ranked_showcases = []
-
-        # Extract timestamps for normalization
-        timestamps = [
-            s.updated_at.timestamp() if s.updated_at else 0 for s in showcases
-        ]
-        min_timestamp = min(timestamps) if timestamps else 0
-        timestamp_range = (
-            max(timestamps) - min_timestamp
-            if timestamps and max(timestamps) > min_timestamp
-            else 1
+        # SQL query using raw SQL for complex calculation
+        sql_query = text(
+            """
+            SELECT 
+                s.*,
+                (
+                    -- Rating score (weight: 0.5)
+                    (COALESCE(s.average_rating, 0) - 1) / 4 * 0.5 +
+                    
+                    -- Recency score (weight: 0.3)
+                    CASE 
+                        WHEN MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER() = 0 
+                        THEN 0.3
+                        ELSE (EXTRACT(EPOCH FROM s.updated_at) - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) / 
+                             (MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) * 0.3
+                    END +
+                    
+                    -- Total ratings score (weight: 0.2)
+                    CASE 
+                        WHEN MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() = 0 
+                        THEN 0
+                        ELSE LN(GREATEST(s.total_ratings, 1) + 1) / MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() * 0.2
+                    END
+                ) AS ranking_score
+            FROM 
+                showcases s
+            ORDER BY 
+                ranking_score DESC
+            LIMIT :limit
+        """
         )
 
-        # Calculate max log for normalization
-        max_log_ratings = (
-            max([math.log(s.total_ratings + 1) for s in showcases]) if showcases else 1
+        # Execute the query
+        result = db.execute(sql_query, {"limit": limit})
+
+        # Convert the result to a list of Showcase objects
+        showcase_ids = [row.id for row in result]
+
+        # Fetch complete showcase objects with their relationships
+        showcases = (
+            db.query(models.Showcase).filter(models.Showcase.id.in_(showcase_ids)).all()
         )
 
-        for showcase in showcases:
-            # Rating score (weight: 0.5)
-            rating_score = ((showcase.average_rating or 0) - 1) / 4 * 0.5
+        # Sort by the order of IDs from the ranked query
+        id_to_position = {id: idx for idx, id in enumerate(showcase_ids)}
+        showcases.sort(key=lambda x: id_to_position.get(x.id, float("inf")))
 
-            # Recency score (weight: 0.3)
-            timestamp = showcase.updated_at.timestamp() if showcase.updated_at else 0
-            recency_score = (
-                ((timestamp - min_timestamp) / timestamp_range) * 0.3
-                if timestamp_range > 0
-                else 0.3
-            )
-
-            # Total ratings score (weight: 0.2)
-            total_ratings_score = (
-                (math.log(showcase.total_ratings + 1) / max_log_ratings) * 0.2
-                if max_log_ratings > 0
-                else 0
-            )
-
-            # Combined score
-            total_score = rating_score + recency_score + total_ratings_score
-
-            ranked_showcases.append((showcase, total_score))
-
-        # Sort by score descending
-        ranked_showcases.sort(key=lambda x: x[1], reverse=True)
-
-        # Return limited number of showcases
-        return [s[0] for s in ranked_showcases[:limit]]
+        return showcases
 
     except Exception as e:
-        logger.error(f"Error in ranked showcases: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching ranked showcases: {str(e)}",
