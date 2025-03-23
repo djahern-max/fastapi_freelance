@@ -1,4 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    File,
+    UploadFile,
+    Form,
+    Query,
+)
 from typing import Optional, List
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -784,8 +793,11 @@ async def link_video_to_showcase(
 
 
 @router.get("/ranked", response_model=List[schemas.ProjectShowcase])
-async def get_ranked_showcases(limit: int = 10, db: Session = Depends(get_db)):
-    """Get showcases ranked by an algorithm considering ratings, recency, and engagement"""
+async def get_ranked_showcases(
+    limit: Optional[int] = Query(10, ge=1, le=100), db: Session = Depends(get_db)
+):
+    """Get showcases ranked by an algorithm considering ratings, recency, and engagement.
+    This is a public endpoint that doesn't require authentication."""
     try:
         # SQL query using raw SQL for complex calculation
         sql_query = text(
@@ -797,16 +809,16 @@ async def get_ranked_showcases(limit: int = 10, db: Session = Depends(get_db)):
                     (COALESCE(s.average_rating, 0) - 1) / 4 * 0.5 +
                     
                     -- Recency score (weight: 0.3)
-                    CASE 
-                        WHEN MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER() = 0 
+                    CASE
+                        WHEN MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER() = 0
                         THEN 0.3
-                        ELSE (EXTRACT(EPOCH FROM s.updated_at) - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) / 
-                             (MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) * 0.3
+                        ELSE (EXTRACT(EPOCH FROM s.updated_at) - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) /
+                            (MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) * 0.3
                     END +
                     
                     -- Total ratings score (weight: 0.2)
-                    CASE 
-                        WHEN MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() = 0 
+                    CASE
+                        WHEN MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() = 0
                         THEN 0
                         ELSE LN(GREATEST(s.total_ratings, 1) + 1) / MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() * 0.2
                     END
@@ -825,6 +837,10 @@ async def get_ranked_showcases(limit: int = 10, db: Session = Depends(get_db)):
         # Convert the result to a list of Showcase objects
         showcase_ids = [row.id for row in result]
 
+        # Handle case where no results were found
+        if not showcase_ids:
+            return []
+
         # Fetch complete showcase objects with their relationships
         showcases = (
             db.query(models.Showcase).filter(models.Showcase.id.in_(showcase_ids)).all()
@@ -837,6 +853,7 @@ async def get_ranked_showcases(limit: int = 10, db: Session = Depends(get_db)):
         return showcases
 
     except Exception as e:
+        logger.exception(f"Error fetching ranked showcases: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching ranked showcases: {str(e)}",
