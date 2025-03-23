@@ -783,44 +783,60 @@ async def link_video_to_showcase(
 # Showcase ranking endpoint
 
 
-@router.get("/ranked/", response_model=List[schemas.ProjectShowcase])
+@router.get("/ranked", response_model=List[schemas.ProjectShowcase])
 async def get_ranked_showcases(limit: int = 10, db: Session = Depends(get_db)):
     """Get showcases ranked by an algorithm considering ratings, recency, and engagement"""
     try:
-        # Use SQLAlchemy ORM for better compatibility
-        showcases = db.query(models.Showcase).all()
+        # SQL query using raw SQL for complex calculation
+        sql_query = text(
+            """
+            SELECT 
+                s.*,
+                (
+                    -- Rating score (weight: 0.5)
+                    (COALESCE(s.average_rating, 0) - 1) / 4 * 0.5 +
+                    
+                    -- Recency score (weight: 0.3)
+                    CASE 
+                        WHEN MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER() = 0 
+                        THEN 0.3
+                        ELSE (EXTRACT(EPOCH FROM s.updated_at) - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) / 
+                             (MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) * 0.3
+                    END +
+                    
+                    -- Total ratings score (weight: 0.2)
+                    CASE 
+                        WHEN MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() = 0 
+                        THEN 0
+                        ELSE LN(GREATEST(s.total_ratings, 1) + 1) / MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() * 0.2
+                    END
+                ) AS ranking_score
+            FROM 
+                showcases s
+            ORDER BY 
+                ranking_score DESC
+            LIMIT :limit
+        """
+        )
 
-        # Calculate ranking scores
-        ranked_showcases = []
+        # Execute the query
+        result = db.execute(sql_query, {"limit": limit})
 
-        for showcase in showcases:
-            # Rating score (weight: 0.5)
-            rating_score = ((showcase.average_rating or 0) - 1) / 4 * 0.5
+        # Convert the result to a list of Showcase objects
+        showcase_ids = [row.id for row in result]
 
-            # Recency score (weight: 0.3)
-            if showcase.updated_at:
-                recency_score = 0.3  # Simplified for now
-            else:
-                recency_score = 0
+        # Fetch complete showcase objects with their relationships
+        showcases = (
+            db.query(models.Showcase).filter(models.Showcase.id.in_(showcase_ids)).all()
+        )
 
-            # Total ratings score (weight: 0.2)
-            total_ratings_score = (
-                (showcase.total_ratings / 10) * 0.2 if showcase.total_ratings else 0
-            )
+        # Sort by the order of IDs from the ranked query
+        id_to_position = {id: idx for idx, id in enumerate(showcase_ids)}
+        showcases.sort(key=lambda x: id_to_position.get(x.id, float("inf")))
 
-            # Combined score
-            total_score = rating_score + recency_score + total_ratings_score
-
-            ranked_showcases.append((showcase, total_score))
-
-        # Sort by score descending
-        ranked_showcases.sort(key=lambda x: x[1], reverse=True)
-
-        # Return limited number of showcases
-        return [s[0] for s in ranked_showcases[:limit]]
+        return showcases
 
     except Exception as e:
-        logging.error(f"Error in ranked showcases: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching ranked showcases: {str(e)}",
