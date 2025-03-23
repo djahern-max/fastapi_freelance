@@ -792,7 +792,75 @@ async def link_video_to_showcase(
 # Showcase ranking endpoint
 
 
-@router.get("/ranked", response_model=List[schemas.ProjectShowcase])
+@router.get("/get-ranked", response_model=List[schemas.ProjectShowcase])
+async def get_ranked_showcases(
+    limit: Optional[int] = Query(10, ge=1, le=100), db: Session = Depends(get_db)
+):
+    """Get showcases ranked by an algorithm considering ratings, recency, and engagement.
+    This is a public endpoint that doesn't require authentication."""
+    try:
+        # SQL query using raw SQL for complex calculation
+        sql_query = text(
+            """
+            SELECT 
+                s.*,
+                (
+                    -- Rating score (weight: 0.5)
+                    (COALESCE(s.average_rating, 0) - 1) / 4 * 0.5 +
+                    
+                    -- Recency score (weight: 0.3)
+                    CASE
+                        WHEN MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER() = 0
+                        THEN 0.3
+                        ELSE (EXTRACT(EPOCH FROM s.updated_at) - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) /
+                            (MAX(EXTRACT(EPOCH FROM s.updated_at)) OVER() - MIN(EXTRACT(EPOCH FROM s.updated_at)) OVER()) * 0.3
+                    END +
+                    
+                    -- Total ratings score (weight: 0.2)
+                    CASE
+                        WHEN MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() = 0
+                        THEN 0
+                        ELSE LN(GREATEST(s.total_ratings, 1) + 1) / MAX(LN(GREATEST(s.total_ratings, 1) + 1)) OVER() * 0.2
+                    END
+                ) AS ranking_score
+            FROM 
+                showcases s
+            ORDER BY 
+                ranking_score DESC
+            LIMIT :limit
+        """
+        )
+
+        # Execute the query
+        result = db.execute(sql_query, {"limit": limit})
+
+        # Convert the result to a list of Showcase objects
+        showcase_ids = [row.id for row in result]
+
+        # Handle case where no results were found
+        if not showcase_ids:
+            return []
+
+        # Fetch complete showcase objects with their relationships
+        showcases = (
+            db.query(models.Showcase).filter(models.Showcase.id.in_(showcase_ids)).all()
+        )
+
+        # Sort by the order of IDs from the ranked query
+        id_to_position = {id: idx for idx, id in enumerate(showcase_ids)}
+        showcases.sort(key=lambda x: id_to_position.get(x.id, float("inf")))
+
+        return showcases
+
+    except Exception as e:
+        logger.exception(f"Error fetching ranked showcases: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching ranked showcases: {str(e)}",
+        )
+
+
+@router.get("/ranked-showcases", response_model=List[schemas.ProjectShowcase])
 async def get_ranked_showcases(
     limit: Optional[int] = Query(10, ge=1, le=100), db: Session = Depends(get_db)
 ):
