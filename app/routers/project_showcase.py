@@ -860,7 +860,7 @@ async def get_ranked_showcases(
         )
 
 
-@router.get("/ranked-showcases", response_model=List[schemas.ProjectShowcase])
+@router.get("/ranked-projects/get", response_model=List[schemas.ProjectShowcase])
 async def get_ranked_showcases(
     limit: Optional[int] = Query(10, ge=1, le=100), db: Session = Depends(get_db)
 ):
