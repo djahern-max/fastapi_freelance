@@ -79,7 +79,7 @@ CONVERSATION HISTORY:
             seeks_collaboration=False,
             estimated_budget=None,  # No budget for support tickets
             # Store additional metadata that might be helpful
-            metadata={
+            request_metadata={
                 "ticket_type": "external_support",
                 "source": ticket.source,
                 "email": ticket.email,
