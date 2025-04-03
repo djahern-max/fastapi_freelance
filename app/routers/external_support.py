@@ -5,12 +5,18 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 import logging
 from datetime import datetime
+import secrets
+import string
+from passlib.context import CryptContext
 
 from .. import models, schemas, oauth2
 from ..database import get_db
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Set up password context for hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/api/external/support-tickets", tags=["External Support"])
 
@@ -29,22 +35,38 @@ def create_external_support_ticket(
     )
 
     try:
-        # Get a system or support user to assign as the ticket owner
-        # You can either use a dedicated support user or create one if needed
-        support_user = (
-            db.query(models.User).filter(models.User.email == "support@ryze.ai").first()
+        # Try to find the system service account
+        system_user = (
+            db.query(models.User).filter(models.User.email == "system@ryze.ai").first()
         )
 
-        if not support_user:
-            logger.warning("Support user not found, using the first admin user")
-            # Fallback to an admin user if support user doesn't exist
-            support_user = db.query(models.User).first()
+        # If no system user exists, create one
+        if not system_user:
+            logger.info("System service account not found, creating one")
 
-        if not support_user:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No support or admin user found to own the ticket",
+            # Generate a secure random password
+            alphabet = string.ascii_letters + string.digits
+            password = "".join(secrets.choice(alphabet) for _ in range(24))
+
+            # Hash the password
+            hashed_password = pwd_context.hash(password)
+
+            # Create the system user
+            system_user = models.User(
+                username="system",
+                email="system@ryze.ai",
+                full_name="RYZE System",
+                password=hashed_password,
+                is_active=True,
+                terms_accepted=True,
+                # Add any other required fields for your User model
             )
+
+            # Add to database
+            db.add(system_user)
+            db.commit()
+            db.refresh(system_user)
+            logger.info(f"Created system service account with ID {system_user.id}")
 
         # Format the conversation history for human-readable display
         if ticket.conversation_history and isinstance(
@@ -82,7 +104,7 @@ ISSUE DESCRIPTION:
                 else f"Support: {ticket.issue}"
             ),
             content=content,
-            user_id=support_user.id,
+            user_id=system_user.id,
             status="open",  # Use your RequestStatus enum value
             is_public=False,
             contains_sensitive_data=True,  # Set to true for support tickets
@@ -126,8 +148,8 @@ ISSUE DESCRIPTION:
         try:
             new_conversation = models.Conversation(
                 request_id=new_request.id,
-                starter_user_id=support_user.id,
-                recipient_user_id=support_user.id,  # Self-conversation for now
+                starter_user_id=system_user.id,
+                recipient_user_id=system_user.id,  # Self-conversation for now
                 status="active",
             )
             db.add(new_conversation)
@@ -136,7 +158,7 @@ ISSUE DESCRIPTION:
             # Add an initial message to the conversation
             initial_message = models.ConversationMessage(
                 conversation_id=new_conversation.id,
-                user_id=support_user.id,
+                user_id=system_user.id,
                 content=f"Support ticket created from {ticket.source} for {ticket.email}",
             )
             db.add(initial_message)
