@@ -1165,3 +1165,31 @@ class DonationOut(BaseModel):
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------ Support - External ------------------
+
+
+class ExternalSupportTicketBase(BaseModel):
+    """Base schema for external support tickets"""
+
+    email: EmailStr
+    issue: str
+    source: str = "analytics-hub"
+    website_id: Optional[str] = None
+    platform: Optional[str] = None
+    conversation_history: Optional[str] = None
+
+
+class ExternalSupportTicketCreate(ExternalSupportTicketBase):
+    """Schema for creating external support tickets"""
+
+    pass
+
+
+class ExternalSupportTicketResponse(BaseModel):
+    """Schema for responding with external support ticket data"""
+
+    status: str
+    message: str
+    ticket_id: int

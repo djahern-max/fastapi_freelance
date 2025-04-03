@@ -23,6 +23,7 @@ from datetime import datetime
 from .database import Base
 from sqlalchemy import Table
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 # ------------------ Mixin ------------------
@@ -99,7 +100,7 @@ class User(Base):
     needs_role_selection = Column(Boolean, default=False)
     stripe_customer_id = Column(String, nullable=True)
     needs_role_selection = Column(Boolean, default=True)
-
+    external_metadata = Column(JSONB, nullable=True)
     # Relationships
     videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")
     requests = relationship(
