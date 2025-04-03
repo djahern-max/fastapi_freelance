@@ -504,7 +504,7 @@ class Request(Base, TimestampMixin):
     )  # Optional details about desired collaboration
 
     # Added metadata columns
-    metadata = Column(JSONB, nullable=True)  # For storing general metadata
+    request_metadata = Column(JSONB, nullable=True)  # For storing general metadata
     external_metadata = Column(
         JSONB, nullable=True
     )  # For storing external support ticket data
