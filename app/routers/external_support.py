@@ -1,6 +1,6 @@
 # app/routers/external_support.py
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Body, status
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 import logging
@@ -18,17 +18,21 @@ logger = logging.getLogger(__name__)
 # Set up password context for hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Define the router with the appropriate prefix
 router = APIRouter(prefix="/api/external/support-tickets", tags=["External Support"])
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=Dict[str, Any])
 def create_external_support_ticket(
-    ticket: schemas.ExternalSupportTicketCreate,
+    ticket: schemas.ExternalSupportTicketCreate = Body(...),
     db: Session = Depends(get_db),
     api_key: str = Depends(oauth2.get_api_key),
 ):
     """
     Create a new support ticket from an external source (e.g., Analytics Hub)
+
+    This endpoint is protected by an API key and creates a new support ticket
+    in the RYZE.ai system as a public request.
     """
     logger.info(
         f"Received external support ticket from {ticket.source} for {ticket.email}"
@@ -59,7 +63,7 @@ def create_external_support_ticket(
                 password=hashed_password,
                 is_active=True,
                 terms_accepted=True,
-                # Add any other required fields for your User model
+                user_type="developer",  # Set as developer to handle requests
             )
 
             # Add to database
@@ -72,25 +76,29 @@ def create_external_support_ticket(
         if ticket.conversation_history and isinstance(
             ticket.conversation_history, list
         ):
-            conversation_formatted = "CONVERSATION HISTORY:\n"
+            conversation_formatted = "## CONVERSATION HISTORY:\n\n"
             for msg in ticket.conversation_history:
-                timestamp = f" ({msg.timestamp})" if msg.timestamp else ""
+                timestamp = (
+                    f" ({msg.timestamp})"
+                    if hasattr(msg, "timestamp") and msg.timestamp
+                    else ""
+                )
                 conversation_formatted += (
-                    f"{msg.role.upper()}{timestamp}: {msg.content}\n"
+                    f"**{msg.role.upper()}**{timestamp}: {msg.content}\n\n"
                 )
         else:
             conversation_formatted = "No conversation history provided"
 
         # Format the content to include the external support information
         content = f"""
-EXTERNAL SUPPORT TICKET
------------------------
-Email: {ticket.email}
-Source: {ticket.source}
-Platform: {ticket.platform or 'Not specified'}
-Website ID: {ticket.website_id or 'Not specified'}
+## EXTERNAL SUPPORT TICKET
 
-ISSUE DESCRIPTION:
+**Email**: {ticket.email}
+**Source**: {ticket.source}
+**Platform**: {ticket.platform or 'Not specified'}
+**Website ID**: {ticket.website_id or 'Not specified'}
+
+### ISSUE DESCRIPTION:
 {ticket.issue}
 
 {conversation_formatted}
@@ -107,7 +115,7 @@ ISSUE DESCRIPTION:
             user_id=system_user.id,
             status="open",  # Use your RequestStatus enum value
             is_public=True,
-            contains_sensitive_data=False,  # Set to true for support tickets
+            contains_sensitive_data=False,  # Support tickets are public
             is_idea=False,
             seeks_collaboration=False,
             estimated_budget=None,  # No budget for support tickets
@@ -128,7 +136,9 @@ ISSUE DESCRIPTION:
                     {
                         "role": msg.role,
                         "content": msg.content,
-                        "timestamp": msg.timestamp,
+                        "timestamp": (
+                            msg.timestamp if hasattr(msg, "timestamp") else None
+                        ),
                     }
                     for msg in (ticket.conversation_history or [])
                 ],
@@ -146,27 +156,66 @@ ISSUE DESCRIPTION:
 
         # Optionally, create an initial conversation for this ticket
         try:
+            # Find the first available developer to assign the ticket to
+            developer = (
+                db.query(models.User)
+                .filter(models.User.user_type == "developer")
+                .filter(models.User.is_active == True)
+                .filter(models.User.id != system_user.id)  # Not the system user
+                .first()
+            )
+
+            recipient_id = developer.id if developer else system_user.id
+
             new_conversation = models.Conversation(
                 request_id=new_request.id,
                 starter_user_id=system_user.id,
-                recipient_user_id=system_user.id,  # Self-conversation for now
+                recipient_user_id=recipient_id,  # Assign to a developer or self
                 status="active",
             )
             db.add(new_conversation)
             db.commit()
+            db.refresh(new_conversation)
 
             # Add an initial message to the conversation
             initial_message = models.ConversationMessage(
                 conversation_id=new_conversation.id,
                 user_id=system_user.id,
-                content=f"Support ticket created from {ticket.source} for {ticket.email}",
+                content=f"Support ticket created from {ticket.source} for {ticket.email}. Please respond within one hour.",
             )
             db.add(initial_message)
             db.commit()
 
+            logger.info(f"Created initial conversation with ID {new_conversation.id}")
+
         except Exception as conv_error:
             logger.error(f"Error creating initial conversation: {str(conv_error)}")
             # Continue even if conversation creation fails
+
+        # Try to add it to the developer's snagged requests if we found a developer
+        if developer and developer.id != system_user.id:
+            try:
+                # Check if it's already snagged
+                existing_snag = (
+                    db.query(models.SnaggedRequest)
+                    .filter(models.SnaggedRequest.request_id == new_request.id)
+                    .filter(models.SnaggedRequest.developer_id == developer.id)
+                    .first()
+                )
+
+                if not existing_snag:
+                    # Create a snagged request entry
+                    snagged = models.SnaggedRequest(
+                        request_id=new_request.id,
+                        developer_id=developer.id,
+                        is_active=True,
+                    )
+                    db.add(snagged)
+                    db.commit()
+                    logger.info(f"Auto-assigned ticket to developer ID {developer.id}")
+            except Exception as snag_error:
+                logger.error(f"Error auto-assigning ticket: {str(snag_error)}")
+                # Continue even if snagging fails
 
         return {
             "status": "success",
@@ -179,3 +228,12 @@ ISSUE DESCRIPTION:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create support ticket: {str(e)}",
         )
+
+
+# For pre-flight CORS requests
+@router.options("/", status_code=status.HTTP_204_NO_CONTENT)
+def options_create_external_support_ticket():
+    """
+    Handle OPTIONS requests for CORS pre-flight check
+    """
+    return {}
