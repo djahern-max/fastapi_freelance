@@ -22,6 +22,7 @@ from app.routers import (
     rating,
     developer_metrics,
     video_ratings,
+    external_support,
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -126,6 +127,7 @@ routers_with_prefixes = [
     (rating.router, ""),
     (video_ratings.router, ""),
     (developer_metrics.router, ""),
+    (external_support.router, ""),
 ]
 
 # Include all routers in this code

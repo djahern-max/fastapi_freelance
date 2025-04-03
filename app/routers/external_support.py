@@ -1,8 +1,9 @@
+# app/routers/external_support.py
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, List
 import logging
-import json
 from datetime import datetime
 
 from .. import models, schemas, oauth2
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/api/external/support-tickets", tags=["External Suppo
 def create_external_support_ticket(
     ticket: schemas.ExternalSupportTicketCreate,
     db: Session = Depends(get_db),
-    authenticated: bool = Depends(oauth2.verify_api_key),
+    api_key: str = Depends(oauth2.get_api_key),
 ):
     """
     Create a new support ticket from an external source (e.g., Analytics Hub)
@@ -47,6 +48,19 @@ def create_external_support_ticket(
                 detail="No support or admin user found to own the ticket",
             )
 
+        # Format the conversation history for human-readable display
+        if ticket.conversation_history and isinstance(
+            ticket.conversation_history, list
+        ):
+            conversation_formatted = "CONVERSATION HISTORY:\n"
+            for msg in ticket.conversation_history:
+                timestamp = f" ({msg.timestamp})" if msg.timestamp else ""
+                conversation_formatted += (
+                    f"{msg.role.upper()}{timestamp}: {msg.content}\n"
+                )
+        else:
+            conversation_formatted = "No conversation history provided"
+
         # Format the content to include the external support information
         content = f"""
 EXTERNAL SUPPORT TICKET
@@ -59,8 +73,7 @@ Website ID: {ticket.website_id or 'Not specified'}
 ISSUE DESCRIPTION:
 {ticket.issue}
 
-CONVERSATION HISTORY:
-{ticket.conversation_history or 'No conversation history provided'}
+{conversation_formatted}
 """
 
         # Create a new request object using your existing model
@@ -79,13 +92,27 @@ CONVERSATION HISTORY:
             seeks_collaboration=False,
             estimated_budget=None,  # No budget for support tickets
             # Store additional metadata that might be helpful
-            request_metadata={
+            request_metadata={  # Updated from metadata to request_metadata
                 "ticket_type": "external_support",
                 "source": ticket.source,
                 "email": ticket.email,
                 "platform": ticket.platform,
                 "website_id": ticket.website_id,
                 "created_at": datetime.utcnow().isoformat(),
+            },
+            external_metadata={  # Also store in external_metadata
+                "source": ticket.source,
+                "website_id": ticket.website_id,
+                "email": ticket.email,
+                "conversation": [
+                    {
+                        "role": msg.role,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp,
+                    }
+                    for msg in (ticket.conversation_history or [])
+                ],
+                "submitted_at": datetime.utcnow().isoformat(),
             },
         )
 
@@ -101,12 +128,22 @@ CONVERSATION HISTORY:
         try:
             new_conversation = models.Conversation(
                 request_id=new_request.id,
-                user_id=support_user.id,
-                message=f"Support ticket created from {ticket.source} for {ticket.email}",
-                is_system_message=True,
+                starter_user_id=support_user.id,
+                recipient_user_id=support_user.id,  # Self-conversation for now
+                status="active",
             )
             db.add(new_conversation)
             db.commit()
+
+            # Add an initial message to the conversation
+            initial_message = models.ConversationMessage(
+                conversation_id=new_conversation.id,
+                user_id=support_user.id,
+                content=f"Support ticket created from {ticket.source} for {ticket.email}",
+            )
+            db.add(initial_message)
+            db.commit()
+
         except Exception as conv_error:
             logger.error(f"Error creating initial conversation: {str(conv_error)}")
             # Continue even if conversation creation fails
