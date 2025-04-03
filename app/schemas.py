@@ -1170,6 +1170,14 @@ class DonationOut(BaseModel):
 # ------------------ Support - External ------------------
 
 
+class ConversationMessage(BaseModel):
+    """Schema for a single message in the conversation history"""
+
+    role: str = Field(..., description="The role of the sender (user, system, support)")
+    content: str = Field(..., description="The message content")
+    timestamp: Optional[str] = Field(None, description="When the message was sent")
+
+
 class ExternalSupportTicketBase(BaseModel):
     """Base schema for external support tickets"""
 
@@ -1178,7 +1186,36 @@ class ExternalSupportTicketBase(BaseModel):
     source: str = "analytics-hub"
     website_id: Optional[str] = None
     platform: Optional[str] = None
-    conversation_history: Optional[str] = None
+    # Changed to use structured data instead of string
+    conversation_history: Optional[List[ConversationMessage]] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "issue": "I can't access my analytics dashboard",
+                "source": "analytics-hub",
+                "website_id": "site-123",
+                "platform": "web",
+                "conversation_history": [
+                    {
+                        "role": "user",
+                        "content": "I need help with my analytics dashboard",
+                        "timestamp": "2025-04-03T12:34:56Z",
+                    },
+                    {
+                        "role": "system",
+                        "content": "Would you like to speak with a support agent?",
+                        "timestamp": "2025-04-03T12:35:10Z",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Yes please",
+                        "timestamp": "2025-04-03T12:35:30Z",
+                    },
+                ],
+            }
+        }
 
 
 class ExternalSupportTicketCreate(ExternalSupportTicketBase):
