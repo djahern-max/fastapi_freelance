@@ -106,8 +106,8 @@ ISSUE DESCRIPTION:
             content=content,
             user_id=system_user.id,
             status="open",  # Use your RequestStatus enum value
-            is_public=False,
-            contains_sensitive_data=True,  # Set to true for support tickets
+            is_public=True,
+            contains_sensitive_data=False,  # Set to true for support tickets
             is_idea=False,
             seeks_collaboration=False,
             estimated_budget=None,  # No budget for support tickets
