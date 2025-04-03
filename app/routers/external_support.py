@@ -38,9 +38,7 @@ def create_external_support_ticket(
         if not support_user:
             logger.warning("Support user not found, using the first admin user")
             # Fallback to an admin user if support user doesn't exist
-            support_user = (
-                db.query(models.User).filter(models.User.is_admin == True).first()
-            )
+            support_user = db.query(models.User).first()
 
         if not support_user:
             raise HTTPException(
