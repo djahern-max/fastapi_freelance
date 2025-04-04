@@ -87,12 +87,6 @@ async def login(provider: str, request: Request):
     print(f"[OAUTH] Redirect URI: {redirect_uri}")
     print(f"[OAUTH] State: {unique_state}")
 
-    # 🔥 Manually generate the authorization URL for logging
-    authorization_url = client.authorize_redirect_url(
-        request, redirect_uri=redirect_uri, state=unique_state
-    )
-    print(f"[OAUTH] Authorization URL to Google: {authorization_url}")
-
     # 🔁 Then redirect
     return await client.authorize_redirect(
         request, redirect_uri=redirect_uri, state=unique_state
