@@ -32,6 +32,7 @@ import logging
 import sys
 from app.routers import oauth
 from starlette.middleware.sessions import SessionMiddleware
+from pathlib import Path
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -45,7 +46,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
 
 
 # Load environment variables first
-load_dotenv()
+load_dotenv(dotenv_path=Path.home() / ".env")
 
 # Configure logging based on environment
 if os.getenv("ENV") == "production":
