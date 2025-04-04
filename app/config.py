@@ -4,6 +4,7 @@ from typing import Optional
 import tempfile
 
 
+# TEST PUSH
 class Settings(BaseSettings):
     env: str = "development"
     database_hostname: str
@@ -14,7 +15,18 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
-    # Digital Ocean Spaces configuration
+    google_client_id: str
+    google_client_secret: str
+    google_oauth_redirect_url: str
+    github_client_id: str
+    github_client_secret: str
+    github_oauth_redirect_url: str
+    linkedin_client_id: Optional[str] = None
+    linkedin_client_secret: Optional[str] = None
+    linkedin_oauth_redirect_url: Optional[str] = None
+    session_secret: str
+    external_api_key: str
+
     spaces_name: str
     spaces_region: str
     spaces_endpoint: str
