@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app import database, models, schemas, utils
 from app.models import User
 from typing import Optional
+from fastapi import Request
+
 
 router = APIRouter(tags=["Users"])
 
@@ -11,7 +13,12 @@ router = APIRouter(tags=["Users"])
 @router.post("/register", response_model=schemas.UserOut)
 def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     """Register a new user with basic information. Profiles can be added later."""
+    # Add this debug line
+    print(f"Registration attempt: {user.dict()}")
+
     if not user.terms_accepted:
+        # Add this debug line
+        print("Terms not accepted")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You must accept the terms of agreement to register.",
@@ -55,7 +62,11 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         db.commit()
         db.refresh(new_user)
 
-        print("DEBUG:", type(new_user), new_user.__dict__ if hasattr(new_user, '__dict__') else new_user)
+        print(
+            "DEBUG:",
+            type(new_user),
+            new_user.__dict__ if hasattr(new_user, "__dict__") else new_user,
+        )
 
         return new_user
 
@@ -88,3 +99,49 @@ def get_user(id: int, db: Session = Depends(database.get_db)):
         )
 
     return user
+
+
+@router.post("/debug-register")
+async def debug_register(request: Request, db: Session = Depends(database.get_db)):
+    """Debug endpoint for registration issues"""
+    try:
+        body = await request.json()
+        print(f"DEBUG REGISTER: {body}")
+
+        # Check if username exists
+        username_exists = (
+            db.query(models.User)
+            .filter(models.User.username == body.get("username"))
+            .first()
+            is not None
+        )
+
+        # Check if email exists
+        email_exists = (
+            db.query(models.User).filter(models.User.email == body.get("email")).first()
+            is not None
+        )
+
+        # Check terms acceptance
+        terms_accepted = body.get("terms_accepted", False)
+
+        # Return diagnostic info
+        return {
+            "received_data": {
+                k: "***" if k == "password" else v for k, v in body.items()
+            },
+            "validation_checks": {
+                "terms_accepted": terms_accepted,
+                "username_exists": username_exists,
+                "email_exists": email_exists,
+            },
+            "required_fields": [
+                "username",
+                "email",
+                "password",
+                "terms_accepted",
+                "user_type",
+            ],
+        }
+    except Exception as e:
+        return {"error": str(e)}
