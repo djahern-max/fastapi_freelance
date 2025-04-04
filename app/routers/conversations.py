@@ -34,7 +34,16 @@ def create_conversation(
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    # Verify user roles
+    # Check if this is an external support ticket
+    is_external_support = False
+    if hasattr(request, "request_metadata") and request.request_metadata:
+        if (
+            isinstance(request.request_metadata, dict)
+            and request.request_metadata.get("ticket_type") == "external_support"
+        ):
+            is_external_support = True
+
+    # Verify user roles - skip certain checks for external support tickets
     if current_user.user_type == models.UserType.client:
         if request.user_id == current_user.id:
             raise HTTPException(
@@ -45,7 +54,8 @@ def create_conversation(
         )
 
     if current_user.user_type == models.UserType.developer:
-        if request.user.user_type != models.UserType.client:
+        # Allow external support tickets to bypass the client-only check
+        if not is_external_support and request.user.user_type != models.UserType.client:
             raise HTTPException(
                 status_code=400, detail="Can only respond to client requests"
             )

@@ -766,6 +766,7 @@ class ConversationCreate(BaseModel):
     initial_message: Optional[str] = None
     video_ids: Optional[List[int]] = []
     include_profile: Optional[bool] = False
+    is_external_support: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)
 
