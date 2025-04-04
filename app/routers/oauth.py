@@ -60,10 +60,6 @@ oauth.register(
 
 @router.get("/auth/{provider}")
 async def login(provider: str, request: Request):
-    """Start OAuth login and ensure fresh session state"""
-
-    # Important change: Explicitly define the redirect URI based on environment variables
-    # This ensures consistency regardless of how the request was proxied
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
     if provider == "google":
@@ -73,25 +69,33 @@ async def login(provider: str, request: Request):
     elif provider == "linkedin":
         redirect_uri = os.getenv("LINKEDIN_OAUTH_REDIRECT_URL")
     else:
-        logger.error(f"Unsupported provider: {provider}")
         return RedirectResponse(
             url=f"{frontend_url}/oauth-error?error=unsupported_provider"
         )
 
-    logger.info(f"OAuth login initiated for provider: {provider}")
-    logger.info(f"Using redirect URI: {redirect_uri}")
-
-    # 🔹 Clear old session state before creating a new one
+    # Clear previous session
     request.session.clear()
 
-    # 🔹 Generate a unique state value
+    # Generate unique state and store in session
     unique_state = str(uuid.uuid4())
-    request.session["oauth_state"] = unique_state  # Store state in session
-    logger.info(f"Generated OAuth state: {unique_state}")
+    request.session["oauth_state"] = unique_state
 
-    # Use the redirect_uri variable we defined above
-    return await oauth.create_client(provider).authorize_redirect(
-        request, redirect_uri, state=unique_state
+    client = oauth.create_client(provider)
+
+    # 🔍 Print for dev/debugging
+    print(f"[OAUTH] Provider: {provider}")
+    print(f"[OAUTH] Redirect URI: {redirect_uri}")
+    print(f"[OAUTH] State: {unique_state}")
+
+    # 🔥 Manually generate the authorization URL for logging
+    authorization_url = client.authorize_redirect_url(
+        request, redirect_uri=redirect_uri, state=unique_state
+    )
+    print(f"[OAUTH] Authorization URL to Google: {authorization_url}")
+
+    # 🔁 Then redirect
+    return await client.authorize_redirect(
+        request, redirect_uri=redirect_uri, state=unique_state
     )
 
 
