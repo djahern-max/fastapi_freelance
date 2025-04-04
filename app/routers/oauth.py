@@ -61,9 +61,25 @@ oauth.register(
 @router.get("/auth/{provider}")
 async def login(provider: str, request: Request):
     """Start OAuth login and ensure fresh session state"""
-    redirect_uri = request.url_for("auth_callback", provider=provider)
+
+    # Important change: Explicitly define the redirect URI based on environment variables
+    # This ensures consistency regardless of how the request was proxied
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    if provider == "google":
+        redirect_uri = os.getenv("GOOGLE_OAUTH_REDIRECT_URL")
+    elif provider == "github":
+        redirect_uri = os.getenv("GITHUB_OAUTH_REDIRECT_URL")
+    elif provider == "linkedin":
+        redirect_uri = os.getenv("LINKEDIN_OAUTH_REDIRECT_URL")
+    else:
+        logger.error(f"Unsupported provider: {provider}")
+        return RedirectResponse(
+            url=f"{frontend_url}/oauth-error?error=unsupported_provider"
+        )
+
     logger.info(f"OAuth login initiated for provider: {provider}")
-    logger.info(f"Redirect URI: {redirect_uri}")
+    logger.info(f"Using redirect URI: {redirect_uri}")
 
     # 🔹 Clear old session state before creating a new one
     request.session.clear()
@@ -73,13 +89,10 @@ async def login(provider: str, request: Request):
     request.session["oauth_state"] = unique_state  # Store state in session
     logger.info(f"Generated OAuth state: {unique_state}")
 
+    # Use the redirect_uri variable we defined above
     return await oauth.create_client(provider).authorize_redirect(
         request, redirect_uri, state=unique_state
     )
-
-
-# Fix for app/routers/oauth.py
-# In the auth_callback function, fix the error with dashboard_path variable
 
 
 @router.get("/auth/{provider}/callback")
@@ -88,6 +101,9 @@ async def auth_callback(
 ):
     try:
         debug_log(f"Auth callback started for provider: {provider}")
+
+        # Log the full request URL for debugging
+        debug_log(f"Full request URL: {request.url}")
     except Exception as e:
         logger.error(f"Debug logging failed: {str(e)}")
 
