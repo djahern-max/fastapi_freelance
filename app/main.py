@@ -135,7 +135,7 @@ for router, prefix in routers_with_prefixes:
     app.include_router(router, prefix=prefix)
 
 # Include OAuth router
-app.include_router(oauth.router, prefix="/api")
+app.include_router(oauth.router)
 # Add this line to include the LinkedIn OAuth router
 
 
