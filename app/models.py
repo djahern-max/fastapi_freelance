@@ -656,6 +656,7 @@ class ConversationMessage(Base):
     created_at = Column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )
+    external_source = Column(String, nullable=True)
 
     conversation = relationship("Conversation", back_populates="messages")
     user = relationship("User")
