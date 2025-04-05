@@ -31,7 +31,7 @@ async def send_message_to_analytics_hub(
             return None
 
         # Get the external ticket ID
-        external_ticket_id = request.external_metadata.get("ticket_id")
+        external_ticket_id = str(request_id)
         if not external_ticket_id:
             logger.error(
                 f"No external ticket ID found in metadata: {request.external_metadata}"
