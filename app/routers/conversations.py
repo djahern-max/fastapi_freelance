@@ -1,7 +1,7 @@
 # app/routers/conversations.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Any
 from .. import models, schemas, database, oauth2
 from sqlalchemy import or_
 from ..middleware import require_active_subscription
@@ -9,6 +9,8 @@ from ..database import get_db
 from fastapi import status
 from sqlalchemy.sql import func
 from typing import Dict
+from ..utils import external_service
+from ..utils import external_service
 
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
@@ -551,3 +553,65 @@ def get_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     return conversation
+
+
+# In app/routers/conversations.py
+@router.post("/conversations/{conversation_id}/messages/{message_id}/transmit")
+async def transmit_message(
+    conversation_id: int,
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    """Transmit a message from RYZE.ai to Analytics Hub"""
+
+    # Get the conversation
+    conversation = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.id == conversation_id)
+        .first()
+    )
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Check authorization
+    if (
+        conversation.starter_user_id != current_user.id
+        and conversation.recipient_user_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this conversation"
+        )
+
+    # Get the message
+    message = (
+        db.query(models.ConversationMessage)
+        .filter(
+            models.ConversationMessage.id == message_id,
+            models.ConversationMessage.conversation_id == conversation_id,
+        )
+        .first()
+    )
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Transmit to Analytics Hub
+    result = await external_service.send_message_to_analytics_hub(
+        db, conversation.request_id, message.id, message.content
+    )
+
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to transmit message")
+
+    # Update message to mark as transmitted
+    # If you have a field for this:
+    # message.transmitted_to_external = True
+    # db.commit()
+
+    return {
+        "status": "success",
+        "message": "Message transmitted successfully",
+        "destination": "analytics-hub",
+    }

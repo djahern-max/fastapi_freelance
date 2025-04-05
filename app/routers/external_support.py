@@ -12,6 +12,13 @@ from passlib.context import CryptContext
 from .. import models, schemas, oauth2
 from ..database import get_db
 
+# Import your settings module
+from ..config import settings
+
+# Import your crud module (we'll create this if needed)
+from .. import crud
+from fastapi import Header
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -236,4 +243,39 @@ def options_create_external_support_ticket():
     """
     Handle OPTIONS requests for CORS pre-flight check
     """
-    return {}
+
+
+# In app/routers/external_support.py
+
+
+@router.post("/{ticket_id}/messages", status_code=201)
+def add_external_message(
+    ticket_id: int,
+    message: schemas.ExternalMessageCreate,
+    db: Session = Depends(get_db),  # Add this
+    api_key: str = Header(..., alias="X-API-Key"),
+):
+    # Validate API key
+    if api_key != settings.EXTERNAL_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Get the request by external ticket ID
+    db_request = crud.get_request_by_external_id(db, ticket_id)
+    if not db_request:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Get the conversation associated with this request
+    conversation = crud.get_conversation_by_request_id(db, db_request.id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Create a new message in the conversation
+    new_message = crud.create_conversation_message(
+        db,
+        conversation_id=conversation.id,
+        user_id=db_request.user_id,  # Use request owner as the sender
+        content=message.content,
+        external_source="analytics-hub",
+    )
+
+    return {"id": new_message.id, "status": "created"}

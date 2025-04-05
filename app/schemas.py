@@ -1231,3 +1231,37 @@ class ExternalSupportTicketResponse(BaseModel):
     status: str
     message: str
     ticket_id: int
+
+
+# External message schemas
+class ExternalMessageCreate(BaseModel):
+    content: str
+    sender_platform: str = "analytics-hub"
+    sender_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "content": "This is a message from Analytics Hub",
+                "sender_platform": "analytics-hub",
+                "sender_id": "user@example.com",
+                "metadata": {"is_resolution": False},
+            }
+        }
+
+
+# For the Analytics Hub endpoint
+class TicketMessageCreate(BaseModel):
+    content: str
+    sender_type: str = "support"  # support or customer
+    message_id: Optional[str] = None
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "content": "This is a response from RYZE.ai support",
+                "sender_type": "support",
+                "message_id": "123",
+            }
+        }

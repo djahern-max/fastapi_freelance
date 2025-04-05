@@ -515,3 +515,41 @@ def get_requests_by_user(
     except Exception as e:
         print(f"Error in get_requests_by_user: {str(e)}")
         raise
+
+
+# In app/crud/crud_request.py or similar file
+def get_request_by_external_id(db: Session, external_id: int):
+    """Get a request by its external ID (from external_metadata)"""
+    return db.query(models.Request).filter(models.Request.id == external_id).first()
+
+
+# In app/crud/crud_conversation.py or similar file
+def get_conversation_by_request_id(db: Session, request_id: int):
+    """Get the conversation associated with a request"""
+    return (
+        db.query(models.Conversation)
+        .filter(models.Conversation.request_id == request_id)
+        .first()
+    )
+
+
+def create_conversation_message(
+    db: Session,
+    conversation_id: int,
+    user_id: int,
+    content: str,
+    external_source: str = None,
+):
+    """Create a new message in a conversation, optionally from an external source"""
+    message = models.ConversationMessage(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        content=content,
+        # If your model has these fields, include them
+        external_source=external_source,
+        # Add any other required fields
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return message
