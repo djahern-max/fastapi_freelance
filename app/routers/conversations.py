@@ -9,8 +9,7 @@ from ..database import get_db
 from fastapi import status
 from sqlalchemy.sql import func
 from typing import Dict
-from ..utils import external_service
-from ..utils import external_service
+from ..utils import external_service as external_service_module
 
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
@@ -598,7 +597,7 @@ async def transmit_message(
         raise HTTPException(status_code=404, detail="Message not found")
 
     # Transmit to Analytics Hub
-    result = await external_service.send_message_to_analytics_hub(
+    result = await external_service_module.send_message_to_analytics_hub(
         db, conversation.request_id, message.id, message.content
     )
 
