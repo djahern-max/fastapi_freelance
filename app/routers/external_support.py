@@ -193,6 +193,16 @@ def create_external_support_ticket(
             db.add(initial_message)
             db.commit()
 
+            # Add the customer's message to the conversation - ADD THIS CODE HERE
+            customer_message = models.ConversationMessage(
+                conversation_id=new_conversation.id,
+                user_id=system_user.id,  # Using system user as proxy for external user
+                content=ticket.issue,  # The actual content from the customer
+                external_source=ticket.source,  # Mark as coming from external source
+            )
+            db.add(customer_message)
+            db.commit()
+
             logger.info(f"Created initial conversation with ID {new_conversation.id}")
 
         except Exception as conv_error:
