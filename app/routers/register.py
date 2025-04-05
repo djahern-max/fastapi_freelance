@@ -3,11 +3,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app import database, models, schemas, utils
 from app.models import User
-from typing import Optional
 from fastapi import Request
+import re
 
 
 router = APIRouter(tags=["Users"])
+
+
+username_pattern = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 @router.post("/register", response_model=schemas.UserOut)
@@ -24,6 +27,13 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
             detail="You must accept the terms of agreement to register.",
         )
 
+    # Validate username format - no spaces allowed
+    if not username_pattern.match(user.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username can only contain letters, numbers, underscores and hyphens (no spaces).",
+        )
+
     # Check if username already exists
     existing_user = (
         db.query(models.User).filter(models.User.username == user.username).first()
@@ -32,16 +42,6 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
-        )
-
-    # Check if email already exists
-    existing_email = (
-        db.query(models.User).filter(models.User.email == user.email).first()
-    )
-
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
     # Create new user with hashed password
