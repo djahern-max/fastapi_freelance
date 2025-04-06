@@ -139,7 +139,6 @@ def create_external_support_ticket(
                 "source": ticket.source,
                 "website_id": ticket.website_id,
                 "email": ticket.email,
-                "analytics_hub_conversation_id": ticket.id,
                 "conversation": [
                     {
                         "role": msg.role,
@@ -157,6 +156,9 @@ def create_external_support_ticket(
         db.add(new_request)
         db.commit()
         db.refresh(new_request)
+
+        new_request.external_metadata["ryze_request_id"] = str(new_request.id)
+        db.commit()  # Commit again to save the updated metadata
 
         logger.info(
             f"External support ticket created successfully with ID {new_request.id}"
