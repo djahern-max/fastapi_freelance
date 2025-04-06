@@ -139,6 +139,7 @@ def create_external_support_ticket(
                 "source": ticket.source,
                 "website_id": ticket.website_id,
                 "email": ticket.email,
+                "analytics_hub_conversation_id": ticket.id,
                 "conversation": [
                     {
                         "role": msg.role,
