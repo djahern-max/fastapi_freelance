@@ -123,17 +123,22 @@ async def test_message_sending():
             )
 
     # Try sending the message to the specific Analytics Hub ticket
+    # Add this to your test_communication.py script for direct testing
+
+    # ...
+
+    # Try sending the message directly with the right schema
     if analytics_hub_ticket_id:
         print(
             f"\nSending message directly to Analytics Hub ticket ID: {analytics_hub_ticket_id}"
         )
 
-        # Call the direct API with the specific ID
         api_url = getattr(
             settings, "ANALYTICS_HUB_API_URL", "https://analytics-hub.xyz/api"
         )
         api_key = getattr(settings, "ANALYTICS_HUB_API_KEY", settings.EXTERNAL_API_KEY)
 
+        # Use the EXACT payload format required by Analytics Hub's API
         payload = {
             "message_id": str(message.id),
             "content": message.content,

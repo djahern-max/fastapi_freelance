@@ -30,24 +30,13 @@ async def send_message_to_analytics_hub(
             )
             return None
 
-        # Print the external metadata for debugging
-        logger.info(f"External metadata: {request.external_metadata}")
-
-        # Try different possible keys where the ticket ID might be stored
-        external_ticket_id = (
-            request.external_metadata.get("analytics_hub_conversation_id")
-            or request.external_metadata.get("ticket_id")
-            or request.external_metadata.get("id")
+        # Get the external ticket ID - which is the ID from Analytics Hub
+        # Use the one stored in external_metadata if available, otherwise use request_id
+        external_ticket_id = request.external_metadata.get(
+            "analytics_hub_ticket_id", str(request_id)
         )
 
-        if not external_ticket_id:
-            # If not found, use the request ID as a fallback
-            logger.warning(
-                f"No Analytics Hub ticket ID found in metadata, using request ID as fallback"
-            )
-            external_ticket_id = str(request_id)
-
-        # Prepare the payload
+        # Prepare the payload ACCORDING TO THE API SCHEMA
         payload = {
             "message_id": str(message_id),
             "content": content,
@@ -61,7 +50,7 @@ async def send_message_to_analytics_hub(
         )
         api_key = getattr(settings, "ANALYTICS_HUB_API_KEY", settings.EXTERNAL_API_KEY)
 
-        # The correct endpoint based on Analytics Hub's router
+        # The correct endpoint from the OpenAPI definition
         endpoint = f"{api_url}/support/tickets/{external_ticket_id}/messages"
 
         logger.info(
@@ -78,21 +67,6 @@ async def send_message_to_analytics_hub(
 
             # Check response
             response.raise_for_status()
-
-            # Update message sync status
-            message = (
-                db.query(models.ConversationMessage)
-                .filter(models.ConversationMessage.id == message_id)
-                .first()
-            )
-            if message:
-                # Add flag if these fields exist in your model
-                # Otherwise you can skip this part
-                if hasattr(message, "external_sync_status"):
-                    message.external_sync_status = "synced"
-                if hasattr(message, "external_sync_time"):
-                    message.external_sync_time = datetime.utcnow()
-                db.commit()
 
             logger.info(
                 f"Successfully sent message {message_id} to Analytics Hub ticket {external_ticket_id}"
