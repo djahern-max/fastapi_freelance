@@ -33,7 +33,7 @@ async def send_message_to_analytics_hub(
         # Get the external ticket ID - which is the ID from Analytics Hub
         # Use the one stored in external_metadata if available, otherwise use request_id
         external_ticket_id = request.external_metadata.get(
-            "analytics_hub_ticket_id", str(request_id)
+            "analytics_hub_id", str(request_id)
         )
 
         # Prepare the payload ACCORDING TO THE API SCHEMA

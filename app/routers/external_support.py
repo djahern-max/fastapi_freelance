@@ -135,7 +135,7 @@ def create_external_support_ticket(
                 "website_id": ticket.website_id,
                 "created_at": datetime.utcnow().isoformat(),
             },
-            external_metadata={  # Also store in external_metadata
+            external_metadata={
                 "source": ticket.source,
                 "website_id": ticket.website_id,
                 "email": ticket.email,
@@ -150,6 +150,7 @@ def create_external_support_ticket(
                     for msg in (ticket.conversation_history or [])
                 ],
                 "submitted_at": datetime.utcnow().isoformat(),
+                "analytics_hub_id": ticket.analytics_hub_id,
             },
         )
 
