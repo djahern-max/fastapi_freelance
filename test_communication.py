@@ -12,8 +12,8 @@ async def test_message_sending():
     db = next(get_db())
 
     # Use a known request ID
-    request_id = 123  # Replace with an actual request ID from your database
-    message_id = 456  # Replace with an actual message ID
+    request_id = 1  # Replace with an actual request ID from your database
+    message_id = 1  # Replace with an actual message ID
     content = "This is a test message from RYZE.ai to Analytics Hub"
 
     # Try sending the message
