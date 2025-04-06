@@ -1187,7 +1187,7 @@ class ExternalSupportTicketBase(BaseModel):
     source: str = "analytics-hub"
     website_id: Optional[str] = None
     platform: Optional[str] = None
-    # Changed to use structured data instead of string
+    analytics_hub_id: Optional[str] = None  # Add this field
     conversation_history: Optional[List[ConversationMessage]] = None
 
     class Config:
