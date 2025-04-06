@@ -825,3 +825,88 @@ class SnaggedRequest(Base):
     # Relationships
     request = relationship("Request", backref="snagged_by")
     developer = relationship("User", backref="snagged_requests")
+
+
+# ------------------ Collaboration Session Models ------------------
+
+
+class CollaborationSession(Base):
+    __tablename__ = "collaboration_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    external_ticket_id = Column(Integer, nullable=False)
+    source_system = Column(String(50), nullable=False)
+    status = Column(String(20), default="open", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    access_token = Column(String(255), unique=True)
+    session_metadata = Column(JSONB, nullable=True)
+
+    # Relationships
+    participants = relationship(
+        "CollaborationParticipant",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
+    messages = relationship(
+        "CollaborationMessage", back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class CollaborationParticipant(Base):
+    __tablename__ = "collaboration_participants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("collaboration_sessions.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    email = Column(String(255), nullable=False)
+    user_name = Column(String(255), nullable=False)
+    user_type = Column(String(50), nullable=False)
+    external_user_id = Column(String(255), nullable=True)
+    last_viewed_at = Column(DateTime(timezone=True), nullable=True)
+    notification_settings = Column(JSONB, nullable=True)
+
+    # Relationships
+    session = relationship("CollaborationSession", back_populates="participants")
+    user = relationship("User", backref="collaboration_participants")
+    messages = relationship("CollaborationMessage", back_populates="participant")
+
+
+class CollaborationMessage(Base):
+    __tablename__ = "collaboration_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("collaboration_sessions.id"))
+    participant_id = Column(
+        Integer, ForeignKey("collaboration_participants.id"), nullable=True
+    )
+    content = Column(Text, nullable=False)
+    message_type = Column(String(50), default="text")
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    message_metadata = Column(JSONB, nullable=True)
+    is_system = Column(Boolean, default=False)
+
+    # Relationships
+    session = relationship("CollaborationSession", back_populates="messages")
+    participant = relationship("CollaborationParticipant", back_populates="messages")
+    attachments = relationship(
+        "CollaborationAttachment",
+        back_populates="message",
+        cascade="all, delete-orphan",
+    )
+
+
+class CollaborationAttachment(Base):
+    __tablename__ = "collaboration_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("collaboration_messages.id"), nullable=True)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(255), nullable=False)
+    file_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    message = relationship("CollaborationMessage", back_populates="attachments")

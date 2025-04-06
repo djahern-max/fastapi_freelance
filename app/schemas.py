@@ -1265,3 +1265,100 @@ class TicketMessageCreate(BaseModel):
                 "message_id": "123",
             }
         }
+
+
+# Pydantic models for collaboration API
+class ParticipantBase(BaseModel):
+    email: str
+    user_name: str
+    user_type: str
+    external_user_id: Optional[str] = None
+    notification_settings: Optional[dict] = None
+
+
+class ParticipantCreate(ParticipantBase):
+    pass
+
+
+class ParticipantResponse(ParticipantBase):
+    id: int
+    session_id: int
+    last_viewed_at: Optional[datetime] = None
+    is_current_user: bool = False
+
+    class Config:
+        orm_mode = True
+
+
+class MessageBase(BaseModel):
+    content: str
+    message_type: str = "text"
+    metadata: Optional[dict] = None
+
+
+class MessageCreate(MessageBase):
+    attachments: Optional[List[dict]] = []
+
+
+class MessageResponse(MessageBase):
+    id: int
+    session_id: int
+    participant_id: int
+    created_at: datetime
+    is_system: bool = False
+    attachments: Optional[List[dict]] = None
+
+    class Config:
+        orm_mode = True
+
+
+class AttachmentResponse(BaseModel):
+    id: int
+    message_id: int
+    file_name: str
+    file_path: str
+    file_type: str
+    file_size: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class SessionStatus(BaseModel):
+    status: str
+
+    @field_validator("status")
+    def validate_status(cls, v):
+        valid_statuses = ["open", "in_progress", "resolved"]
+        if v not in valid_statuses:
+            raise ValueError(f"Status must be one of {valid_statuses}")
+        return v
+
+
+class SessionCreate(BaseModel):
+    external_ticket_id: int
+    source_system: str
+    metadata: Optional[dict] = None
+
+
+class AccessRequest(BaseModel):
+    email: str
+    user_name: Optional[str] = None
+    user_type: str
+    duration_days: Optional[int] = 30
+
+
+class SessionResponse(BaseModel):
+    id: int
+    external_ticket_id: int
+    source_system: str
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime]
+    resolved_at: Optional[datetime]
+    metadata: Optional[dict]
+    participants: List[ParticipantResponse]
+
+    class Config:
+        orm_mode = True
