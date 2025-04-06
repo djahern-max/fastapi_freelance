@@ -30,9 +30,16 @@ async def send_message_to_analytics_hub(
             )
             return None
 
-        # Extract the Analytics Hub conversation ID
-        # Look for it in the external_metadata
-        external_ticket_id = request.external_metadata.get("ticket_id")
+        # Print the external metadata for debugging
+        logger.info(f"External metadata: {request.external_metadata}")
+
+        # Try different possible keys where the ticket ID might be stored
+        external_ticket_id = (
+            request.external_metadata.get("analytics_hub_conversation_id")
+            or request.external_metadata.get("ticket_id")
+            or request.external_metadata.get("id")
+        )
+
         if not external_ticket_id:
             # If not found, use the request ID as a fallback
             logger.warning(
@@ -79,10 +86,12 @@ async def send_message_to_analytics_hub(
                 .first()
             )
             if message:
-                # You may need to add these fields to your ConversationMessage model
-                # Set a flag to indicate this message was sent to Analytics Hub
-                message.external_sync_status = "synced"
-                message.external_sync_time = datetime.utcnow()
+                # Add flag if these fields exist in your model
+                # Otherwise you can skip this part
+                if hasattr(message, "external_sync_status"):
+                    message.external_sync_status = "synced"
+                if hasattr(message, "external_sync_time"):
+                    message.external_sync_time = datetime.utcnow()
                 db.commit()
 
             logger.info(
