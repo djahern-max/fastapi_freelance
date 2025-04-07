@@ -2,7 +2,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app import database, models, schemas
-from app import utils
+
+# Import bcrypt directly
+import bcrypt
 from app.models import User
 from typing import Optional
 
@@ -43,9 +45,11 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
                 detail="Email already registered",
             )
 
-        # Create new user with hashed password - use the imported hash_password function
+        # Create new user with hashed password - use bcrypt directly
         print("Hashing password...")
-        hashed_password = utils.hash_password(user.password)
+        hashed_password = bcrypt.hashpw(
+            user.password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
 
         print("Creating user object...")
         new_user = models.User(
