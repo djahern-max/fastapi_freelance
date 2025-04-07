@@ -10,34 +10,43 @@ router = APIRouter(tags=["Users"])
 
 @router.post("/register", response_model=schemas.UserOut)
 def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    # First check terms
-    if not user.terms_accepted:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must accept the terms of agreement to register.",
-        )
-
-    # Check if username already exists
-    existing_user = (
-        db.query(models.User).filter(models.User.username == user.username).first()
-    )
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
-        )
-
-    # Check if email already exists
-    existing_email = (
-        db.query(models.User).filter(models.User.email == user.email).first()
-    )
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
-        )
-
-    # Create new user with hashed password
     try:
+        # First check terms
+        if not user.terms_accepted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must accept the terms of agreement to register.",
+            )
+
+        # Log what we're about to do
+        print(f"Registering user: {user.email}, username: {user.username}")
+
+        # Check if username already exists
+        existing_user = (
+            db.query(models.User).filter(models.User.username == user.username).first()
+        )
+        if existing_user:
+            print(f"Username already taken: {user.username}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+            )
+
+        # Check if email already exists
+        existing_email = (
+            db.query(models.User).filter(models.User.email == user.email).first()
+        )
+        if existing_email:
+            print(f"Email already registered: {user.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+
+        # Create new user with hashed password
+        print("Hashing password...")
         hashed_password = utils.hash_password(user.password)
+
+        print("Creating user object...")
         new_user = models.User(
             username=user.username,
             email=user.email,
@@ -49,16 +58,23 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         )
 
         # Save user to database
+        print("Adding to database...")
         db.add(new_user)
+
+        print("Committing to database...")
         db.commit()
+
+        print("Refreshing user object...")
         db.refresh(new_user)
 
+        print(f"User created: {new_user.id}, {new_user.username}")
         return new_user
 
     except Exception as e:
+        print(f"Error during registration: {type(e).__name__}: {str(e)}")
         db.rollback()
-        # Re-raise the exception
+        # Re-raise but with more detail
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating user: {str(e)}",
+            detail=f"Error creating user: {type(e).__name__}: {str(e)}",
         )
