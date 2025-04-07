@@ -1,7 +1,8 @@
 # app/routers/register.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app import database, models, schemas, utils
+from app import database, models, schemas
+from app.utils import hash_password  # Only import what you need
 from app.models import User
 from fastapi import Request
 import re
@@ -56,7 +57,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
 
     # Create new user with hashed password
     try:
-        hashed_password = utils.hash_password(user.password)
+        hashed_password = hash_password(user.password)  # Fixed: direct call
         new_user = models.User(
             username=user.username,
             email=user.email,
@@ -87,76 +88,3 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to register user: {str(e)}",
         )
-
-
-@router.get("/users/{id}", response_model=schemas.UserOut)
-def get_user(id: int, db: Session = Depends(database.get_db)):
-    """Get user by ID"""
-    user = db.query(User).filter(User.id == id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with id: {id} does not exist",
-        )
-
-    # Get profile information based on user type
-    if user.user_type == models.UserType.developer:
-        user.developer_profile = (
-            db.query(models.DeveloperProfile)
-            .filter(models.DeveloperProfile.user_id == user.id)
-            .first()
-        )
-    elif user.user_type == models.UserType.client:
-        user.client_profile = (
-            db.query(models.ClientProfile)
-            .filter(models.ClientProfile.user_id == user.id)
-            .first()
-        )
-
-    return user
-
-
-@router.post("/debug-register")
-async def debug_register(request: Request, db: Session = Depends(database.get_db)):
-    """Debug endpoint for registration issues"""
-    try:
-        body = await request.json()
-        print(f"DEBUG REGISTER: {body}")
-
-        # Check if username exists
-        username_exists = (
-            db.query(models.User)
-            .filter(models.User.username == body.get("username"))
-            .first()
-            is not None
-        )
-
-        # Check if email exists
-        email_exists = (
-            db.query(models.User).filter(models.User.email == body.get("email")).first()
-            is not None
-        )
-
-        # Check terms acceptance
-        terms_accepted = body.get("terms_accepted", False)
-
-        # Return diagnostic info
-        return {
-            "received_data": {
-                k: "***" if k == "password" else v for k, v in body.items()
-            },
-            "validation_checks": {
-                "terms_accepted": terms_accepted,
-                "username_exists": username_exists,
-                "email_exists": email_exists,
-            },
-            "required_fields": [
-                "username",
-                "email",
-                "password",
-                "terms_accepted",
-                "user_type",
-            ],
-        }
-    except Exception as e:
-        return {"error": str(e)}
