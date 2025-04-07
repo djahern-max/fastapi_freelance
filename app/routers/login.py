@@ -7,6 +7,7 @@ from app.models import User
 from app.oauth2 import get_current_user
 from app.database import get_db
 from typing import Optional
+import bcrypt
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -23,10 +24,13 @@ def login(user_credentials: schemas.UserLogin, db: Session = Depends(database.ge
         .first()
     )
 
-    if not user or not utils.verify_password(user_credentials.password, user.password):
+    if not user or not bcrypt.checkpw(
+        user_credentials.password.encode("utf-8"), user.password.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials, please try again.",
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     # Create token with string ID
