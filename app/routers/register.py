@@ -1,7 +1,8 @@
 # app/routers/register.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app import database, models, schemas, utils
+from app import database, models, schemas
+from app.utils import hash_password  # Importing the function directly
 from app.models import User
 from typing import Optional
 
@@ -42,9 +43,9 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
                 detail="Email already registered",
             )
 
-        # Create new user with hashed password
+        # Create new user with hashed password - use the imported hash_password function
         print("Hashing password...")
-        hashed_password = utils.hash_password(user.password)
+        hashed_password = hash_password(user.password)
 
         print("Creating user object...")
         new_user = models.User(
