@@ -53,17 +53,11 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
         db.commit()
         db.refresh(new_user)
 
-        print(
-            "DEBUG:",
-            type(new_user),
-            new_user.__dict__ if hasattr(new_user, "__dict__") else new_user,
-        )
-
         return new_user
 
     except Exception as e:
         db.rollback()
-        # Don't silently catch exceptions! Either log them or re-raise
+        # Re-raise the exception
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating user: {str(e)}",
