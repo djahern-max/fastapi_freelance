@@ -215,3 +215,16 @@ def get_message_attachments(
         .filter(models.CollaborationAttachment.message_id == message_id)
         .all()
     )
+
+
+def get_request_by_external_id(db: Session, external_id: str):
+    """Get a request by external ID stored in external_metadata"""
+    requests = db.query(models.Request).all()
+    for request in requests:
+        if (
+            request.external_metadata
+            and "analytics_hub_id" in request.external_metadata
+        ):
+            if request.external_metadata["analytics_hub_id"] == str(external_id):
+                return request
+    return None
