@@ -1,37 +1,20 @@
 # app/routers/register.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app import database, models, schemas, utils  # Import utils as a module
+from app import database, models, schemas, utils
 from app.models import User
-from fastapi import Request
-import re
-
+from typing import Optional
 
 router = APIRouter(tags=["Users"])
-
-
-username_pattern = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 @router.post("/register", response_model=schemas.UserOut)
 def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     """Register a new user with basic information. Profiles can be added later."""
-    # Add this debug line
-    print(f"Registration attempt: {user.dict()}")
-
     if not user.terms_accepted:
-        # Add this debug line
-        print("Terms not accepted")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You must accept the terms of agreement to register.",
-        )
-
-    # Validate username format - no spaces allowed
-    if not username_pattern.match(user.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username can only contain letters, numbers, underscores and hyphens (no spaces).",
         )
 
     # Check if username already exists
@@ -82,8 +65,30 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
 
     except Exception as e:
         db.rollback()
-        print(f"Registration error: {str(e)}")
+
+
+@router.get("/users/{id}", response_model=schemas.UserOut)
+def get_user(id: int, db: Session = Depends(database.get_db)):
+    """Get user by ID"""
+    user = db.query(User).filter(User.id == id).first()
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register user: {str(e)}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id: {id} does not exist",
         )
+
+    # Get profile information based on user type
+    if user.user_type == models.UserType.developer:
+        user.developer_profile = (
+            db.query(models.DeveloperProfile)
+            .filter(models.DeveloperProfile.user_id == user.id)
+            .first()
+        )
+    elif user.user_type == models.UserType.client:
+        user.client_profile = (
+            db.query(models.ClientProfile)
+            .filter(models.ClientProfile.user_id == user.id)
+            .first()
+        )
+
+    return user
