@@ -616,3 +616,56 @@ async def transmit_message(
         "message": "Message transmitted successfully",
         "destination": "analytics-hub",
     }
+
+
+@router.post("/{conversation_id}/messages/{message_id}/transmit")
+async def transmit_message(
+    conversation_id: int,
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(oauth2.get_current_user),
+):
+    # Get the message
+    message = (
+        db.query(models.ConversationMessage)
+        .filter(
+            models.ConversationMessage.id == message_id,
+            models.ConversationMessage.conversation_id == conversation_id,
+        )
+        .first()
+    )
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Get the request to find external_ticket_id
+    conversation = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.id == conversation_id)
+        .first()
+    )
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Get the request to find external metadata
+    request = (
+        db.query(models.Request)
+        .filter(models.Request.id == conversation.request_id)
+        .first()
+    )
+
+    if (
+        not request
+        or not request.external_metadata
+        or "analytics_hub_id" not in request.external_metadata
+    ):
+        raise HTTPException(
+            status_code=400, detail="No external ticket reference found"
+        )
+
+    # Send to Analytics Hub
+    analytics_hub_id = request.external_metadata["analytics_hub_id"]
+    # Call your external service to transmit the message
+
+    return {"status": "success"}

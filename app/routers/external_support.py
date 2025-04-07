@@ -178,34 +178,51 @@ def create_external_support_ticket(
 
             recipient_id = developer.id if developer else system_user.id
 
-            new_conversation = models.Conversation(
-                request_id=new_request.id,
-                starter_user_id=system_user.id,
-                recipient_user_id=recipient_id,  # Assign to a developer or self
-                status="active",
+            # Check if a conversation already exists for this request
+            existing_conversation = (
+                db.query(models.Conversation)
+                .filter(models.Conversation.request_id == new_request.id)
+                .first()
             )
-            db.add(new_conversation)
-            db.commit()
-            db.refresh(new_conversation)
 
-            # Add an initial message to the conversation
-            initial_message = models.ConversationMessage(
-                conversation_id=new_conversation.id,
-                user_id=system_user.id,
-                content=f"Support ticket created from {ticket.source} for {ticket.email}. Please respond within one hour.",
-            )
-            db.add(initial_message)
-            db.commit()
+            if not existing_conversation:
+                # Create new conversation only if one doesn't exist
+                new_conversation = models.Conversation(
+                    request_id=new_request.id,
+                    starter_user_id=system_user.id,
+                    recipient_user_id=recipient_id,  # Assign to a developer or self
+                    status="active",
+                )
+                db.add(new_conversation)
+                db.commit()
+                db.refresh(new_conversation)
 
-            # Add the customer's message to the conversation - ADD THIS CODE HERE
-            customer_message = models.ConversationMessage(
-                conversation_id=new_conversation.id,
-                user_id=system_user.id,  # Using system user as proxy for external user
-                content=ticket.issue,  # The actual content from the customer
-                external_source=ticket.source,  # Mark as coming from external source
-            )
-            db.add(customer_message)
-            db.commit()
+                # Only create the initial message if we created a new conversation
+                # Add an initial message to the conversation
+                initial_message = models.ConversationMessage(
+                    conversation_id=new_conversation.id,
+                    user_id=system_user.id,
+                    content=f"Support ticket created from {ticket.source} for {ticket.email}. Please respond within one hour.",
+                )
+                db.add(initial_message)
+                db.commit()
+
+                # Add the customer's message to the conversation
+                customer_message = models.ConversationMessage(
+                    conversation_id=new_conversation.id,
+                    user_id=system_user.id,  # Using system user as proxy for external user
+                    content=ticket.issue,  # The actual content from the customer
+                    external_source=ticket.source,  # Mark as coming from external source
+                )
+                db.add(customer_message)
+                db.commit()
+            else:
+                logger.info(
+                    f"Using existing conversation with ID {existing_conversation.id} for request {new_request.id}"
+                )
+                new_conversation = (
+                    existing_conversation  # Use the existing conversation
+                )
 
             logger.info(f"Created initial conversation with ID {new_conversation.id}")
 
