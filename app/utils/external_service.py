@@ -1,86 +1,101 @@
+# app/utils/external_service.py
+
 import httpx
+import os
 import logging
+from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime
-from .. import models
-from ..config import settings
 
 logger = logging.getLogger(__name__)
 
 
 async def send_message_to_analytics_hub(
     db: Session, request_id: int, message_id: int, content: str
-):
-    """Send a message from RYZE.ai to Analytics Hub"""
+) -> bool:
+    """
+    Send a message from RYZE.ai to Analytics Hub
+
+    Args:
+        db: Database session
+        request_id: The request ID
+        message_id: The message ID
+        content: The message content
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
     try:
-        # Get the request to find external ticket details
+        # Get the request with external metadata
+        from .. import models
+
         request = (
             db.query(models.Request).filter(models.Request.id == request_id).first()
         )
-        if not request:
-            logger.error(f"Request {request_id} not found")
-            return None
 
-        # Check for external metadata
-        if not request.external_metadata or not isinstance(
-            request.external_metadata, dict
+        if (
+            not request
+            or not request.external_metadata
+            or "analytics_hub_id" not in request.external_metadata
         ):
             logger.error(
-                f"Request {request_id} has invalid external metadata: {request.external_metadata}"
+                f"Request {request_id} has no analytics_hub_id in external_metadata"
             )
-            return None
+            return False
 
-        # Get the external ticket ID - which is the ID from Analytics Hub
-        # Use the one stored in external_metadata if available, otherwise use request_id
-        external_ticket_id = request.external_metadata.get(
-            "analytics_hub_id", str(request_id)
+        analytics_hub_id = request.external_metadata["analytics_hub_id"]
+
+        # Get the message and user details
+        message = (
+            db.query(models.ConversationMessage)
+            .filter(models.ConversationMessage.id == message_id)
+            .first()
         )
+        if not message:
+            logger.error(f"Message {message_id} not found")
+            return False
 
-        # Prepare the payload ACCORDING TO THE API SCHEMA
+        user = db.query(models.User).filter(models.User.id == message.user_id).first()
+        if not user:
+            logger.error(f"User for message {message_id} not found")
+            return False
+
+        # Prepare the webhook payload
         payload = {
-            "message_id": str(message_id),
+            "analytics_hub_id": analytics_hub_id,
             "content": content,
-            "sender_type": "support",
-            "timestamp": datetime.utcnow().isoformat(),
+            "sender": user.username,
         }
 
-        # Get API settings from configuration
-        api_url = getattr(
-            settings, "ANALYTICS_HUB_API_URL", "https://analytics-hub.xyz/api"
-        )
-        api_key = getattr(settings, "ANALYTICS_HUB_API_KEY", settings.EXTERNAL_API_KEY)
+        # Get API endpoint and key from environment
+        api_url = os.getenv("ANALYTICS_HUB_API_URL", "https://analytics-hub.xyz/api")
+        webhook_url = f"{api_url}/webhooks/ryze/messages"
+        api_key = os.getenv("ANALYTICS_HUB_API_KEY")
 
-        # The correct endpoint from the OpenAPI definition
-        endpoint = f"{api_url}/support/tickets/{external_ticket_id}/messages"
+        if not api_key:
+            logger.error("ANALYTICS_HUB_API_KEY environment variable not set")
+            return False
 
-        logger.info(
-            f"Sending message to Analytics Hub: URL={endpoint}, Payload={payload}"
-        )
+        # Set up headers
+        headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+
+        # Make the request
+        logger.info(f"Sending message to Analytics Hub webhook: {webhook_url}")
+        logger.info(f"Payload: {payload}")
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                endpoint,
-                headers={"Content-Type": "application/json", "X-API-Key": api_key},
-                json=payload,
-                timeout=10.0,
-            )
+            response = await client.post(webhook_url, json=payload, headers=headers)
 
-            # Check response
-            response.raise_for_status()
+            if response.status_code in (200, 201, 204):
+                logger.info(
+                    f"Successfully sent message to Analytics Hub. Response: {response.status_code}"
+                )
+                return True
+            else:
+                logger.error(
+                    f"Failed to send message to Analytics Hub. Status: {response.status_code}, Response: {response.text}"
+                )
+                return False
 
-            logger.info(
-                f"Successfully sent message {message_id} to Analytics Hub ticket {external_ticket_id}"
-            )
-            return response.json()
-
-    except httpx.HTTPStatusError as e:
-        logger.error(
-            f"HTTP error from Analytics Hub: {e.response.status_code} - {e.response.text}"
-        )
-        return None
-    except httpx.RequestError as e:
-        logger.error(f"Request error sending to Analytics Hub: {str(e)}")
-        return None
     except Exception as e:
-        logger.error(f"Failed to send message to Analytics Hub: {str(e)}")
-        return None
+        logger.error(f"Exception sending message to Analytics Hub: {str(e)}")
+        return False
