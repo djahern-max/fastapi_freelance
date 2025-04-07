@@ -10,7 +10,7 @@ router = APIRouter(tags=["Users"])
 
 @router.post("/register", response_model=schemas.UserOut)
 def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    """Register a new user with basic information. Profiles can be added later."""
+    # First check terms
     if not user.terms_accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -21,7 +21,6 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
     existing_user = (
         db.query(models.User).filter(models.User.username == user.username).first()
     )
-
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
@@ -31,7 +30,6 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
     existing_email = (
         db.query(models.User).filter(models.User.email == user.email).first()
     )
-
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
@@ -47,7 +45,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
             password=hashed_password,
             user_type=user.user_type.lower(),
             is_active=True,
-            terms_accepted=user.terms_accepted,  # Include this field
+            terms_accepted=user.terms_accepted,
         )
 
         # Save user to database
@@ -65,30 +63,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
 
     except Exception as e:
         db.rollback()
-
-
-@router.get("/users/{id}", response_model=schemas.UserOut)
-def get_user(id: int, db: Session = Depends(database.get_db)):
-    """Get user by ID"""
-    user = db.query(User).filter(User.id == id).first()
-    if not user:
+        # Don't silently catch exceptions! Either log them or re-raise
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with id: {id} does not exist",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating user: {str(e)}",
         )
-
-    # Get profile information based on user type
-    if user.user_type == models.UserType.developer:
-        user.developer_profile = (
-            db.query(models.DeveloperProfile)
-            .filter(models.DeveloperProfile.user_id == user.id)
-            .first()
-        )
-    elif user.user_type == models.UserType.client:
-        user.client_profile = (
-            db.query(models.ClientProfile)
-            .filter(models.ClientProfile.user_id == user.id)
-            .first()
-        )
-
-    return user
