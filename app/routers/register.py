@@ -44,6 +44,16 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
             status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
         )
 
+    # Check if email already exists
+    existing_email = (
+        db.query(models.User).filter(models.User.email == user.email).first()
+    )
+
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+        )
+
     # Create new user with hashed password
     try:
         hashed_password = utils.hash_password(user.password)
@@ -72,6 +82,11 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(database.get_d
 
     except Exception as e:
         db.rollback()
+        print(f"Registration error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to register user: {str(e)}",
+        )
 
 
 @router.get("/users/{id}", response_model=schemas.UserOut)
