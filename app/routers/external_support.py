@@ -304,9 +304,14 @@ def add_external_message(
     new_message = crud.create_conversation_message(
         db,
         conversation_id=conversation.id,
-        user_id=db_request.user_id,  # Use request owner as the sender
+        user_id=db_request.user_id,  # Still use system user's ID
         content=message.content,
-        external_source="analytics-hub",
+        external_source="analytics-hub",  # This is correct
+        message_metadata={  # Add this metadata
+            "original_sender": "external_user",
+            "source_platform": "analytics-hub",
+            "analytics_hub_id": message.sender_id or "unknown",
+        },
     )
 
     return {"id": new_message.id, "status": "created"}
