@@ -284,83 +284,86 @@ def list_user_conversations(
             .filter(models.Request.id == conv.request_id)
             .first()
         )
+
+        # Initialize messages array for this conversation
         messages = []
 
+        # Fetch all messages for this conversation
         conversation_messages = (
             db.query(models.ConversationMessage)
             .filter(models.ConversationMessage.conversation_id == conv.id)
             .all()
         )
-    for msg in conversation_messages:
-        # First, get content links
-        content_links = (
-            db.query(models.ConversationContentLink)
-            .filter(models.ConversationContentLink.message_id == msg.id)
-            .all()
-        )
 
-        # Build linked_content array
-        linked_content = []
-        for link in content_links:
-            if link.content_type == "video":
-                video = (
-                    db.query(models.Video)
-                    .filter(models.Video.id == link.content_id)
-                    .first()
-                )
-                if video:
-                    linked_content.append(
-                        {
-                            "id": link.id,
-                            "type": "video",
-                            "content_id": video.id,
-                            "title": video.title,
-                            "url": video.file_path,
-                        }
+        # Process each message
+        for msg in conversation_messages:
+            # First, get content links
+            content_links = (
+                db.query(models.ConversationContentLink)
+                .filter(models.ConversationContentLink.message_id == msg.id)
+                .all()
+            )
+
+            # Build linked_content array
+            linked_content = []
+            for link in content_links:
+                if link.content_type == "video":
+                    video = (
+                        db.query(models.Video)
+                        .filter(models.Video.id == link.content_id)
+                        .first()
                     )
-            elif link.content_type == "profile":
-                user = (
-                    db.query(models.User)
-                    .filter(models.User.id == link.content_id)
-                    .first()
-                )
-                if user:
-                    linked_content.append(
-                        {
-                            "id": link.id,
-                            "type": "profile",
-                            "content_id": user.id,
-                            "title": f"{user.username}'s Profile",
-                            "url": f"/profile/developer/{user.id}",
-                        }
+                    if video:
+                        linked_content.append(
+                            {
+                                "id": link.id,
+                                "type": "video",
+                                "content_id": video.id,
+                                "title": video.title,
+                                "url": video.file_path,
+                            }
+                        )
+                elif link.content_type == "profile":
+                    user = (
+                        db.query(models.User)
+                        .filter(models.User.id == link.content_id)
+                        .first()
                     )
+                    if user:
+                        linked_content.append(
+                            {
+                                "id": link.id,
+                                "type": "profile",
+                                "content_id": user.id,
+                                "title": f"{user.username}'s Profile",
+                                "url": f"/profile/developer/{user.id}",
+                            }
+                        )
 
-        # Check if message is external
-        is_external = (
-            hasattr(msg, "external_source") and msg.external_source == "analytics-hub"
-        )
+            # Check if message is external
+            is_external = (
+                hasattr(msg, "external_source")
+                and msg.external_source == "analytics-hub"
+            )
 
-        # Get message metadata for additional context
-        message_metadata = getattr(msg, "message_metadata", {}) or {}
+            # Now build the complete message object
+            message_data = {
+                "id": msg.id,
+                "conversation_id": msg.conversation_id,
+                "user_id": msg.user_id,
+                "content": msg.content,
+                "created_at": msg.created_at,
+                "is_external": is_external,
+                "sender_type": (
+                    "external_user"
+                    if is_external
+                    else "system" if msg.user_id == request.user_id else "developer"
+                ),
+                "linked_content": linked_content,
+            }
+            messages.append(message_data)
 
-        # Now build the complete message object
-        message_data = {
-            "id": msg.id,
-            "conversation_id": msg.conversation_id,
-            "user_id": msg.user_id,
-            "content": msg.content,
-            "created_at": msg.created_at,
-            "is_external": is_external,
-            "sender_type": (
-                "external_user"
-                if is_external
-                else ("system" if msg.user_id == request.user_id else "developer")
-            ),
-            "linked_content": linked_content,
-            "metadata": message_metadata,
-        }
-        messages.append(message_data)
-
+        # Finish building the conversation data
         starter = (
             db.query(models.User).filter(models.User.id == conv.starter_user_id).first()
         )
