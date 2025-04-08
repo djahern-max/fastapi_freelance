@@ -28,7 +28,7 @@ def get_public_developers(
     if min_experience is not None:
         query = query.filter(models.DeveloperProfile.experience_years >= min_experience)
 
-    # Order by rating and success rate
+    # Order by rating and success factor (rate)
     query = query.order_by(
         desc(models.DeveloperProfile.rating), desc(models.DeveloperProfile.success_rate)
     )
