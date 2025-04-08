@@ -28,21 +28,68 @@ async def send_message_to_analytics_hub(
         # Get the request with external metadata
         from .. import models
 
+        # Print request_id to verify it's valid
+        print(f"Sending message to Analytics Hub for request ID: {request_id}")
+
+        # Check if request_id is valid
+        if not request_id:
+            logger.error("Invalid request_id (None or 0)")
+            return False
+
         request = (
             db.query(models.Request).filter(models.Request.id == request_id).first()
         )
 
+        # Print request to verify it was found
+        print(f"Found request: {request}")
+
+        # Check if request exists
+        if not request:
+            logger.error(f"Request with ID {request_id} not found")
+            return False
+
+        # Check if external_metadata exists
         if (
-            not request
-            or not request.external_metadata
-            or "analytics_hub_id" not in request.external_metadata
+            not hasattr(request, "external_metadata")
+            or request.external_metadata is None
         ):
             logger.error(
-                f"Request {request_id} has no analytics_hub_id in external_metadata"
+                f"Request {request_id} has no external_metadata attribute or it is None"
             )
             return False
 
-        analytics_hub_id = request.external_metadata["analytics_hub_id"]
+        # Print external_metadata to check its type and content
+        print(
+            f"Request external_metadata: {type(request.external_metadata)} - {request.external_metadata}"
+        )
+
+        # Check external_metadata type
+        if not isinstance(request.external_metadata, dict):
+            try:
+                # Try to convert to dict if it's JSON string or similar
+                import json
+
+                external_metadata = json.loads(request.external_metadata)
+                analytics_hub_id = external_metadata.get("analytics_hub_id")
+                if not analytics_hub_id:
+                    logger.error(
+                        f"analytics_hub_id not found in parsed external_metadata"
+                    )
+                    return False
+            except Exception as e:
+                logger.error(f"Failed to parse external_metadata: {str(e)}")
+                return False
+        else:
+            # It's already a dict
+            if "analytics_hub_id" not in request.external_metadata:
+                logger.error(
+                    f"analytics_hub_id not found in external_metadata dictionary"
+                )
+                return False
+            analytics_hub_id = request.external_metadata["analytics_hub_id"]
+
+        # Print analytics_hub_id to verify it's correct
+        print(f"Found analytics_hub_id: {analytics_hub_id}")
 
         # Get the message and user details
         message = (
@@ -67,7 +114,12 @@ async def send_message_to_analytics_hub(
         }
 
         # Get API endpoint and key from environment
-        api_url = os.getenv("ANALYTICS_HUB_API_URL", "https://analytics-hub.xyz/api")
+        api_url = os.getenv("ANALYTICS_HUB_API_URL")
+        if not api_url:
+            logger.error("ANALYTICS_HUB_API_URL environment variable not set")
+            # Default to a common value for debugging
+            api_url = "http://localhost:8000/api"
+
         webhook_url = f"{api_url}/webhooks/ryze/messages"
         api_key = os.getenv("ANALYTICS_HUB_API_KEY")
 
@@ -81,9 +133,16 @@ async def send_message_to_analytics_hub(
         # Make the request
         logger.info(f"Sending message to Analytics Hub webhook: {webhook_url}")
         logger.info(f"Payload: {payload}")
+        print(f"Sending to webhook URL: {webhook_url}")
+        print(f"With payload: {payload}")
 
-        async with httpx.AsyncClient() as client:
+        # Use a timeout to prevent hanging
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(webhook_url, json=payload, headers=headers)
+
+            # Print full response for debugging
+            print(f"Response status: {response.status_code}")
+            print(f"Response body: {response.text}")
 
             if response.status_code in (200, 201, 204):
                 logger.info(
@@ -98,4 +157,9 @@ async def send_message_to_analytics_hub(
 
     except Exception as e:
         logger.error(f"Exception sending message to Analytics Hub: {str(e)}")
+        # Print exception traceback for debugging
+        import traceback
+
+        print(f"Exception sending message to Analytics Hub: {str(e)}")
+        print(traceback.format_exc())
         return False

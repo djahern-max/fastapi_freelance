@@ -91,13 +91,13 @@ def create_conversation(
 
 
 @router.post("/{id}/messages", response_model=schemas.ConversationMessageOut)
-def create_message(
+async def create_message(
     id: int,
     message: schemas.ConversationMessageCreate,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    try:  # Add this try block
+    try:
         print(
             f"Creating message with video_ids: {message.video_ids} and include_profile: {message.include_profile}"
         )
@@ -128,7 +128,6 @@ def create_message(
 
         # Handle video links
         if message.video_ids:
-
             videos = (
                 db.query(models.Video)
                 .filter(
@@ -211,13 +210,49 @@ def create_message(
             "linked_content": linked_content,
         }
 
+        # NEW CODE: Check if this conversation is related to an external support ticket
+        if conversation and conversation.request_id:
+            # Get the associated request
+            request = (
+                db.query(models.Request)
+                .filter(models.Request.id == conversation.request_id)
+                .first()
+            )
+
+            # Check if this is an external support ticket (from Analytics Hub)
+            if (
+                request
+                and request.external_metadata
+                and isinstance(request.external_metadata, dict)
+                and "analytics_hub_id" in request.external_metadata
+            ):
+
+                print(
+                    f"This message is part of an external support ticket: {request.external_metadata['analytics_hub_id']}"
+                )
+
+                # Import at the function level to avoid circular imports
+                from ..utils.external_service import send_message_to_analytics_hub
+                import asyncio
+
+                # Send the message to Analytics Hub (in background to not block response)
+                asyncio.create_task(
+                    send_message_to_analytics_hub(
+                        db=db,
+                        request_id=request.id,
+                        message_id=new_message.id,
+                        content=new_message.content,
+                    )
+                )
+                print(f"Scheduled message to be sent to Analytics Hub")
+
         return response
 
     except HTTPException as he:
         raise he
     except Exception as e:
-
         db.rollback()
+        print(f"Error creating message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
