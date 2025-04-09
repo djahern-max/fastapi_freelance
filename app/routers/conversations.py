@@ -100,7 +100,7 @@ from .analyticshub_webhook import send_message_webhook
 
 
 @router.post("/{id}/messages", response_model=schemas.ConversationMessageOut)
-def create_message(
+async def create_message(  # Make this async
     id: int,
     message: schemas.ConversationMessageCreate,
     db: Session = Depends(get_db),
@@ -269,34 +269,34 @@ def create_message(
                         "analytics_hub_id"
                     ]
 
-            if external_reference_id:
-                print(
-                    f"Sending message to external system with ID: {external_reference_id}"
-                )
-                from ..utils.external_service import send_message_to_analytics_hub
-                import asyncio
+        if external_reference_id:
+            print(
+                f"Sending message to external system with ID: {external_reference_id}"
+            )
+            from ..utils.external_service import send_message_to_analytics_hub
 
-                asyncio.create_task(
-                    send_message_to_analytics_hub(
-                        db=db,
-                        conversation_id=conversation.id,
-                        message_id=new_message.id,
-                        content=new_message.content,
-                        external_reference_id=external_reference_id,
-                        external_source=getattr(
-                            conversation, "external_source", "analytics-hub"
-                        ),
-                    )
-                )
-                print("Scheduled message to be sent to Analytics Hub")
+            # Use await directly
+            await send_message_to_analytics_hub(
+                db=db,
+                conversation_id=conversation.id,
+                message_id=new_message.id,
+                content=new_message.content,
+                external_reference_id=external_reference_id,
+                external_source=getattr(
+                    conversation, "external_source", "analytics-hub"
+                ),
+            )
+            print("Message sent to Analytics Hub successfully")
 
-        # === NEW: Analytics Hub webhook ===
+        # For webhook call
         if (
             conversation
             and conversation.is_external
             and conversation.external_source == "analytics-hub"
             and conversation.external_reference_id
         ):
+            # If this is a sync function, no need to await
+            # If it's async, you need to await it
             send_message_webhook(
                 ticket_id=conversation.external_reference_id,
                 message_content=message.content,
@@ -739,5 +739,64 @@ async def transmit_message(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
-    # Simple test without any database queries
-    return {"status": "success", "message": "Test successful"}
+    """Transmit a message from RYZE.ai to Analytics Hub"""
+    try:
+        # Get the message
+        message = (
+            db.query(models.ConversationMessage)
+            .filter(
+                models.ConversationMessage.id == message_id,
+                models.ConversationMessage.conversation_id == conversation_id,
+            )
+            .first()
+        )
+
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        # Get the conversation
+        conversation = (
+            db.query(models.Conversation)
+            .filter(models.Conversation.id == conversation_id)
+            .first()
+        )
+
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        # Get the request
+        request = (
+            db.query(models.Request)
+            .filter(models.Request.id == conversation.request_id)
+            .first()
+        )
+
+        if (
+            not request
+            or not request.external_metadata
+            or "analytics_hub_id" not in request.external_metadata
+        ):
+            raise HTTPException(
+                status_code=400, detail="No external ticket reference found"
+            )
+
+        # Get analytics_hub_id
+        analytics_hub_id = request.external_metadata["analytics_hub_id"]
+
+        # Call the webhook
+        result = send_message_webhook(
+            ticket_id=analytics_hub_id,
+            message_content=message.content,
+            message_id=f"ryze-msg-{message.id}",
+            sender_type="support",
+            sender_name=current_user.username,
+            sender_id=str(current_user.id),
+        )
+
+        return {"status": "success", "message": "Message transmitted successfully"}
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error transmitting message: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
