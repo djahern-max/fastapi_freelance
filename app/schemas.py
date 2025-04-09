@@ -555,9 +555,9 @@ class RequestOut(BaseModel):
     estimated_budget: Optional[float] = None
     is_public: bool
     contains_sensitive_data: bool
-    is_idea: bool  # New field missing in endpoint
-    seeks_collaboration: bool  # New field missing in endpoint
-    collaboration_details: Optional[str] = None  # New field missing in endpoint
+    is_idea: bool
+    seeks_collaboration: bool
+    collaboration_details: Optional[str] = None
     user_id: int
     status: RequestStatus
     project_id: Optional[int] = None
@@ -566,6 +566,9 @@ class RequestOut(BaseModel):
     updated_at: Optional[datetime] = None
     owner_username: str
     shared_with_info: List[dict] = []
+    # Add these fields:
+    request_metadata: Optional[Dict[str, Any]] = None
+    external_metadata: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
