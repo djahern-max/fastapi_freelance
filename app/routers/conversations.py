@@ -12,6 +12,11 @@ from typing import Dict
 from ..utils import external_service
 from .analyticshub_webhook import send_message_webhook
 
+import logging
+
+# Get the logger at the top of your file, outside any function
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
@@ -750,17 +755,26 @@ async def transmit_message(
     # Import the external service utility
     from app.utils.external_service import send_message_to_analytics_hub
 
-    # Call the function to send the message
-    success = await send_message_to_analytics_hub(
-        db=db,
-        message_id=message_id,
-        content=message.content,
-        conversation_id=conversation_id,
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=500, detail="Failed to transmit message to Analytics Hub"
+    try:
+        # Call the function to send the message - note the await keyword
+        success = await send_message_to_analytics_hub(
+            db=db,
+            message_id=message_id,
+            content=message.content,
+            conversation_id=conversation_id,
         )
 
-    return {"status": "success", "message": "Message transmitted to Analytics Hub"}
+        if not success:
+            raise HTTPException(
+                status_code=500, detail="Failed to transmit message to Analytics Hub"
+            )
+
+        return {"status": "success", "message": "Message transmitted to Analytics Hub"}
+    except Exception as e:
+        import traceback
+
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error transmitting message: {str(e)}\n{error_traceback}")
+        raise HTTPException(
+            status_code=500, detail=f"Error transmitting message: {str(e)}"
+        )
