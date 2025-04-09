@@ -739,5 +739,44 @@ async def transmit_message(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
-    # Simple test without any database queries
-    return {"status": "success", "message": "Test successful"}
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Get all required data
+        message = (
+            db.query(models.ConversationMessage)
+            .filter(
+                models.ConversationMessage.id == message_id,
+                models.ConversationMessage.conversation_id == conversation_id,
+            )
+            .first()
+        )
+
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        # Import the external service utility
+        from app.utils.external_service import send_message_to_analytics_hub
+
+        # Call the function with await
+        success = await send_message_to_analytics_hub(
+            db=db,
+            message_id=message_id,
+            content=message.content,
+            conversation_id=conversation_id,
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=500, detail="Failed to transmit message to Analytics Hub"
+            )
+
+        return {"status": "success", "message": "Message transmitted to Analytics Hub"}
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error in transmit: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
