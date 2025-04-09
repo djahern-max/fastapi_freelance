@@ -747,72 +747,20 @@ async def transmit_message(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    # Get the request to find external_ticket_id
-    conversation = (
-        db.query(models.Conversation)
-        .filter(models.Conversation.id == conversation_id)
-        .first()
+    # Import the external service utility
+    from app.utils.external_service import send_message_to_analytics_hub
+
+    # Call the function to send the message
+    success = await send_message_to_analytics_hub(
+        db=db,
+        message_id=message_id,
+        content=message.content,
+        conversation_id=conversation_id,
     )
 
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    # Get the request to find external metadata
-    request = (
-        db.query(models.Request)
-        .filter(models.Request.id == conversation.request_id)
-        .first()
-    )
-
-    if (
-        not request
-        or not request.external_metadata
-        or "analytics_hub_id" not in request.external_metadata
-    ):
+    if not success:
         raise HTTPException(
-            status_code=400, detail="No external ticket reference found"
-        )
-
-    # Send to Analytics Hub
-    analytics_hub_id = request.external_metadata["analytics_hub_id"]
-
-    result = send_message_webhook(
-        ticket_id=str(analytics_hub_id),
-        message_content=message.content,
-        message_id=str(message.id),
-        sender_type="support",
-        sender_name=current_user.username,
-        sender_id=str(current_user.id),
-    )
-
-    # Log the result for debugging
-    print(f"Webhook result: {result}")
-
-    # Call the webhook function to transmit the message
-    try:
-        webhook_response = send_message_webhook(
-            ticket_id=str(
-                analytics_hub_id
-            ),  # Convert to string, the function will handle int conversion
-            message_content=message.content,
-            message_id=str(message.id),
-            sender_type="support" if message.user_id == current_user.id else "client",
-            sender_name=current_user.username,
-            sender_id=str(current_user.id),
-        )
-
-        # Log the response
-        print(f"Analytics Hub webhook response: {webhook_response}")
-
-        if webhook_response.get("status") == "error":
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error from Analytics Hub: {webhook_response.get('message', 'Unknown error')}",
-            )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to transmit message: {str(e)}"
+            status_code=500, detail="Failed to transmit message to Analytics Hub"
         )
 
     return {"status": "success", "message": "Message transmitted to Analytics Hub"}

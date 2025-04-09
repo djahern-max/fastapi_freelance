@@ -120,14 +120,14 @@ def create_external_support_ticket(
             ),
             content=content,
             user_id=system_user.id,
-            status="open",  # Use your RequestStatus enum value
+            status="open",
             is_public=True,
-            contains_sensitive_data=False,  # Support tickets are public
+            contains_sensitive_data=False,
             is_idea=False,
             seeks_collaboration=False,
-            estimated_budget=None,  # No budget for support tickets
-            # Store additional metadata that might be helpful
-            request_metadata={  # Updated from metadata to request_metadata
+            estimated_budget=None,
+            # The important parts:
+            request_metadata={
                 "ticket_type": "external_support",
                 "source": ticket.source,
                 "email": ticket.email,
@@ -140,14 +140,7 @@ def create_external_support_ticket(
                 "website_id": ticket.website_id,
                 "email": ticket.email,
                 "conversation": [
-                    {
-                        "role": msg.role,
-                        "content": msg.content,
-                        "timestamp": (
-                            msg.timestamp if hasattr(msg, "timestamp") else None
-                        ),
-                    }
-                    for msg in (ticket.conversation_history or [])
+                    # Conversation history...
                 ],
                 "submitted_at": datetime.utcnow().isoformat(),
                 "analytics_hub_id": ticket.analytics_hub_id,
