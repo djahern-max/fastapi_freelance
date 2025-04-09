@@ -48,7 +48,7 @@ def send_message_webhook(
     Send a webhook notification to Analytics Hub when a message is created in RYZE
 
     Parameters:
-    - ticket_id: The Analytics Hub ticket ID
+    - ticket_id: The Analytics Hub ticket ID (will be converted to int)
     - message_content: The content of the message
     - message_id: Unique identifier for the message
     - sender_type: Type of sender (usually "support" for RYZE messages)
@@ -60,9 +60,18 @@ def send_message_webhook(
     """
     logger.info(f"Sending webhook to Analytics Hub for ticket {ticket_id}")
 
+    # Convert ticket_id to integer
+    try:
+        int_ticket_id = int(ticket_id)
+    except ValueError:
+        logger.error(
+            f"Invalid ticket ID format: {ticket_id}. Must be convertible to integer."
+        )
+        return {"status": "error", "message": "Invalid ticket ID format"}
+
     # Prepare webhook payload
     payload = {
-        "analytics_hub_id": str(ticket_id),
+        "analytics_hub_id": int_ticket_id,  # Send as integer
         "content": message_content,
         "sender_type": sender_type,
         "message_id": message_id,
