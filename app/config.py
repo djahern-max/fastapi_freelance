@@ -41,8 +41,9 @@ class Settings(BaseSettings):
     frontend_url: str
     # Add local video upload directory with a temporary directory
     local_video_upload_dir: Optional[str] = tempfile.gettempdir()
-    # Add Analytics Hub API URL
+    # Add Analytics Hub API settings
     ANALYTICS_HUB_API_URL: Optional[str] = None
+    ANALYTICS_HUB_API_KEY: Optional[str] = None
 
     class Config:
         env_file = os.getenv("ENV_FILE", ".env")
