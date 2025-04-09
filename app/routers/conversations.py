@@ -10,7 +10,7 @@ from fastapi import status
 from sqlalchemy.sql import func
 from typing import Dict
 from ..utils import external_service
-
+from .analyticshub_webhook import send_message_webhook
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
@@ -90,12 +90,15 @@ def create_conversation(
     return new_conversation
 
 
+from .analyticshub_webhook import send_message_webhook
+
+
 @router.post("/{id}/messages", response_model=schemas.ConversationMessageOut)
-async def create_message(
+def create_message(
     id: int,
     message: schemas.ConversationMessageCreate,
-    db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
 ):
     try:
         print(
@@ -123,10 +126,8 @@ async def create_message(
             if not request:
                 raise HTTPException(status_code=404, detail="Related request not found")
 
-            # Check if user is the system account
             is_system = current_user.email == "system@ryze.ai"
 
-            # Check if user is assigned to this request
             is_assigned = (
                 db.query(models.SnaggedRequest)
                 .filter(
@@ -138,14 +139,12 @@ async def create_message(
                 is not None
             )
 
-            # Only system or assigned developers can respond to external tickets
             if not (is_system or is_assigned):
                 raise HTTPException(
                     status_code=403,
                     detail="Not authorized to post in this external support conversation",
                 )
         else:
-            # Regular authorization for normal conversations
             if current_user.id not in [
                 conversation.starter_user_id,
                 conversation.recipient_user_id,
@@ -160,9 +159,9 @@ async def create_message(
             conversation_id=id, user_id=current_user.id, content=message.content
         )
         db.add(new_message)
-        db.flush()  # Get the message ID without committing
+        db.flush()
 
-        linked_content = []  # Initialize linked_content list
+        linked_content = []
 
         # Handle video links
         if message.video_ids:
@@ -193,7 +192,7 @@ async def create_message(
                 db.add(content_link)
                 linked_content.append(
                     {
-                        "id": video.id,  # We'll update this after commit
+                        "id": video.id,
                         "type": "video",
                         "content_id": video.id,
                         "title": video.title,
@@ -215,7 +214,7 @@ async def create_message(
             db.add(profile_link)
             linked_content.append(
                 {
-                    "id": current_user.id,  # We'll update this after commit
+                    "id": current_user.id,
                     "type": "profile",
                     "content_id": current_user.id,
                     "title": current_user.username,
@@ -223,18 +222,15 @@ async def create_message(
                 }
             )
 
-        # Commit all changes
         db.commit()
         db.refresh(new_message)
 
-        # Update the IDs in linked_content with actual ContentLink IDs
         content_links = (
             db.query(models.ConversationContentLink)
             .filter(models.ConversationContentLink.message_id == new_message.id)
             .all()
         )
 
-        # Map the content links to their respective linked_content entries
         for i, link in enumerate(content_links):
             if i < len(linked_content):
                 linked_content[i]["id"] = link.id
@@ -250,17 +246,14 @@ async def create_message(
 
         # Handle external support ticket message forwarding
         if is_external:
-            # Use the external_reference_id directly from the conversation
             external_reference_id = getattr(conversation, "external_reference_id", None)
 
-            # If not found in conversation, try to get it from the request
             if not external_reference_id and conversation.request_id:
                 request = (
                     db.query(models.Request)
                     .filter(models.Request.id == conversation.request_id)
                     .first()
                 )
-
                 if (
                     request
                     and request.external_metadata
@@ -274,12 +267,9 @@ async def create_message(
                 print(
                     f"Sending message to external system with ID: {external_reference_id}"
                 )
-
-                # Import at the function level to avoid circular imports
                 from ..utils.external_service import send_message_to_analytics_hub
                 import asyncio
 
-                # Send the message to Analytics Hub (in background to not block response)
                 asyncio.create_task(
                     send_message_to_analytics_hub(
                         db=db,
@@ -292,7 +282,23 @@ async def create_message(
                         ),
                     )
                 )
-                print(f"Scheduled message to be sent to Analytics Hub")
+                print("Scheduled message to be sent to Analytics Hub")
+
+        # === NEW: Analytics Hub webhook ===
+        if (
+            conversation
+            and conversation.is_external
+            and conversation.external_source == "analytics-hub"
+            and conversation.external_reference_id
+        ):
+            send_message_webhook(
+                ticket_id=conversation.external_reference_id,
+                message_content=message.content,
+                message_id=f"ryze-msg-{new_message.id}",
+                sender_type="support",
+                sender_name=current_user.username,
+                sender_id=str(current_user.id),
+            )
 
         return response
 

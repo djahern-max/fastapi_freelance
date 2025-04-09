@@ -24,6 +24,7 @@ from app.routers import (
     video_ratings,
     external_support,
     collaboration,
+    analyticshub_webhook,
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -131,6 +132,7 @@ routers_with_prefixes = [
     (developer_metrics.router, ""),
     (external_support.router, ""),
     (collaboration.router, ""),
+    (analyticshub_webhook.router, ""),
 ]
 
 # Include all routers in this code
