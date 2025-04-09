@@ -3,6 +3,10 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
 from ..config import settings
+from fastapi import APIRouter
+
+router = APIRouter(tags=["analytics"])
+
 
 # Configure logger
 logger = logging.getLogger("analytics_hub_integration")
