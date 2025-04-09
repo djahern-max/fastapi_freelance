@@ -739,21 +739,5 @@ async def transmit_message(
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
-    import logging
-
-    logger = logging.getLogger(__name__)
-
-    try:
-        logger.info(
-            f"Starting message transmission: conv_id={conversation_id}, msg_id={message_id}"
-        )
-
-        # Just for testing, return success without doing anything
-        return {"status": "success", "message": "Simplified test endpoint"}
-
-    except Exception as e:
-        import traceback
-
-        error_traceback = traceback.format_exc()
-        logger.error(f"Error in simplified transmit: {str(e)}\n{error_traceback}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+    # Simple test without any database queries
+    return {"status": "success", "message": "Test successful"}
