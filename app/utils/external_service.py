@@ -5,93 +5,45 @@ import os
 import logging
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
 async def send_message_to_analytics_hub(
-    db: Session, request_id: int, message_id: int, content: str
+    db: Session,
+    message_id: int,
+    content: str,
+    conversation_id: Optional[int] = None,
+    request_id: Optional[int] = None,
+    external_reference_id: Optional[str] = None,
+    external_source: Optional[str] = "analytics-hub",
 ) -> bool:
     """
     Send a message from RYZE.ai to Analytics Hub
 
     Args:
         db: Database session
-        request_id: The request ID
         message_id: The message ID
         content: The message content
+        conversation_id: The conversation ID (preferred way to identify)
+        request_id: The request ID (fallback)
+        external_reference_id: Direct reference to Analytics Hub ID (most reliable)
+        external_source: Source system identifier
 
     Returns:
         bool: True if successful, False otherwise
     """
     try:
-        # Get the request with external metadata
         from .. import models
+        from ..config import settings
 
-        # Print request_id to verify it's valid
-        print(f"Sending message to Analytics Hub for request ID: {request_id}")
-
-        # Check if request_id is valid
-        if not request_id:
-            logger.error("Invalid request_id (None or 0)")
-            return False
-
-        request = (
-            db.query(models.Request).filter(models.Request.id == request_id).first()
+        # Log start of operation
+        logger.info(
+            f"Sending message to Analytics Hub: msg_id={message_id}, conv_id={conversation_id}, req_id={request_id}"
         )
 
-        # Print request to verify it was found
-        print(f"Found request: {request}")
-
-        # Check if request exists
-        if not request:
-            logger.error(f"Request with ID {request_id} not found")
-            return False
-
-        # Check if external_metadata exists
-        if (
-            not hasattr(request, "external_metadata")
-            or request.external_metadata is None
-        ):
-            logger.error(
-                f"Request {request_id} has no external_metadata attribute or it is None"
-            )
-            return False
-
-        # Print external_metadata to check its type and content
-        print(
-            f"Request external_metadata: {type(request.external_metadata)} - {request.external_metadata}"
-        )
-
-        # Check external_metadata type
-        if not isinstance(request.external_metadata, dict):
-            try:
-                # Try to convert to dict if it's JSON string or similar
-                import json
-
-                external_metadata = json.loads(request.external_metadata)
-                analytics_hub_id = external_metadata.get("analytics_hub_id")
-                if not analytics_hub_id:
-                    logger.error(
-                        f"analytics_hub_id not found in parsed external_metadata"
-                    )
-                    return False
-            except Exception as e:
-                logger.error(f"Failed to parse external_metadata: {str(e)}")
-                return False
-        else:
-            # It's already a dict
-            if "analytics_hub_id" not in request.external_metadata:
-                logger.error(
-                    f"analytics_hub_id not found in external_metadata dictionary"
-                )
-                return False
-            analytics_hub_id = request.external_metadata["analytics_hub_id"]
-
-        # Print analytics_hub_id to verify it's correct
-        print(f"Found analytics_hub_id: {analytics_hub_id}")
-
-        # Get the message and user details
+        # Get message and confirm it exists
         message = (
             db.query(models.ConversationMessage)
             .filter(models.ConversationMessage.id == message_id)
@@ -101,53 +53,128 @@ async def send_message_to_analytics_hub(
             logger.error(f"Message {message_id} not found")
             return False
 
+        # Get the user who sent the message
         user = db.query(models.User).filter(models.User.id == message.user_id).first()
         if not user:
             logger.error(f"User for message {message_id} not found")
+            return False
+
+        # Get conversation if not provided
+        conversation = None
+        analytics_hub_id = external_reference_id  # Use direct reference if provided
+
+        # Try to get conversation by ID
+        if conversation_id:
+            conversation = (
+                db.query(models.Conversation)
+                .filter(models.Conversation.id == conversation_id)
+                .first()
+            )
+        elif message.conversation_id:
+            conversation = (
+                db.query(models.Conversation)
+                .filter(models.Conversation.id == message.conversation_id)
+                .first()
+            )
+
+        # Use conversation external reference if available
+        if (
+            conversation
+            and hasattr(conversation, "external_reference_id")
+            and conversation.external_reference_id
+        ):
+            analytics_hub_id = conversation.external_reference_id
+            logger.info(
+                f"Using external_reference_id from conversation: {analytics_hub_id}"
+            )
+
+        # If no direct reference, try to get request
+        if not analytics_hub_id:
+            req = None
+
+            # Get request from conversation
+            if conversation:
+                req = (
+                    db.query(models.Request)
+                    .filter(models.Request.id == conversation.request_id)
+                    .first()
+                )
+            # Or get request directly if provided
+            elif request_id:
+                req = (
+                    db.query(models.Request)
+                    .filter(models.Request.id == request_id)
+                    .first()
+                )
+
+            # Extract analytics_hub_id from request metadata
+            if (
+                req
+                and req.external_metadata
+                and isinstance(req.external_metadata, dict)
+            ):
+                analytics_hub_id = req.external_metadata.get("analytics_hub_id")
+                logger.info(
+                    f"Using analytics_hub_id from request metadata: {analytics_hub_id}"
+                )
+
+        # If we still don't have an ID, we can't proceed
+        if not analytics_hub_id:
+            logger.error("Could not find analytics_hub_id from any source")
             return False
 
         # Prepare the webhook payload
         payload = {
             "analytics_hub_id": analytics_hub_id,
             "content": content,
+            "sender_type": "developer",
             "sender": user.username,
+            "sender_id": user.id,
+            "message_id": str(message.id),
+            "external_ticket_id": (
+                conversation.request_id if conversation else request_id
+            ),
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
-        # Get API endpoint and key from environment
-        api_url = os.getenv("ANALYTICS_HUB_API_URL")
+        # Get API endpoint and key from settings
+        api_url = settings.ANALYTICS_HUB_API_URL
         if not api_url:
-            logger.error("ANALYTICS_HUB_API_URL environment variable not set")
-            # Default to a common value for debugging
-            api_url = "http://localhost:8000/api"
+            logger.error("ANALYTICS_HUB_API_URL setting not configured")
+            return False
 
         webhook_url = f"{api_url}/webhooks/ryze/messages"
-        api_key = os.getenv("ANALYTICS_HUB_API_KEY")
+        api_key = settings.ANALYTICS_HUB_API_KEY
 
         if not api_key:
-            logger.error("ANALYTICS_HUB_API_KEY environment variable not set")
+            logger.error("ANALYTICS_HUB_API_KEY setting not configured")
             return False
 
         # Set up headers
         headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
 
-        # Make the request
-        logger.info(f"Sending message to Analytics Hub webhook: {webhook_url}")
-        logger.info(f"Payload: {payload}")
-        print(f"Sending to webhook URL: {webhook_url}")
-        print(f"With payload: {payload}")
+        # Log the request details
+        logger.info(f"Sending webhook to: {webhook_url}")
+        logger.debug(f"Payload: {payload}")
 
-        # Use a timeout to prevent hanging
+        # Make the request
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(webhook_url, json=payload, headers=headers)
-
-            # Print full response for debugging
-            print(f"Response status: {response.status_code}")
-            print(f"Response body: {response.text}")
 
             if response.status_code in (200, 201, 204):
                 logger.info(
                     f"Successfully sent message to Analytics Hub. Response: {response.status_code}"
                 )
+
+                # Update conversation's last sync time if available
+                if conversation and hasattr(conversation, "external_metadata"):
+                    if not conversation.external_metadata:
+                        conversation.external_metadata = {}
+                    conversation.external_metadata["last_synced_at"] = (
+                        datetime.utcnow().isoformat()
+                    )
+                    db.commit()
+
                 return True
             else:
                 logger.error(
@@ -157,9 +184,7 @@ async def send_message_to_analytics_hub(
 
     except Exception as e:
         logger.error(f"Exception sending message to Analytics Hub: {str(e)}")
-        # Print exception traceback for debugging
         import traceback
 
-        print(f"Exception sending message to Analytics Hub: {str(e)}")
-        print(traceback.format_exc())
+        logger.error(traceback.format_exc())
         return False

@@ -15,7 +15,7 @@ from ..database import get_db
 # Import your settings module
 from ..config import settings
 
-# Import your crud module (we'll create this if needed)
+# Import your crud module
 from .. import crud
 from fastapi import Header
 
@@ -165,100 +165,82 @@ def create_external_support_ticket(
             f"External support ticket created successfully with ID {new_request.id}"
         )
 
-        # Optionally, create an initial conversation for this ticket
-        try:
-            # Find the first available developer to assign the ticket to
-            developer = (
-                db.query(models.User)
-                .filter(models.User.user_type == "developer")
-                .filter(models.User.is_active == True)
-                .filter(models.User.id != system_user.id)  # Not the system user
-                .first()
-            )
+        # Find the first available developer to assign the ticket to
+        developer = (
+            db.query(models.User)
+            .filter(models.User.user_type == "developer")
+            .filter(models.User.is_active == True)
+            .filter(models.User.id != system_user.id)  # Not the system user
+            .first()
+        )
 
-            recipient_id = developer.id if developer else system_user.id
+        recipient_id = developer.id if developer else system_user.id
 
-            # Check if a conversation already exists for this request
-            existing_conversation = (
-                db.query(models.Conversation)
-                .filter(models.Conversation.request_id == new_request.id)
-                .first()
-            )
+        # Create a new conversation with external support specific fields
+        new_conversation = models.Conversation(
+            request_id=new_request.id,
+            starter_user_id=system_user.id,
+            recipient_user_id=recipient_id,
+            status="active",
+            # Add these new fields for external support
+            is_external=True,
+            external_source=ticket.source,
+            external_reference_id=str(ticket.analytics_hub_id),
+            external_metadata={
+                "email": ticket.email,
+                "platform": ticket.platform,
+                "website_id": ticket.website_id,
+                "analytics_hub_id": ticket.analytics_hub_id,
+                "created_at": datetime.utcnow().isoformat(),
+            },
+        )
 
-            if not existing_conversation:
-                # Create new conversation only if one doesn't exist
-                new_conversation = models.Conversation(
-                    request_id=new_request.id,
-                    starter_user_id=system_user.id,
-                    recipient_user_id=recipient_id,  # Assign to a developer or self
-                    status="active",
-                )
-                db.add(new_conversation)
-                db.commit()
-                db.refresh(new_conversation)
+        db.add(new_conversation)
+        db.commit()
+        db.refresh(new_conversation)
 
-                # Only create the initial message if we created a new conversation
-                # Add an initial message to the conversation
-                initial_message = models.ConversationMessage(
-                    conversation_id=new_conversation.id,
-                    user_id=system_user.id,
-                    content=f"Support ticket created from {ticket.source} for {ticket.email}. Please respond within one hour.",
-                )
-                db.add(initial_message)
-                db.commit()
+        # Add an initial system message to the conversation
+        initial_message = models.ConversationMessage(
+            conversation_id=new_conversation.id,
+            user_id=system_user.id,
+            content=f"[EXTERNAL SUPPORT] Ticket created from {ticket.source} for {ticket.email}. Please respond within one hour.",
+        )
+        db.add(initial_message)
 
-                # Add the customer's message to the conversation
-                customer_message = models.ConversationMessage(
-                    conversation_id=new_conversation.id,
-                    user_id=system_user.id,  # Using system user as proxy for external user
-                    content=ticket.issue,  # The actual content from the customer
-                    external_source=ticket.source,  # Mark as coming from external source
-                )
-                db.add(customer_message)
-                db.commit()
-            else:
-                logger.info(
-                    f"Using existing conversation with ID {existing_conversation.id} for request {new_request.id}"
-                )
-                new_conversation = (
-                    existing_conversation  # Use the existing conversation
-                )
+        # Add the customer's message to the conversation
+        customer_message = models.ConversationMessage(
+            conversation_id=new_conversation.id,
+            user_id=system_user.id,  # Using system user as proxy for external user
+            content=ticket.issue,  # The actual content from the customer
+            external_source=ticket.source,  # Mark as coming from external source
+        )
+        db.add(customer_message)
+        db.commit()
 
-            logger.info(f"Created initial conversation with ID {new_conversation.id}")
-
-        except Exception as conv_error:
-            logger.error(f"Error creating initial conversation: {str(conv_error)}")
-            # Continue even if conversation creation fails
+        logger.info(f"Created external conversation with ID {new_conversation.id}")
 
         # Try to add it to the developer's snagged requests if we found a developer
         if developer and developer.id != system_user.id:
             try:
-                # Check if it's already snagged
-                existing_snag = (
-                    db.query(models.SnaggedRequest)
-                    .filter(models.SnaggedRequest.request_id == new_request.id)
-                    .filter(models.SnaggedRequest.developer_id == developer.id)
-                    .first()
+                # Create a snagged request entry
+                snagged = models.SnaggedRequest(
+                    request_id=new_request.id,
+                    developer_id=developer.id,
+                    is_active=True,
                 )
-
-                if not existing_snag:
-                    # Create a snagged request entry
-                    snagged = models.SnaggedRequest(
-                        request_id=new_request.id,
-                        developer_id=developer.id,
-                        is_active=True,
-                    )
-                    db.add(snagged)
-                    db.commit()
-                    logger.info(f"Auto-assigned ticket to developer ID {developer.id}")
+                db.add(snagged)
+                db.commit()
+                logger.info(f"Auto-assigned ticket to developer ID {developer.id}")
             except Exception as snag_error:
                 logger.error(f"Error auto-assigning ticket: {str(snag_error)}")
                 # Continue even if snagging fails
 
+        # Return both the request and conversation IDs
         return {
             "status": "success",
             "message": "Support ticket created successfully",
             "ticket_id": new_request.id,
+            "conversation_id": new_conversation.id,
         }
     except Exception as e:
         logger.error(f"Error creating external support ticket: {str(e)}")
@@ -276,42 +258,69 @@ def options_create_external_support_ticket():
     """
 
 
-# In app/routers/external_support.py
-
-
 @router.post("/{ticket_id}/messages", status_code=201)
 def add_external_message(
     ticket_id: int,
     message: schemas.ExternalMessageCreate,
-    db: Session = Depends(get_db),  # Add this
+    db: Session = Depends(get_db),
     api_key: str = Header(..., alias="X-API-Key"),
 ):
     # Validate API key
     if api_key != settings.EXTERNAL_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # Get the request by external ticket ID
-    db_request = crud.get_request_by_external_id(db, ticket_id)
-    if not db_request:
-        raise HTTPException(status_code=404, detail="Ticket not found")
+    # Try to find the request by external reference ID in conversations first
+    conversation = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.external_reference_id == str(ticket_id))
+        .filter(models.Conversation.is_external == True)
+        .first()
+    )
 
-    # Get the conversation associated with this request
-    conversation = crud.get_conversation_by_request_id(db, db_request.id)
+    # If not found by direct reference, look up by request ID
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        # Get the request using the external metadata
+        db_request = (
+            db.query(models.Request)
+            .filter(
+                models.Request.external_metadata.has_key("analytics_hub_id"),
+                models.Request.external_metadata["analytics_hub_id"].astext
+                == str(ticket_id),
+            )
+            .first()
+        )
+
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Support ticket not found")
+
+        # Now get the conversation for this request
+        conversation = (
+            db.query(models.Conversation)
+            .filter(models.Conversation.request_id == db_request.id)
+            .first()
+        )
+
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Get or create the system user for sending the message
+    system_user = (
+        db.query(models.User).filter(models.User.email == "system@ryze.ai").first()
+    )
+
+    if not system_user:
+        raise HTTPException(status_code=500, detail="System user not found")
 
     # Create a new message in the conversation
-    new_message = crud.create_conversation_message(
-        db,
+    new_message = models.ConversationMessage(
         conversation_id=conversation.id,
-        user_id=db_request.user_id,  # Still use system user's ID
+        user_id=system_user.id,  # Use system user as proxy for external user
         content=message.content,
-        external_source="analytics-hub",  # This is correct
-        message_metadata={  # Add this metadata
-            "original_sender": "external_user",
-            "source_platform": "analytics-hub",
-            "analytics_hub_id": message.sender_id or "unknown",
-        },
+        external_source=conversation.external_source or "analytics-hub",
     )
+
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
 
     return {"id": new_message.id, "status": "created"}

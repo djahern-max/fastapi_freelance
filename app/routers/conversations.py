@@ -102,20 +102,58 @@ async def create_message(
             f"Creating message with video_ids: {message.video_ids} and include_profile: {message.include_profile}"
         )
 
-        # Check if conversation exists and user has access
+        # Check if conversation exists
         conversation = (
             db.query(models.Conversation).filter(models.Conversation.id == id).first()
         )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        if current_user.id not in [
-            conversation.starter_user_id,
-            conversation.recipient_user_id,
-        ]:
-            raise HTTPException(
-                status_code=403, detail="Not authorized to post in this conversation"
+        # Check if this is an external conversation
+        is_external = getattr(conversation, "is_external", False)
+
+        # Authorization check - handle differently for external conversations
+        if is_external:
+            # For external support conversations, allow system user and assigned developers
+            request = (
+                db.query(models.Request)
+                .filter(models.Request.id == conversation.request_id)
+                .first()
             )
+            if not request:
+                raise HTTPException(status_code=404, detail="Related request not found")
+
+            # Check if user is the system account
+            is_system = current_user.email == "system@ryze.ai"
+
+            # Check if user is assigned to this request
+            is_assigned = (
+                db.query(models.SnaggedRequest)
+                .filter(
+                    models.SnaggedRequest.request_id == conversation.request_id,
+                    models.SnaggedRequest.developer_id == current_user.id,
+                    models.SnaggedRequest.is_active == True,
+                )
+                .first()
+                is not None
+            )
+
+            # Only system or assigned developers can respond to external tickets
+            if not (is_system or is_assigned):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Not authorized to post in this external support conversation",
+                )
+        else:
+            # Regular authorization for normal conversations
+            if current_user.id not in [
+                conversation.starter_user_id,
+                conversation.recipient_user_id,
+            ]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Not authorized to post in this conversation",
+                )
 
         # Create the new message
         new_message = models.ConversationMessage(
@@ -210,25 +248,31 @@ async def create_message(
             "linked_content": linked_content,
         }
 
-        # NEW CODE: Check if this conversation is related to an external support ticket
-        if conversation and conversation.request_id:
-            # Get the associated request
-            request = (
-                db.query(models.Request)
-                .filter(models.Request.id == conversation.request_id)
-                .first()
-            )
+        # Handle external support ticket message forwarding
+        if is_external:
+            # Use the external_reference_id directly from the conversation
+            external_reference_id = getattr(conversation, "external_reference_id", None)
 
-            # Check if this is an external support ticket (from Analytics Hub)
-            if (
-                request
-                and request.external_metadata
-                and isinstance(request.external_metadata, dict)
-                and "analytics_hub_id" in request.external_metadata
-            ):
+            # If not found in conversation, try to get it from the request
+            if not external_reference_id and conversation.request_id:
+                request = (
+                    db.query(models.Request)
+                    .filter(models.Request.id == conversation.request_id)
+                    .first()
+                )
 
+                if (
+                    request
+                    and request.external_metadata
+                    and "analytics_hub_id" in request.external_metadata
+                ):
+                    external_reference_id = request.external_metadata[
+                        "analytics_hub_id"
+                    ]
+
+            if external_reference_id:
                 print(
-                    f"This message is part of an external support ticket: {request.external_metadata['analytics_hub_id']}"
+                    f"Sending message to external system with ID: {external_reference_id}"
                 )
 
                 # Import at the function level to avoid circular imports
@@ -239,9 +283,13 @@ async def create_message(
                 asyncio.create_task(
                     send_message_to_analytics_hub(
                         db=db,
-                        request_id=request.id,
+                        conversation_id=conversation.id,
                         message_id=new_message.id,
                         content=new_message.content,
+                        external_reference_id=external_reference_id,
+                        external_source=getattr(
+                            conversation, "external_source", "analytics-hub"
+                        ),
                     )
                 )
                 print(f"Scheduled message to be sent to Analytics Hub")
