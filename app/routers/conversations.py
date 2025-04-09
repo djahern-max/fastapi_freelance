@@ -776,6 +776,18 @@ async def transmit_message(
     # Send to Analytics Hub
     analytics_hub_id = request.external_metadata["analytics_hub_id"]
 
+    result = send_message_webhook(
+        ticket_id=str(analytics_hub_id),
+        message_content=message.content,
+        message_id=str(message.id),
+        sender_type="support",
+        sender_name=current_user.username,
+        sender_id=str(current_user.id),
+    )
+
+    # Log the result for debugging
+    print(f"Webhook result: {result}")
+
     # Call the webhook function to transmit the message
     try:
         webhook_response = send_message_webhook(
