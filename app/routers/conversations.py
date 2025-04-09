@@ -12,6 +12,7 @@ from typing import Dict
 from ..utils import external_service
 from .analyticshub_webhook import send_message_webhook
 
+
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 
@@ -774,6 +775,32 @@ async def transmit_message(
 
     # Send to Analytics Hub
     analytics_hub_id = request.external_metadata["analytics_hub_id"]
-    # Call your external service to transmit the message
 
-    return {"status": "success"}
+    # Call the webhook function to transmit the message
+    try:
+        webhook_response = send_message_webhook(
+            ticket_id=str(
+                analytics_hub_id
+            ),  # Convert to string, the function will handle int conversion
+            message_content=message.content,
+            message_id=str(message.id),
+            sender_type="support" if message.user_id == current_user.id else "client",
+            sender_name=current_user.username,
+            sender_id=str(current_user.id),
+        )
+
+        # Log the response
+        print(f"Analytics Hub webhook response: {webhook_response}")
+
+        if webhook_response.get("status") == "error":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error from Analytics Hub: {webhook_response.get('message', 'Unknown error')}",
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to transmit message: {str(e)}"
+        )
+
+    return {"status": "success", "message": "Message transmitted to Analytics Hub"}
