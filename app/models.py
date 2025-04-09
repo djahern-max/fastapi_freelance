@@ -621,6 +621,10 @@ class Conversation(Base, TimestampMixin):
         nullable=False,
         default=ConversationStatus.active,
     )
+    is_external = Column(Boolean, default=False)  # Flag for external conversations
+    external_source = Column(String, nullable=True)  # "analytics-hub", etc.
+    external_reference_id = Column(String, nullable=True)  # ID from external system
+    external_metadata = Column(JSONB, nullable=True)  # Metadata from external system
 
     # Relationships
     request = relationship("Request", back_populates="conversations")
