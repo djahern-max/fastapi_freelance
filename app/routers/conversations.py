@@ -646,26 +646,46 @@ def create_conversation_from_video(
 def get_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        oauth2.get_current_user
-    ),  # Change back to basic auth
+    current_user: models.User = Depends(oauth2.get_current_user),
 ):
+    # Get the conversation with all relationships loaded
     conversation = (
         db.query(models.Conversation)
-        .filter(
-            models.Conversation.id == conversation_id,
-            or_(
-                models.Conversation.starter_user_id == current_user.id,
-                models.Conversation.recipient_user_id == current_user.id,
-            ),
-        )
+        .filter(models.Conversation.id == conversation_id)
         .first()
     )
 
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    return conversation
+    # Check permissions
+    if (
+        conversation.starter_user_id != current_user.id
+        and conversation.recipient_user_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view this conversation"
+        )
+
+    # Create a dictionary with all the required fields for the response schema
+    response_data = {
+        "id": conversation.id,
+        "request_id": conversation.request_id,
+        "starter_user_id": conversation.starter_user_id,
+        "recipient_user_id": conversation.recipient_user_id,
+        "status": conversation.status,
+        "agreed_amount": None,  # Replace with actual value if it exists
+        "created_at": conversation.created_at,
+        # Get these values from the relationships
+        "starter_username": conversation.starter.username,
+        "recipient_username": conversation.recipient.username,
+        "request_title": conversation.request.title,
+        # Get messages
+        "messages": conversation.messages,
+    }
+
+    # Return the constructed response
+    return response_data
 
 
 # In app/routers/conversations.py
