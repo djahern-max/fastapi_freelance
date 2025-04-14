@@ -158,6 +158,13 @@ class User(Base):
 
     oauth_connections = relationship("OAuthConnection", back_populates="user")
 
+    playlists = relationship(
+        "VideoPlaylist",
+        back_populates="creator",
+        cascade="all, delete-orphan",
+        foreign_keys="[VideoPlaylist.creator_id]",
+    )
+
 
 # ------------------ OAuth ------------------
 class UserToken(Base):
