@@ -1,25 +1,21 @@
+# Standard library imports
 import os
 import uuid
+import logging
+from typing import Optional, Dict, Any
+
+# Third-party imports
 import boto3
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
+from botocore.exceptions import NoCredentialsError, ClientError
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, status
 from sqlalchemy.orm import Session
+
+# Application imports
 from app.database import get_db
-from app.models import Video, VideoType
+from app.models import Video, VideoType, User
 from app.schemas import VideoCreate
-from botocore.exceptions import NoCredentialsError
-from app import oauth2
-from app.models import User
-import logging
-from typing import Optional
-from app.utils.video_processor import compress_video
-from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy.orm import Session
-from typing import Dict, Any
-import logging
-
-from app.database import get_db
 from app import models, oauth2
-
+from app.utils.video_processor import compress_video
 
 # Initialize the logger
 logger = logging.getLogger(__name__)
