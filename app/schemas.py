@@ -460,31 +460,6 @@ class VideoRatingResponse(BaseModel):
     message: str
 
 
-class PlaylistCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    is_public: bool = False
-
-
-class PlaylistBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    is_public: bool = False
-
-
-class PlaylistCreate(PlaylistBase):
-    pass
-
-
-class Playlist(PlaylistBase):
-    id: int
-    creator_id: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True  # formerly orm_mode = True in pydantic v1
-
-
 class PlaylistResponse(BaseModel):
     id: int
     name: str
@@ -1090,27 +1065,6 @@ class ProjectShowcaseCreate(BaseModel):
         return v
 
 
-# Full showcase model with all fields
-class ProjectShowcase(ProjectShowcaseBase):
-    id: int
-    developer_id: int
-    created_at: datetime
-    updated_at: datetime
-    image_url: Optional[str] = None
-    readme_url: Optional[str] = None
-    demo_url: Optional[str] = None
-    average_rating: Optional[float] = 0.0
-    total_ratings: Optional[int] = 0
-    share_token: Optional[str] = None
-    videos: Optional[List[VideoOut]] = []
-    developer: Optional[UserBasic] = None  # Change this to just include basic user info
-    developer_profile: Optional[DeveloperProfilePublic] = (
-        None  # Keep the full profile separate
-    )
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class DeveloperMetricsResponse(BaseModel):
     profile_rating: float
     video_rating: float
@@ -1168,22 +1122,6 @@ class ShowcaseContentLink(BaseModel):
     developer_name: Optional[str] = None  # For profiles
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# Update the ProjectShowcaseCreate schema
-class ProjectShowcaseCreate(BaseModel):
-    title: str
-    description: str
-    project_url: Optional[str] = None
-    repository_url: Optional[str] = None
-    video_ids: Optional[List[int]] = []  # Changed from selected_video_ids
-    include_profile: Optional[bool] = False  # Added for profile linking
-
-    @field_validator("project_url", "repository_url")
-    def validate_urls(cls, v):
-        if v is not None and not v.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return v
 
 
 # Update the ProjectShowcase schema
