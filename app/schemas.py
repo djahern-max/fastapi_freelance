@@ -475,11 +475,22 @@ class PlaylistResponse(BaseModel):
 class VideoInPlaylist(BaseModel):
     id: int
     title: str
+    description: Optional[str] = None
     thumbnail_path: Optional[str] = None
+    file_path: str
     order: int
+    user_id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
+
+
+class CreatorInfo(BaseModel):
+    id: int
+    username: str
+
+    class Config:
+        orm_mode = True
 
 
 class PlaylistDetail(BaseModel):
@@ -490,9 +501,10 @@ class PlaylistDetail(BaseModel):
     creator_id: int
     created_at: datetime
     videos: List[VideoInPlaylist] = []
+    creator: Optional[CreatorInfo] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class PlaylistBase(BaseModel):

@@ -20,38 +20,58 @@ def create_playlist(db: Session, playlist: schemas.PlaylistCreate, user_id: int)
 
 
 def get_playlist(db: Session, playlist_id: int):
-    # Get the playlist with eager loading
+    # Get the playlist
     playlist = (
         db.query(models.VideoPlaylist)
-        .options(
-            joinedload(models.VideoPlaylist.creator),
-            joinedload(models.VideoPlaylist.videos).joinedload(
-                models.PlaylistVideo.video
-            ),
-        )
         .filter(models.VideoPlaylist.id == playlist_id)
         .first()
     )
 
     if playlist:
-        # Transform the data if needed for your schema
-        # For example, if your schema expects a 'videos' field with direct video objects
-        video_list = []
-        for playlist_video in sorted(playlist.videos, key=lambda pv: pv.order):
-            video_list.append(
+        # Get all playlist videos with related video data
+        playlist_videos = (
+            db.query(models.PlaylistVideo)
+            .filter(models.PlaylistVideo.playlist_id == playlist_id)
+            .join(models.Video, models.Video.id == models.PlaylistVideo.video_id)
+            .options(joinedload(models.PlaylistVideo.video))
+            .order_by(models.PlaylistVideo.order)
+            .all()
+        )
+
+        # Prepare the response with properly structured video data
+        response = {
+            "id": playlist.id,
+            "name": playlist.name,
+            "description": playlist.description,
+            "is_public": playlist.is_public,
+            "creator_id": playlist.creator_id,
+            "created_at": playlist.created_at,
+            # Transform videos into the format expected by frontend
+            "videos": [
                 {
-                    "id": playlist_video.video.id,
-                    "title": playlist_video.video.title,
-                    "thumbnail_path": playlist_video.video.thumbnail_path,
-                    "order": playlist_video.order,
-                    # Add other fields as needed by your schema
+                    "id": pv.video.id,
+                    "title": pv.video.title,
+                    "description": pv.video.description,
+                    "thumbnail_path": pv.video.thumbnail_path,
+                    "file_path": pv.video.file_path,
+                    "order": pv.order,
+                    "user_id": pv.video.user_id,
+                    # Add other video fields needed by frontend
                 }
-            )
+                for pv in playlist_videos
+            ],
+        }
 
-        # Attach the transformed data if your schema expects it
-        playlist.formatted_videos = video_list
+        # Get creator info if needed
+        if hasattr(playlist, "creator") and playlist.creator:
+            response["creator"] = {
+                "id": playlist.creator.id,
+                "username": playlist.creator.username,
+            }
 
-    return playlist
+        return response
+
+    return None
 
 
 def get_playlists_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
