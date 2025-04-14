@@ -497,6 +497,29 @@ class PlaylistResponse(BaseModel):
         from_attributes = True  # This is the new name for orm_mode in Pydantic v2
 
 
+class VideoInPlaylist(BaseModel):
+    id: int
+    title: str
+    thumbnail_path: Optional[str] = None
+    order: int
+
+    class Config:
+        from_attributes = True
+
+
+class PlaylistDetail(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    is_public: bool
+    creator_id: int
+    created_at: datetime
+    videos: List[VideoInPlaylist] = []
+
+    class Config:
+        from_attributes = True
+
+
 # ------------------ Project Schemas ------------------
 class ProjectBase(BaseModel):
     """Simplified project schema - just basic grouping info"""
