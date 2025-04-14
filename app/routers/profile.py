@@ -307,7 +307,6 @@ async def upload_profile_image(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    """Upload and update developer profile image"""
     try:
         # First verify that the user is a developer
         if current_user.user_type != models.UserType.developer:
@@ -332,12 +331,37 @@ async def upload_profile_image(
         # Read file content
         try:
             file_content = await file.read()
+            await file.seek(0)  # Reset file position immediately after reading
+
             if not file_content:
                 logger.error("File content is empty")
                 raise ValueError("File content is empty")
+
+            logger.debug(
+                f"Successfully read file content, size: {len(file_content)} bytes"
+            )
         except Exception as e:
             logger.error(f"Error reading file: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
+
+        # Generate unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"profile_images/{uuid.uuid4()}{file_extension}"
+        logger.info(f"Generated unique filename: {unique_filename}")
+
+        # Upload to DO Spaces
+        try:
+            s3.put_object(
+                Bucket=SPACES_BUCKET,
+                Key=unique_filename,
+                Body=file_content,  # Make sure file_content is not None
+                ACL="public-read",
+                ContentType=file.content_type,
+            )
+            logger.info("Successfully uploaded to Digital Ocean Spaces")
+        except Exception as e:
+            logger.error(f"Upload to Digital Ocean Spaces failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
         # Generate unique filename
         file_extension = os.path.splitext(file.filename)[1]
