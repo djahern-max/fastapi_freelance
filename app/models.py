@@ -223,46 +223,6 @@ class VideoRating(Base):
     rater = relationship("User")
 
 
-class Video(Base):
-    __tablename__ = "videos"
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String, nullable=True)
-    file_path = Column(String, nullable=False)
-    thumbnail_path = Column(String, nullable=True)
-    upload_date = Column(DateTime(timezone=True), server_default=func.now())
-    project_id = Column(
-        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
-    )
-    request_id = Column(
-        Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True
-    )
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    video_type = Column(
-        SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo
-    )
-    share_token = Column(String, unique=True, nullable=True, index=True)
-    project_url = Column(String, nullable=True)
-    is_public = Column(Boolean, default=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Relationships
-    user = relationship("User", back_populates="videos")
-    project = relationship("Project", back_populates="videos")
-    request = relationship("Request", back_populates="videos")
-    votes = relationship("Vote", back_populates="video", cascade="all, delete-orphan")
-    showcases = relationship(
-        "Showcase", secondary=showcase_videos, back_populates="videos"
-    )
-    ratings = relationship(
-        "VideoRating", back_populates="video", cascade="all, delete-orphan"
-    )
-
-
 class ShowcaseRating(Base):
     __tablename__ = "showcase_ratings"
     __table_args__ = (
@@ -323,9 +283,43 @@ class PlaylistVideo(Base):
 
 # Update the existing Video model
 class Video(Base):
-    # Existing fields...
+    __tablename__ = "videos"
+    __table_args__ = {"extend_existing": True}
 
-    # Add new relationship
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String, nullable=True)
+    file_path = Column(String, nullable=False)
+    thumbnail_path = Column(String, nullable=True)
+    upload_date = Column(DateTime(timezone=True), server_default=func.now())
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    request_id = Column(
+        Integer, ForeignKey("requests.id", ondelete="SET NULL"), nullable=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    video_type = Column(
+        SQLAlchemyEnum(VideoType), nullable=False, default=VideoType.solution_demo
+    )
+    share_token = Column(String, unique=True, nullable=True, index=True)
+    project_url = Column(String, nullable=True)
+    is_public = Column(Boolean, default=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="videos")
+    project = relationship("Project", back_populates="videos")
+    request = relationship("Request", back_populates="videos")
+    votes = relationship("Vote", back_populates="video", cascade="all, delete-orphan")
+    showcases = relationship(
+        "Showcase", secondary=showcase_videos, back_populates="videos"
+    )
+    ratings = relationship(
+        "VideoRating", back_populates="video", cascade="all, delete-orphan"
+    )
     playlists = relationship("PlaylistVideo", back_populates="video")
 
 
