@@ -495,6 +495,18 @@ class PlaylistDetail(BaseModel):
         from_attributes = True
 
 
+class PlaylistBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_public: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlaylistCreate(PlaylistBase):
+    pass
+
+
 # ------------------ Project Schemas ------------------
 class ProjectBase(BaseModel):
     """Simplified project schema - just basic grouping info"""
