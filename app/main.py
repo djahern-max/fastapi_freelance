@@ -25,6 +25,7 @@ from app.routers import (
     external_support,
     collaboration,
     analyticshub_webhook,
+    playlists,
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -133,6 +134,7 @@ routers_with_prefixes = [
     (external_support.router, ""),
     (collaboration.router, ""),
     (analyticshub_webhook.router, ""),
+    (playlists.router, ""),
 ]
 
 # Include all routers in this code

@@ -287,6 +287,48 @@ class ShowcaseRating(Base):
     rater = relationship("User")
 
 
+# New model in app/models.py
+class VideoPlaylist(Base):
+    __tablename__ = "video_playlists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    creator_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    is_public = Column(Boolean, default=True)
+
+    # Relationships
+    creator = relationship("User", back_populates="playlists")
+    videos = relationship("PlaylistVideo", back_populates="playlist")
+
+
+# Join table for playlist-video many-to-many relationship
+class PlaylistVideo(Base):
+    __tablename__ = "playlist_videos"
+
+    playlist_id = Column(
+        Integer, ForeignKey("video_playlists.id", ondelete="CASCADE"), primary_key=True
+    )
+    video_id = Column(
+        Integer, ForeignKey("videos.id", ondelete="CASCADE"), primary_key=True
+    )
+    order = Column(Integer, default=0)  # For ordering videos in playlist
+    added_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    playlist = relationship("VideoPlaylist", back_populates="videos")
+    video = relationship("Video", back_populates="playlists")
+
+
+# Update the existing Video model
+class Video(Base):
+    # Existing fields...
+
+    # Add new relationship
+    playlists = relationship("PlaylistVideo", back_populates="video")
+
+
 # ------------------ Developer Showcase Models ------------------
 class Showcase(Base):
     __tablename__ = "showcases"
