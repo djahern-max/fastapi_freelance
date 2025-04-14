@@ -54,7 +54,6 @@ async def upload_video(
 ):
     # Create temp file paths
     temp_file_path = f"/tmp/{uuid.uuid4()}_{file.filename}"
-    compressed_file_path = None
 
     try:
         # Save uploaded file to temp location instead of loading into memory
@@ -67,8 +66,8 @@ async def upload_video(
                     break
                 buffer.write(chunk)
 
-        # Compress the video
-        compressed_file_path = compress_video(temp_file_path, "medium")
+        # Skip compression - use original file
+        compressed_file_path = temp_file_path
 
         # Initialize S3 client
         s3 = boto3.client(
@@ -79,17 +78,17 @@ async def upload_video(
             aws_secret_access_key=os.getenv("SPACES_SECRET"),
         )
 
-        # Upload compressed video
-        file_extension = ".mp4"  # Force mp4 extension for compressed videos
+        # Upload video with original extension
+        file_extension = os.path.splitext(file.filename)[1]
         unique_filename = f"{uuid.uuid4()}{file_extension}"
 
-        with open(compressed_file_path, "rb") as compressed_file:
+        with open(compressed_file_path, "rb") as video_file:
             s3.put_object(
                 Bucket=os.getenv("SPACES_BUCKET"),
                 Key=unique_filename,
-                Body=compressed_file,
+                Body=video_file,
                 ACL="public-read",
-                ContentType="video/mp4",
+                ContentType=file.content_type or "video/mp4",
             )
 
         file_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_filename}"
@@ -146,8 +145,6 @@ async def upload_video(
         # Clean up temporary files
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
-        if compressed_file_path and os.path.exists(compressed_file_path):
-            os.remove(compressed_file_path)
 
 
 @router.post("/{video_id}/share")
