@@ -4,6 +4,9 @@ from .. import models, schemas
 from typing import List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.sql import func
+from fastapi import HTTPException, status
 
 
 def create_playlist(db: Session, playlist: schemas.PlaylistCreate, user_id: int):
@@ -87,21 +90,70 @@ def get_playlists_by_user(db: Session, user_id: int, skip: int = 0, limit: int =
 def add_video_to_playlist(
     db: Session, playlist_id: int, video_id: int, order: Optional[int] = None
 ):
-    # Get the maximum order if not provided
-    if order is None:
-        max_order = (
-            db.query(func.max(models.PlaylistVideo.order))
-            .filter(models.PlaylistVideo.playlist_id == playlist_id)
-            .scalar()
-            or 0
+    try:
+        # Check if video exists
+        video = db.query(models.Video).filter(models.Video.id == video_id).first()
+        if not video:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Video not found"
+            )
+
+        # Check if entry already exists
+        existing = (
+            db.query(models.PlaylistVideo)
+            .filter(
+                models.PlaylistVideo.playlist_id == playlist_id,
+                models.PlaylistVideo.video_id == video_id,
+            )
+            .first()
         )
-        order = max_order + 1
 
-    # Create the relationship
-    db_playlist_video = models.PlaylistVideo(
-        playlist_id=playlist_id, video_id=video_id, order=order
-    )
+        if existing:
+            # Update order if provided
+            if order is not None:
+                existing.order = order
+                db.commit()
+            return {
+                "message": "Video already in playlist",
+                "updated": order is not None,
+            }
 
-    db.add(db_playlist_video)
-    db.commit()
-    return db_playlist_video
+        # Calculate order if not provided
+        if order is None:
+            # Get the max order in the playlist
+            max_order = (
+                db.query(func.max(models.PlaylistVideo.order))
+                .filter(models.PlaylistVideo.playlist_id == playlist_id)
+                .scalar()
+            )
+
+            # Set order to max + 1, or 1 if no videos exist
+            order = 1 if max_order is None else max_order + 1
+
+        # Create new playlist video entry
+        playlist_video = models.PlaylistVideo(
+            playlist_id=playlist_id, video_id=video_id, order=order
+        )
+
+        db.add(playlist_video)
+        db.commit()
+        db.refresh(playlist_video)
+
+        return {"message": "Video added to playlist successfully"}
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        # Log the error details for debugging
+        print(f"Database error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add video to playlist due to database error",
+        )
+    except Exception as e:
+        db.rollback()
+        # Log general exceptions
+        print(f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )
