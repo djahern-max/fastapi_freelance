@@ -37,9 +37,9 @@ def compress_video(input_file_path: str, output_quality: str = "medium") -> str:
             output_quality, quality_presets["medium"]
         )
 
-        # Build the FFmpeg command
+        # Use the full path to FFmpeg
         command = [
-            "ffmpeg",
+            "/usr/bin/ffmpeg",
             "-i",
             input_file_path,
             *quality_settings,
@@ -65,4 +65,6 @@ def compress_video(input_file_path: str, output_quality: str = "medium") -> str:
 
     except Exception as e:
         logger.error(f"Error compressing video: {str(e)}")
-        raise
+        # If compression fails, return the original file path
+        logger.info(f"Returning original uncompressed video file")
+        return input_file_path
