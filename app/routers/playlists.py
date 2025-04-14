@@ -53,7 +53,24 @@ def add_video_to_playlist(
         playlist = crud_playlist.get_playlist(db, playlist_id)
         print(f"Playlist found: {playlist is not None}")
 
-        if not playlist or playlist.creator_id != current_user.id:
+        # Check the type of playlist
+        print(f"Playlist type: {type(playlist)}")
+
+        # Fixed: Check if it's a dictionary and access accordingly
+        if not playlist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Playlist not found",
+            )
+
+        # Check if it's a dictionary (ORM object would be true here)
+        if isinstance(playlist, dict):
+            creator_id = playlist.get("creator_id")
+        else:
+            # It's an ORM object, use attribute access
+            creator_id = playlist.creator_id
+
+        if creator_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to modify this playlist",
