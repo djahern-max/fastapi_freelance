@@ -54,6 +54,7 @@ async def upload_video(
 ):
     # Create temp file paths
     temp_file_path = f"/tmp/{uuid.uuid4()}_{file.filename}"
+    compressed_file_path = None
 
     try:
         # Save uploaded file to temp location instead of loading into memory
@@ -66,8 +67,8 @@ async def upload_video(
                     break
                 buffer.write(chunk)
 
-        # Skip compression - use original file
-        compressed_file_path = temp_file_path
+        # Compress the video
+        compressed_file_path = compress_video(temp_file_path, "medium")
 
         # Initialize S3 client
         s3 = boto3.client(
@@ -78,17 +79,17 @@ async def upload_video(
             aws_secret_access_key=os.getenv("SPACES_SECRET"),
         )
 
-        # Upload video with original extension
-        file_extension = os.path.splitext(file.filename)[1]
+        # Upload compressed video
+        file_extension = ".mp4"  # Force mp4 extension for compressed videos
         unique_filename = f"{uuid.uuid4()}{file_extension}"
 
-        with open(compressed_file_path, "rb") as video_file:
+        with open(compressed_file_path, "rb") as compressed_file:
             s3.put_object(
                 Bucket=os.getenv("SPACES_BUCKET"),
                 Key=unique_filename,
-                Body=video_file,
+                Body=compressed_file,
                 ACL="public-read",
-                ContentType=file.content_type or "video/mp4",
+                ContentType="video/mp4",
             )
 
         file_url = f"https://{os.getenv('SPACES_BUCKET')}.{os.getenv('SPACES_REGION')}.digitaloceanspaces.com/{unique_filename}"
@@ -145,6 +146,41 @@ async def upload_video(
         # Clean up temporary files
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
+        if compressed_file_path and os.path.exists(compressed_file_path):
+            os.remove(compressed_file_path)
+
+
+@router.post("/{video_id}/share")
+async def generate_share_link(
+    video_id: int,
+    project_url: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(oauth2.get_current_user),
+):
+    # Get the video
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Update project URL if provided
+    if project_url:
+        video.project_url = project_url
+
+    # Generate share token if not exists
+    if not video.share_token:
+        video.share_token = str(uuid.uuid4())
+
+    video.is_public = True
+    db.commit()
+
+    base_url = (
+        "https://www.ryze.ai"
+        if os.getenv("ENV") == "production"
+        else "http://localhost:3000"
+    )
+    share_url = f"{base_url}/shared/videos/{video.share_token}"
+
+    return {"share_url": share_url, "project_url": video.project_url}
 
 
 def delete_from_spaces(file_key):
