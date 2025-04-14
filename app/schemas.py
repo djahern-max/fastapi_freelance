@@ -460,6 +460,31 @@ class VideoRatingResponse(BaseModel):
     message: str
 
 
+class PlaylistCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_public: bool = False
+
+
+class PlaylistBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_public: bool = False
+
+
+class PlaylistCreate(PlaylistBase):
+    pass
+
+
+class Playlist(PlaylistBase):
+    id: int
+    creator_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True  # formerly orm_mode = True in pydantic v1
+
+
 # ------------------ Project Schemas ------------------
 class ProjectBase(BaseModel):
     """Simplified project schema - just basic grouping info"""
