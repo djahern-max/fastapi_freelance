@@ -44,12 +44,30 @@ def add_video_to_playlist(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user),
 ):
-    # Verify ownership or permissions
-    playlist = crud_playlist.get_playlist(db, playlist_id)
-    if not playlist or playlist.creator_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to modify this playlist",
-        )
+    print(f"Adding video {video_id} to playlist {playlist_id}")
+    # Print relevant info for debugging
+    print(f"User: {current_user.id}, Order: {order}")
 
-    return crud_playlist.add_video_to_playlist(db, playlist_id, video_id, order)
+    try:
+        # Verify ownership or permissions
+        playlist = crud_playlist.get_playlist(db, playlist_id)
+        print(f"Playlist found: {playlist is not None}")
+
+        if not playlist or playlist.creator_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to modify this playlist",
+            )
+
+        result = crud_playlist.add_video_to_playlist(db, playlist_id, video_id, order)
+        print(f"Add video result: {result}")
+        return result
+    except Exception as e:
+        print(f"ERROR in add_video_to_playlist: {str(e)}")
+        print(f"Exception type: {type(e)}")
+        # Let's see the full error traceback
+        import traceback
+
+        print(traceback.format_exc())
+        # After printing, re-raise to preserve the 500 error
+        raise
