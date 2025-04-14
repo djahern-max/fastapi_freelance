@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from typing import List, Optional
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 
 def create_playlist(db: Session, playlist: schemas.PlaylistCreate, user_id: int):
@@ -19,11 +20,38 @@ def create_playlist(db: Session, playlist: schemas.PlaylistCreate, user_id: int)
 
 
 def get_playlist(db: Session, playlist_id: int):
-    return (
+    # Get the playlist with eager loading
+    playlist = (
         db.query(models.VideoPlaylist)
+        .options(
+            joinedload(models.VideoPlaylist.creator),
+            joinedload(models.VideoPlaylist.videos).joinedload(
+                models.PlaylistVideo.video
+            ),
+        )
         .filter(models.VideoPlaylist.id == playlist_id)
         .first()
     )
+
+    if playlist:
+        # Transform the data if needed for your schema
+        # For example, if your schema expects a 'videos' field with direct video objects
+        video_list = []
+        for playlist_video in sorted(playlist.videos, key=lambda pv: pv.order):
+            video_list.append(
+                {
+                    "id": playlist_video.video.id,
+                    "title": playlist_video.video.title,
+                    "thumbnail_path": playlist_video.video.thumbnail_path,
+                    "order": playlist_video.order,
+                    # Add other fields as needed by your schema
+                }
+            )
+
+        # Attach the transformed data if your schema expects it
+        playlist.formatted_videos = video_list
+
+    return playlist
 
 
 def get_playlists_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
