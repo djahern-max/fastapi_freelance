@@ -1,7 +1,8 @@
 # New file: app/crud/crud_playlist.py
 from sqlalchemy.orm import Session
 from .. import models, schemas
-from typing import List, Optional, func
+from typing import List, Optional
+from sqlalchemy import func
 
 
 def create_playlist(db: Session, playlist: schemas.PlaylistCreate, user_id: int):
