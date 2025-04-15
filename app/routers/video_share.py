@@ -5,6 +5,9 @@ from app.models import Video
 from app.config import settings  # Import the settings
 import secrets
 import string
+from typing import Optional
+from app import oauth2
+from app import models
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 
@@ -15,7 +18,12 @@ def generate_share_token(length=10):
 
 
 @router.post("/{video_id}/share")
-def generate_share_link(video_id: int, db: Session = Depends(get_db)):
+def generate_share_link(
+    video_id: int,
+    project_url: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
     video = db.query(Video).filter(Video.id == video_id).first()
     if not video:
         raise HTTPException(
@@ -31,15 +39,14 @@ def generate_share_link(video_id: int, db: Session = Depends(get_db)):
                 break
 
         video.share_token = share_token
+
+        # Store project URL if provided
+        if project_url:
+            video.project_url = project_url
+
         video.is_public = True
         db.commit()
+        db.refresh(video)  # Make sure to refresh
 
-    # Use the configured frontend_url instead of hardcoding localhost
-    share_url = f"{settings.frontend_url}/shared/videos/{video.share_token}"
-
-    # Return both the share_token and the properly constructed share_url
-    return {
-        "share_token": video.share_token,
-        "share_url": share_url,
-        "project_url": video.project_url,
-    }
+    # Return just the token
+    return {"share_token": video.share_token}
