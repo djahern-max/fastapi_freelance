@@ -33,10 +33,5 @@ def generate_share_link(video_id: int, db: Session = Depends(get_db)):
         video.is_public = True
         db.commit()
 
-    # Construct the share URL based on environment
-    base_url = (
-        "https://www.ryze.ai" if not video.is_development else "http://localhost:3000"
-    )
-    share_url = f"{base_url}/shared/video/{video.share_token}"
-
-    return {"share_token": video.share_token, "share_url": share_url}
+    # Return just the token - let the frontend build the full URL
+    return {"share_token": video.share_token}
