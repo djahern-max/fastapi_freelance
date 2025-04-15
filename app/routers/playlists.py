@@ -245,6 +245,7 @@ def get_video_playlists(
     return enhanced_playlists
 
 
+# Remove the duplicate route and update the implementation
 @router.post("/{playlist_id}/share", response_model=dict)
 def generate_share_link(
     playlist_id: int,
@@ -271,35 +272,7 @@ def generate_share_link(
     if not playlist.share_token:
         playlist.share_token = str(uuid.uuid4())
         db.commit()
+        db.refresh(playlist)  # Refresh to ensure we have the updated playlist
 
-    return {"share_token": playlist.share_token}
-
-
-@router.post("/{playlist_id}/share", response_model=dict)
-def generate_share_link(
-    playlist_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
-):
-    """Generate a shareable link for a playlist"""
-    # Get the playlist
-    playlist = (
-        db.query(models.VideoPlaylist)
-        .filter(models.VideoPlaylist.id == playlist_id)
-        .first()
-    )
-    if not playlist:
-        raise HTTPException(status_code=404, detail="Playlist not found")
-
-    # Check if user owns the playlist
-    if playlist.creator_id != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="Only the playlist owner can generate share links"
-        )
-
-    # Generate share token if it doesn't exist
-    if not playlist.share_token:
-        playlist.share_token = str(uuid.uuid4())
-        db.commit()
-
+    # Return token - frontend can construct full URL if needed
     return {"share_token": playlist.share_token}
