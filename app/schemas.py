@@ -468,9 +468,11 @@ class PlaylistResponse(BaseModel):
     is_public: bool
     creator_id: int
     created_at: datetime
+    video_count: Optional[int] = 0  # Make sure this field exists
 
     class Config:
-        from_attributes = True  # This is the new name for orm_mode in Pydantic v2
+        orm_mode = True  # Use this for Pydantic v1
+        # For Pydantic v2, use: model_config = ConfigDict(from_attributes=True)
 
 
 class VideoInPlaylist(BaseModel):

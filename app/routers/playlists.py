@@ -7,6 +7,7 @@ from .. import schemas, models, oauth2
 from ..database import get_db
 from ..crud import crud_playlist
 from datetime import datetime
+from ..schemas import PlaylistResponse, PlaylistDetail
 
 router = APIRouter(prefix="/playlists", tags=["playlists"])
 
@@ -20,8 +21,7 @@ def create_playlist(
     return crud_playlist.create_playlist(db, playlist, current_user.id)
 
 
-# app/routers/playlists.py
-@router.get("/{playlist_id}", response_model=schemas.PlaylistDetail)
+@router.get("/{playlist_id}", response_model=PlaylistDetail)
 def get_playlist(playlist_id: int, db: Session = Depends(get_db)):
     # Get the playlist with eager loading of videos
     playlist = (
@@ -64,11 +64,37 @@ def get_playlist(playlist_id: int, db: Session = Depends(get_db)):
     return playlist_data
 
 
-@router.get("/user/{user_id}", response_model=List[schemas.PlaylistResponse])
-def get_user_playlists(
-    user_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
-):
-    return crud_playlist.get_playlists_by_user(db, user_id, skip, limit)
+@router.get("/user/{user_id}", response_model=List[PlaylistResponse])
+def get_user_playlists(user_id: int, db: Session = Depends(get_db)):
+    # Get all playlists for this user
+    playlists = (
+        db.query(models.VideoPlaylist)
+        .filter(models.VideoPlaylist.creator_id == user_id)
+        .all()
+    )
+
+    # Create a list to store the enhanced playlists with counts
+    enhanced_playlists = []
+
+    # Process each playlist
+    for playlist in playlists:
+        # Convert to dict for easier manipulation
+        playlist_dict = playlist.__dict__.copy()
+
+        # Count videos in this playlist
+        video_count = (
+            db.query(models.PlaylistVideo)
+            .filter(models.PlaylistVideo.playlist_id == playlist.id)
+            .count()
+        )
+
+        # Add the count explicitly
+        playlist_dict["video_count"] = video_count
+
+        # Add to our enhanced list
+        enhanced_playlists.append(playlist_dict)
+
+    return enhanced_playlists
 
 
 @router.post("/{playlist_id}/videos/{video_id}")
