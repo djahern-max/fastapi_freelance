@@ -20,14 +20,48 @@ def create_playlist(
     return crud_playlist.create_playlist(db, playlist, current_user.id)
 
 
+# app/routers/playlists.py
 @router.get("/{playlist_id}", response_model=schemas.PlaylistDetail)
 def get_playlist(playlist_id: int, db: Session = Depends(get_db)):
-    playlist = crud_playlist.get_playlist(db, playlist_id)
+    # Get the playlist with eager loading of videos
+    playlist = (
+        db.query(models.VideoPlaylist)
+        .filter(models.VideoPlaylist.id == playlist_id)
+        .first()
+    )
+
     if not playlist:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Playlist not found"
-        )
-    return playlist
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    # Count the videos explicitly
+    video_count = (
+        db.query(models.PlaylistVideo)
+        .filter(models.PlaylistVideo.playlist_id == playlist_id)
+        .count()
+    )
+
+    # Fetch the videos associated with this playlist
+    playlist_videos = (
+        db.query(models.PlaylistVideo, models.Video)
+        .join(models.Video, models.PlaylistVideo.video_id == models.Video.id)
+        .filter(models.PlaylistVideo.playlist_id == playlist_id)
+        .order_by(models.PlaylistVideo.order)
+        .all()
+    )
+
+    # Format the videos with their playlist order
+    videos = []
+    for pv, video in playlist_videos:
+        video_dict = {**video.__dict__}
+        video_dict["order"] = pv.order
+        videos.append(video_dict)
+
+    # Prepare the response
+    playlist_data = {**playlist.__dict__}
+    playlist_data["videos"] = videos
+    playlist_data["video_count"] = video_count  # Add explicit count
+
+    return playlist_data
 
 
 @router.get("/user/{user_id}", response_model=List[schemas.PlaylistResponse])
