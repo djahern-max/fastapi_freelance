@@ -276,3 +276,41 @@ def generate_share_link(
 
     # Return token - frontend can construct full URL if needed
     return {"share_token": playlist.share_token}
+
+
+@router.get("/shared/{share_token}")
+def get_shared_playlist(share_token: str, db: Session = Depends(get_db)):
+    """Get a playlist by its share token"""
+    # Find the playlist with the given share token
+    playlist = (
+        db.query(models.VideoPlaylist)
+        .filter(models.VideoPlaylist.share_token == share_token)
+        .first()
+    )
+
+    if not playlist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Shared playlist not found"
+        )
+
+    # Get the videos in this playlist with their order
+    playlist_videos = (
+        db.query(models.PlaylistVideo, models.Video)
+        .join(models.Video, models.PlaylistVideo.video_id == models.Video.id)
+        .filter(models.PlaylistVideo.playlist_id == playlist.id)
+        .order_by(models.PlaylistVideo.order)
+        .all()
+    )
+
+    # Format the response
+    videos = []
+    for pv, video in playlist_videos:
+        video_dict = {**video.__dict__}
+        video_dict["order"] = pv.order
+        videos.append(video_dict)
+
+    # Create the response with the playlist and its videos
+    playlist_data = {**playlist.__dict__}
+    playlist_data["videos"] = videos
+
+    return playlist_data
