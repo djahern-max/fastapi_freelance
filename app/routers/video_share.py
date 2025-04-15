@@ -33,5 +33,5 @@ def generate_share_link(video_id: int, db: Session = Depends(get_db)):
         video.is_public = True
         db.commit()
 
-    # Return just the token - let the frontend build the full URL
+    # Just return the token instead of a full URL
     return {"share_token": video.share_token}
