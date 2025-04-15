@@ -6,6 +6,7 @@ from typing import List, Optional
 from .. import schemas, models, oauth2
 from ..database import get_db
 from ..crud import crud_playlist
+from datetime import datetime
 
 router = APIRouter(prefix="/playlists", tags=["playlists"])
 
@@ -88,3 +89,41 @@ def add_video_to_playlist(
         print(traceback.format_exc())
         # After printing, re-raise to preserve the 500 error
         raise
+
+
+@router.put("/{playlist_id}", response_model=schemas.PlaylistResponse)
+def update_playlist(
+    playlist_id: int,
+    playlist_update: schemas.PlaylistUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    # Get the playlist
+    playlist_query = db.query(models.VideoPlaylist).filter(
+        models.VideoPlaylist.id == playlist_id
+    )
+    playlist = playlist_query.first()
+
+    # Check if playlist exists
+    if not playlist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Playlist with id {playlist_id} not found",
+        )
+
+    # Check if user owns the playlist
+    if playlist.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this playlist",
+        )
+
+    # Update the playlist with the new data
+    for key, value in playlist_update.dict(exclude_unset=True).items():
+        setattr(playlist, key, value)
+
+    # Commit changes to database
+    db.commit()
+    db.refresh(playlist)
+
+    return playlist

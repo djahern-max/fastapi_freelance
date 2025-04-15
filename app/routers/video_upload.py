@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 # Application imports
 from app.database import get_db
 from app.models import Video, VideoType, User
-from app.schemas import VideoCreate
+from app.schemas import VideoCreate, VideoOut, VideoUpdate
 from app import models, oauth2
 from app.utils.video_processor import compress_video
+from datetime import datetime
+
 
 # Initialize the logger
 logger = logging.getLogger(__name__)
@@ -256,3 +258,42 @@ def delete_video(
 @router.get("/test")
 def test_video_router():
     return {"message": "Video router is working"}
+
+
+@router.put("/{video_id}", response_model=VideoOut)
+def update_video(
+    video_id: int,
+    video_update: VideoUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    # Get the video
+    video_query = db.query(models.Video).filter(models.Video.id == video_id)
+    video = video_query.first()
+
+    # Check if video exists
+    if not video:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Video with id {video_id} not found",
+        )
+
+    # Check if user owns the video
+    if video.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this video",
+        )
+
+    # Update the video with the new data
+    for key, value in video_update.model_dump(exclude_unset=True).items():
+        setattr(video, key, value)
+
+    # Update timestamp
+    video.updated_at = datetime.now()
+
+    # Commit changes to database
+    db.commit()
+    db.refresh(video)
+
+    return video

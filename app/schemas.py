@@ -374,6 +374,7 @@ class VideoOut(VideoBase):
     id: int
     user_id: int
     upload_date: datetime
+    updated_at: Optional[datetime] = None
 
 
 # Schema for returning lists of videos
@@ -481,16 +482,14 @@ class VideoInPlaylist(BaseModel):
     order: int
     user_id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CreatorInfo(BaseModel):
     id: int
     username: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PlaylistDetail(BaseModel):
@@ -503,8 +502,7 @@ class PlaylistDetail(BaseModel):
     videos: List[VideoInPlaylist] = []
     creator: Optional[CreatorInfo] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PlaylistBase(BaseModel):
@@ -517,6 +515,28 @@ class PlaylistBase(BaseModel):
 
 class PlaylistCreate(PlaylistBase):
     pass
+
+
+# Add this for video updates
+class VideoUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    is_public: Optional[bool] = None
+    video_type: Optional[VideoType] = None
+    project_id: Optional[int] = None
+    request_id: Optional[int] = None
+
+    class Config:
+        orm_mode = True
+
+
+# Add this for playlist updates
+class PlaylistUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_public: Optional[bool] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ------------------ Project Schemas ------------------
