@@ -8,6 +8,7 @@ from ..database import get_db
 from ..crud import crud_playlist
 from datetime import datetime
 from ..schemas import PlaylistResponse, PlaylistDetail
+import uuid
 
 router = APIRouter(prefix="/playlists", tags=["playlists"])
 
@@ -242,3 +243,68 @@ def get_video_playlists(
         enhanced_playlists.append(playlist_dict)
 
     return enhanced_playlists
+
+
+@router.post("/{playlist_id}/share", response_model=dict)
+def generate_share_link(
+    playlist_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user),
+):
+    """Generate a shareable link for a playlist"""
+    # Get the playlist
+    playlist = (
+        db.query(models.VideoPlaylist)
+        .filter(models.VideoPlaylist.id == playlist_id)
+        .first()
+    )
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    # Check if user owns the playlist
+    if playlist.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Only the playlist owner can generate share links"
+        )
+
+    # Generate share token if it doesn't exist
+    if not playlist.share_token:
+        playlist.share_token = str(uuid.uuid4())
+        db.commit()
+
+    return {"share_token": playlist.share_token}
+
+
+@router.get("/shared/{share_token}", response_model=PlaylistDetail)
+def get_shared_playlist(share_token: str, db: Session = Depends(get_db)):
+    """Get a shared playlist by share token"""
+    playlist = (
+        db.query(models.VideoPlaylist)
+        .filter(models.VideoPlaylist.share_token == share_token)
+        .first()
+    )
+
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Shared playlist not found")
+
+    # Fetch the videos in this playlist
+    playlist_videos = (
+        db.query(models.PlaylistVideo, models.Video)
+        .join(models.Video, models.PlaylistVideo.video_id == models.Video.id)
+        .filter(models.PlaylistVideo.playlist_id == playlist.id)
+        .all()
+    )
+
+    # Format the response similar to the normal playlist detail endpoint
+    playlist_data = {**playlist.__dict__}
+
+    # Add the videos to the response
+    videos = []
+    for pv, video in playlist_videos:
+        video_dict = {**video.__dict__}
+        video_dict["order"] = pv.order
+        videos.append(video_dict)
+
+    playlist_data["videos"] = videos
+
+    return playlist_data
