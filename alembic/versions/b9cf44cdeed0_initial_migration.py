@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: b255d2c1a7b2
+Revision ID: b9cf44cdeed0
 Revises: 
-Create Date: 2025-04-14 10:22:43.566174
+Create Date: 2025-04-15 13:54:38.399079
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'b255d2c1a7b2'
+revision: str = 'b9cf44cdeed0'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -187,8 +187,10 @@ def upgrade() -> None:
     sa.Column('creator_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('is_public', sa.Boolean(), nullable=True),
+    sa.Column('share_token', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('share_token')
     )
     op.create_index(op.f('ix_video_playlists_id'), 'video_playlists', ['id'], unique=False)
     op.create_table('collaboration_messages',
