@@ -187,3 +187,58 @@ def update_playlist(
     db.refresh(playlist)
 
     return playlist
+
+
+@router.get("/video/{video_id}", response_model=List[PlaylistResponse])
+def get_video_playlists(
+    video_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[models.User] = Depends(
+        oauth2.get_current_active_user_optional
+    ),
+):
+    """Get all playlists containing a specific video"""
+    # First check if the video exists
+    video = db.query(models.Video).filter(models.Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Get the video owner
+    video_owner_id = video.user_id
+
+    # Get playlists that contain this video
+    playlist_videos = (
+        db.query(models.PlaylistVideo)
+        .filter(models.PlaylistVideo.video_id == video_id)
+        .all()
+    )
+
+    playlist_ids = [pv.playlist_id for pv in playlist_videos]
+
+    if not playlist_ids:
+        return []
+
+    # Query the playlists
+    playlists_query = db.query(models.VideoPlaylist).filter(
+        models.VideoPlaylist.id.in_(playlist_ids)
+    )
+
+    # If the current user is not the video owner, only show public playlists
+    if not current_user or current_user.id != video_owner_id:
+        playlists_query = playlists_query.filter(models.VideoPlaylist.is_public == True)
+
+    playlists = playlists_query.all()
+
+    # Add video count to each playlist
+    enhanced_playlists = []
+    for playlist in playlists:
+        playlist_dict = playlist.__dict__.copy()
+        video_count = (
+            db.query(models.PlaylistVideo)
+            .filter(models.PlaylistVideo.playlist_id == playlist.id)
+            .count()
+        )
+        playlist_dict["video_count"] = video_count
+        enhanced_playlists.append(playlist_dict)
+
+    return enhanced_playlists

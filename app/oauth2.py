@@ -138,3 +138,15 @@ async def verify_api_key(api_key: str = Depends(api_key_header)):
     # This will raise an HTTPException if the key is invalid
     await get_api_key(api_key)
     return True
+
+
+def get_current_active_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(database.get_db),
+):
+    """
+    Similar to get_optional_user but specifically for endpoints that need to
+    know if a user is authenticated but don't need to block unauthenticated access.
+    """
+    # This is essentially an alias to get_optional_user for now, but keeps the naming convention clear
+    return get_optional_user(token, db)
