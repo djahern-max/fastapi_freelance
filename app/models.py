@@ -264,6 +264,7 @@ class VideoPlaylist(Base):
     creator_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     is_public = Column(Boolean, default=True)
+    share_token = Column(String, unique=True, nullable=True)  # Add this line
 
     # Relationships
     creator = relationship("User", back_populates="playlists")
