@@ -68,8 +68,17 @@ async def upload_video(
                     break
                 buffer.write(chunk)
 
-        # Skip compression - use original file
-        compressed_file_path = compress_video(temp_file_path, "medium")
+        try:
+            logger.info(f"Starting video compression for file: {file.filename}")
+            # Call the compression function
+            compressed_file_path = compress_video(temp_file_path, "medium")
+            logger.info(
+                f"Compression complete. Original size: {os.path.getsize(temp_file_path) / (1024*1024):.2f}MB, "
+                + f"Compressed size: {os.path.getsize(compressed_file_path) / (1024*1024):.2f}MB"
+            )
+        except Exception as e:
+            logger.error(f"Compression failed: {str(e)}. Using original file.")
+            compressed_file_path = temp_file_path
 
         # Initialize S3 client
         s3 = boto3.client(
