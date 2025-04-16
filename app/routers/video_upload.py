@@ -69,7 +69,7 @@ async def upload_video(
                 buffer.write(chunk)
 
         # Skip compression - use original file
-        compressed_file_path = temp_file_path
+        compressed_file_path = compress_video(temp_file_path, "medium")
 
         # Initialize S3 client
         s3 = boto3.client(
