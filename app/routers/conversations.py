@@ -72,6 +72,8 @@ def create_conversation(
         starter_user_id=current_user.id,
         recipient_user_id=request.user_id,
         status="active",
+        is_external=is_external_support,  # Set this flag based on ticket type
+        external_source="analytics-hub" if is_external_support else None,
     )
 
     db.add(new_conversation)
@@ -645,14 +647,47 @@ def get_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check permissions
-    if (
-        conversation.starter_user_id != current_user.id
-        and conversation.recipient_user_id != current_user.id
-    ):
-        raise HTTPException(
-            status_code=403, detail="Not authorized to view this conversation"
+    # Check if this is an external conversation
+    is_external = getattr(conversation, "is_external", False)
+
+    # Authorization check - handle differently for external conversations
+    if is_external:
+        # For external support conversations, allow system user and assigned developers
+        request = (
+            db.query(models.Request)
+            .filter(models.Request.id == conversation.request_id)
+            .first()
         )
+        if not request:
+            raise HTTPException(status_code=404, detail="Related request not found")
+
+        is_system = current_user.email == "system@ryze.ai"
+
+        is_assigned = (
+            db.query(models.SnaggedRequest)
+            .filter(
+                models.SnaggedRequest.request_id == conversation.request_id,
+                models.SnaggedRequest.developer_id == current_user.id,
+                models.SnaggedRequest.is_active == True,
+            )
+            .first()
+            is not None
+        )
+
+        if not (is_system or is_assigned):
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to view this external support conversation",
+            )
+    else:
+        # Standard permission check for non-external conversations
+        if (
+            conversation.starter_user_id != current_user.id
+            and conversation.recipient_user_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=403, detail="Not authorized to view this conversation"
+            )
 
     # Create a dictionary with all the required fields for the response schema
     response_data = {
