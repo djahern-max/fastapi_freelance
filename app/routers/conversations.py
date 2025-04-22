@@ -688,6 +688,7 @@ def get_conversation(
             raise HTTPException(
                 status_code=403, detail="Not authorized to view this conversation"
             )
+
     # Create a dictionary with all the required fields for the response schema
     response_data = {
         "id": conversation.id,
