@@ -250,6 +250,8 @@ async def create_message(  # Make this async
             "linked_content": linked_content,
         }
 
+        external_reference_id = None
+
         # Handle external support ticket message forwarding
         if is_external:
             external_reference_id = getattr(conversation, "external_reference_id", None)
