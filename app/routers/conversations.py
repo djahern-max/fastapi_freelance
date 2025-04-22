@@ -28,7 +28,7 @@ router = APIRouter(prefix="/conversations", tags=["Conversations"])
 def create_conversation(
     conversation: schemas.ConversationCreate,
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(require_active_subscription),  # Keep this
+    current_user: models.User = Depends(require_active_subscription),
 ):
     # Get the request and its owner
     request = (
@@ -50,36 +50,21 @@ def create_conversation(
         ):
             is_external_support = True
 
-    # Verify user roles - skip certain checks for external support tickets
-    if current_user.user_type == models.UserType.client:
-        if request.user_id == current_user.id:
-            raise HTTPException(
-                status_code=400, detail="You cannot respond to your own request"
+    # For external tickets, check if there's already an external conversation
+    if is_external_support:
+        existing_external_conv = (
+            db.query(models.Conversation)
+            .filter(
+                models.Conversation.request_id == conversation.request_id,
+                models.Conversation.is_external == True,
+                models.Conversation.external_source == "analytics-hub",
             )
-        raise HTTPException(
-            status_code=403, detail="Only developers can initiate conversations"
+            .first()
         )
 
-    if current_user.user_type == models.UserType.developer:
-        # Allow external support tickets to bypass the client-only check
-        if not is_external_support and request.user.user_type != models.UserType.client:
-            raise HTTPException(
-                status_code=400, detail="Can only respond to client requests"
-            )
-
-    # Check if conversation already exists
-    existing_conversation = (
-        db.query(models.Conversation)
-        .filter(
-            models.Conversation.request_id == conversation.request_id,
-            models.Conversation.starter_user_id == current_user.id,
-            models.Conversation.recipient_user_id == request.user_id,
-        )
-        .first()
-    )
-
-    if existing_conversation:
-        return existing_conversation
+        if existing_external_conv:
+            # Return the existing conversation instead of creating a new one
+            return existing_external_conv
 
     # Create new conversation
     new_conversation = models.Conversation(
