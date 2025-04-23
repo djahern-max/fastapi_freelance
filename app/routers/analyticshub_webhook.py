@@ -28,8 +28,7 @@ except Exception:
 
 # Analytics Hub webhook configuration
 ANALYTICS_HUB_URL = (
-    settings.ANALYTICS_HUB_API_URL
-    or "https://analytics-hub.xyz/api/webhooks/ryze/messages"
+    settings.ANALYTICS_HUB_API_URL or "https://analytics-hub.xyz/api/ryze/messages"
 )
 API_KEY = (
     settings.ANALYTICS_HUB_API_KEY or "n4H9Yz1tKdW18fBNjoUqe6Kclz/yP96cTW8DsJo02uk="

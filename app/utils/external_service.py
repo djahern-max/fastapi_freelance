@@ -143,7 +143,7 @@ async def send_message_to_analytics_hub(
             logger.error("ANALYTICS_HUB_API_URL setting not configured")
             return False
 
-        webhook_url = f"{api_url}/webhooks/ryze/messages"
+        webhook_url = f"{api_url}/ryze/messages"
         api_key = settings.ANALYTICS_HUB_API_KEY
 
         if not api_key:
