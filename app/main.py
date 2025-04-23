@@ -53,7 +53,7 @@ load_dotenv(dotenv_path=Path.home() / ".env")
 
 # Configure logging based on environment
 if os.getenv("ENV") == "production":
-    LOG_DIR = "/var/log/ryzeapi"
+    LOG_DIR = "/var/log/freelancewtf"
 else:
     # Use a local directory for development
     LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
@@ -84,8 +84,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    title="RYZE.AI API",
-    description="API for RYZE.AI platform",
+    title="Freelance.wtf API",
+    description="API for freelance.wtf platform",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",

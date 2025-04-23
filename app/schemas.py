@@ -1307,7 +1307,7 @@ class TicketMessageCreate(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "content": "This is a response from RYZE.ai support",
+                "content": "This is a response from freelance.wtf support",
                 "sender_type": "support",
                 "message_id": "123",
             }
