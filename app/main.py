@@ -22,9 +22,6 @@ from app.routers import (
     rating,
     developer_metrics,
     video_ratings,
-    external_support,
-    collaboration,
-    analyticshub_webhook,
     playlists,
 )
 from fastapi.routing import APIRoute
@@ -131,9 +128,6 @@ routers_with_prefixes = [
     (rating.router, ""),
     (video_ratings.router, ""),
     (developer_metrics.router, ""),
-    (external_support.router, ""),
-    (collaboration.router, ""),
-    (analyticshub_webhook.router, ""),
     (playlists.router, ""),
 ]
 
