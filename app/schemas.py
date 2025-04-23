@@ -157,24 +157,24 @@ class RoleSelection(BaseModel):
     user_type: str
 
     class Config:
-        orm_mode = True
-        schema_extra = {"example": {"email": "user@example.com", "user_type": "client"}}
+        from_attributes = True
+        json_json_schema_extra = {"example": {"email": "user@example.com", "user_type": "client"}}
 
 
 class OAuthCallbackRequest(BaseModel):
     code: str
 
     class Config:
-        orm_mode = True
-        schema_extra = {"example": {"code": "4/P7q7W91a-oMsCeLvIaQm6bTrgtp7"}}
+        from_attributes = True
+        json_schema_extra = {"example": {"code": "4/P7q7W91a-oMsCeLvIaQm6bTrgtp7"}}
 
 
 class UserTypeUpdate(BaseModel):
     user_type: str
 
     class Config:
-        orm_mode = True
-        schema_extra = {"example": {"user_type": "client"}}  # or "developer"
+        from_attributes = True
+        json_schema_extra = {"example": {"user_type": "client"}}  # or "developer"
 
 
 # In schemas.py
@@ -471,7 +471,7 @@ class PlaylistResponse(BaseModel):
     video_count: Optional[int] = 0  # Make sure this field exists
 
     class Config:
-        orm_mode = True  # Use this for Pydantic v1
+        from_attributes = True  # Use this for Pydantic v1
         # For Pydantic v2, use: model_config = ConfigDict(from_attributes=True)
 
 
@@ -529,7 +529,7 @@ class VideoUpdate(BaseModel):
     request_id: Optional[int] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Add this for playlist updates
@@ -1238,7 +1238,7 @@ class ExternalSupportTicketBase(BaseModel):
     conversation_history: Optional[List[ConversationMessage]] = None
 
     class Config:
-        json_schema_extra = {
+        json_json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "issue": "I can't access my analytics dashboard",
@@ -1288,7 +1288,7 @@ class ExternalMessageCreate(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "content": "This is a message from Analytics Hub",
                 "sender_platform": "analytics-hub",
@@ -1305,7 +1305,7 @@ class TicketMessageCreate(BaseModel):
     message_id: Optional[str] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "content": "This is a response from freelance.wtf support",
                 "sender_type": "support",
@@ -1334,7 +1334,7 @@ class ParticipantResponse(ParticipantBase):
     is_current_user: bool = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class MessageBase(BaseModel):
@@ -1356,7 +1356,7 @@ class MessageResponse(MessageBase):
     attachments: Optional[List[dict]] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class AttachmentResponse(BaseModel):
@@ -1369,7 +1369,7 @@ class AttachmentResponse(BaseModel):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class SessionStatus(BaseModel):
@@ -1408,4 +1408,4 @@ class SessionResponse(BaseModel):
     participants: List[ParticipantResponse]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
