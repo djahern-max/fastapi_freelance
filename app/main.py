@@ -52,7 +52,8 @@ load_dotenv(dotenv_path=Path.home() / ".env")
 
 # Configure logging based on environment
 if os.getenv("ENV") == "production":
-    LOG_DIR = "/var/log/freelancewtf"
+    # Change this line to use a directory in your application folder
+    LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 else:
     # Use a local directory for development
     LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
