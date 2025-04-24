@@ -24,23 +24,7 @@ SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
-EXTERNAL_API_KEY = os.getenv("EXTERNAL_API_KEY")
-if not EXTERNAL_API_KEY:
-    raise ValueError("EXTERNAL_API_KEY not set in environment variables")
 
-# Define API key scheme for header authentication
-api_key_header = APIKeyHeader(name="X-API-Key")
-
-
-# Dependency for API key authentication
-async def get_api_key(api_key: str = Depends(api_key_header)):
-    if api_key != EXTERNAL_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API Key",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return api_key
 
 
 def create_access_token(data: dict):
@@ -127,17 +111,6 @@ def get_optional_user(
 
     except JWTError:
         return None  # Invalid token, return None
-
-
-async def verify_api_key(api_key: str = Depends(api_key_header)):
-    """
-    Verifies the API key and returns True if valid.
-    This is a convenience wrapper around get_api_key for endpoints
-    that only need to check if the key is valid.
-    """
-    # This will raise an HTTPException if the key is invalid
-    await get_api_key(api_key)
-    return True
 
 
 def get_current_active_user_optional(

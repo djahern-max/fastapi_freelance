@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     linkedin_client_secret: Optional[str] = None
     linkedin_oauth_redirect_url: Optional[str] = None
     session_secret: str
-    EXTERNAL_API_KEY: str
+ 
 
     spaces_name: str
     spaces_region: str
