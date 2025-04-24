@@ -222,16 +222,11 @@ async def test_oauth_config():
         "allowed_origins": allowed_origins,
     }
 
-# Add this to a route to test your OAuth configuration
-# In one of your API route files:
-@router.get("/test-oauth-config", tags=["Authentication"])
-async def test_oauth_config():
-    """Test endpoint to check if OAuth environment variables are properly loaded"""
+@app.get("/test-oauth")
+async def test_oauth():
     return {
-        "google_client_id": settings.google_client_id[:10] + "..." if settings.google_client_id else None,
-        "google_redirect_url": settings.google_oauth_redirect_url,
-        "github_client_id": settings.github_client_id[:10] + "..." if settings.github_client_id else None,
-        "github_redirect_url": settings.github_oauth_redirect_url,
+        "message": "OAuth test endpoint working",
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/routes-simple", response_class=PlainTextResponse)
