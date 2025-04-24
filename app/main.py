@@ -1,3 +1,10 @@
+import os
+import sys
+from app.utils.logging_manager import log_manager, get_logger
+
+log_manager.patch_all()
+logger = get_logger()
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -60,15 +67,15 @@ else:
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(os.path.join(LOG_DIR, "app.log")),
-    ],
-)
-logger = logging.getLogger(__name__)
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+#     handlers=[
+#         logging.StreamHandler(sys.stdout),
+#         logging.FileHandler(os.path.join(LOG_DIR, "app.log")),
+#     ],
+# )
+# logger = logging.getLogger(__name__)
 
 
 # Load environment variables
