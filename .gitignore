@@ -1,65 +1,50 @@
-# Ignore virtual environment directories
-venv/
-env/
-.venv/
-
-# Ignore environment files
-*.env 
-*.env.test
-
-# Ignore Python compiled files
-*.pyc
-*.pyo
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Ignore configuration files and sensitive information
-*.ini
-*.cfg
-secrets.yaml
-secrets.json
+# Virtual Environment
+venv/
+ENV/
+env/
 
-# Ignore log files and temporary files
-*.log
-*.tmp
-*.temp
-*.bak
+# Environment variables
+.env
+.env.*
 
-# Ignore system files
-.DS_Store
-Thumbs.db
-
-# Ignore IDE/editor configurations
+# IDE files
 .idea/
 .vscode/
 *.swp
+*.swo
 
-# Ignore database files (if any are stored locally)
-*.sqlite3
-database.sqlite3  # If you are using SQLite for development
+# Log files
+*.log
+logs/
 
-# Ignore pytest cache and other test files
-.pytest_cache/
-.tox/
-.coverage
-coverage.xml
-*.cover
-.hypothesis/
-nosetests.xml
-test_results/
-junit-xml/
+# Node modules (if any)
+node_modules/
 
-# Ignore static files generated during builds
-staticfiles/
-media/
+# Local development settings
+.DS_Store
 
-# Ignore uploaded videos
-app/uploaded_videos/
-
-# Ignore SQL backup files
-*.sql
-
-# Ignore the specific .env file in the app directory
-app/.env
-
-# Ignore all files in the videos directory
-videos/
+# Alembic versions
+# alembic/versions/  # Uncomment if you don't want to track migration files
