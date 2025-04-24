@@ -48,3 +48,18 @@ node_modules/
 
 # Alembic versions
 # alembic/versions/  # Uncomment if you don't want to track migration files
+# Large media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+
+# Credentials and secrets
+**/credentials.json
+**/*.pem
+**/*.key
+**/*_token*
+**/*apikey*
+**/*secret*
