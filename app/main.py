@@ -233,3 +233,16 @@ async def test_oauth_config():
         "github_client_id": settings.github_client_id[:10] + "..." if settings.github_client_id else None,
         "github_redirect_url": settings.github_oauth_redirect_url,
     }
+
+@app.get("/routes-simple", response_class=PlainTextResponse)
+async def get_routes_simple():
+    """
+    Returns a concise list of all routes with their paths and methods.
+    """
+    routes = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            methods = ", ".join(route.methods)
+            routes.append(f"{methods}: {route.path}")
+
+    return "\n".join(routes)
