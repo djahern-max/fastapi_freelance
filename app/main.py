@@ -221,3 +221,13 @@ async def test_oauth_config():
         "base_url": os.getenv("BASE_URL"),
         "allowed_origins": allowed_origins,
     }
+
+# Add this to a route to test your OAuth configuration
+@app.get("/auth/test-config")
+async def test_oauth_config():
+    return {
+        "google_client_id": settings.google_client_id,
+        "google_redirect_url": settings.google_oauth_redirect_url,
+        # Don't return the secret in production!
+        "client_id_length": len(settings.google_client_id) if settings.google_client_id else 0,
+    }
