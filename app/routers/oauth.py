@@ -21,10 +21,6 @@ router = APIRouter()
 oauth = OAuth()
 
 
-# Add this function at the top of your file
-def debug_log(message):
-    with open("/home/dane/linkedin_debug.log", "a") as f:
-        f.write(f"{datetime.datetime.now()}: {message}\n")
 
 
 # Register OAuth providers
