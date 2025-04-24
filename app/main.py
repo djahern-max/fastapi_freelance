@@ -93,7 +93,11 @@ app = FastAPI(
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
 
 app.add_middleware(
-    SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecretkey")
+    SessionMiddleware, 
+    secret_key=os.getenv("SESSION_SECRET", "supersecretkey"),
+    max_age=1800,  # 30 minutes
+    same_site="lax",  # Critical for OAuth redirects
+    https_only=True  # Since you're using HTTPS
 )
 
 # Set up CORS middleware

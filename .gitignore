@@ -63,3 +63,6 @@ node_modules/
 **/*_token*
 **/*apikey*
 **/*secret*
+
+# Ignore personal notes
+app/crud/notes.txt
