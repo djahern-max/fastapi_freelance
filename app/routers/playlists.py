@@ -191,12 +191,11 @@ def update_playlist(
 
 
 @router.get("/video/{video_id}", response_model=List[PlaylistResponse])
+@router.get("/video/{video_id}", response_model=List[PlaylistResponse])
 def get_video_playlists(
     video_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[models.User] = Depends(
-        oauth2.get_current_active_user_optional
-    ),
+    current_user: Optional[models.User] = Depends(oauth2.get_current_user_optional),
 ):
     """Get all playlists containing a specific video"""
     # First check if the video exists
@@ -314,3 +313,28 @@ def get_shared_playlist(share_token: str, db: Session = Depends(get_db)):
     playlist_data["videos"] = videos
 
     return playlist_data
+
+
+@router.get("/", response_model=List[schemas.PlaylistResponse])
+def get_public_playlists(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user_optional),
+):
+    """
+    Get all public playlists.
+    If user is authenticated, also include their private playlists.
+    """
+    # Base query for public playlists
+    query = db.query(models.VideoPlaylist).filter(
+        models.VideoPlaylist.is_public == True
+    )
+
+    # If user is authenticated, include their private playlists too
+    if current_user:
+        query = db.query(models.VideoPlaylist).filter(
+            (models.VideoPlaylist.is_public == True)
+            | (models.VideoPlaylist.creator_id == current_user.id)
+        )
+
+    playlists = query.all()
+    return playlists
