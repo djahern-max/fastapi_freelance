@@ -1,0 +1,89 @@
+sudo nano /etc/systemd/system/fastapi_freelance.service
+
+sudo systemctl start fastapi_freelance
+
+sudo systemctl restart fastapi_freelance
+
+sudo systemctl status fastapi_freelance
+
+sudo nano /etc/nginx/sites-available/freelance.wtf
+
+sudo ln -s /etc/nginx/sites-available/freelance.wtf /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+sudo nano /etc/systemd/system/fastapi_freelance.service
+
+cd /var/www/freelance_frontend
+npm run build
+
+ACCESS DATABASE
+
+PGPASSWORD=Guitar0123 psql -U postgres -d freelance -h localhost
+
+journalctl -u fastapi_freelance -n 50
+
+sudo systemctl restart fastapi_freelance
+sudo systemctl status fastapi_freelance
+
+
+cd /var/www/fastapi_freelance
+./aggregate_data_freelance.sh
+
+DATA TRANSFER:
+RYZE:
+scp -r "dane@161.35.96.28:/home/dane/Claude/*" /Users/ryze.ai/Desktop/CLAUDE/RYZE/
+ANALYTICS-HUB:
+scp -r "root@104.131.181.139:/var/www/analytics-hub/Claude/*" /Users/ryze.ai/Desktop/CLAUDE/ANALYTICS/
+FREELANCE:
+scp -r "root@104.131.177.47:/var/www/fastapi_freelance/tree_freelance_wtf/" "/Users/ryze.ai/Desktop/CLAUDE/FREELANCE/"
+scp -r "root@104.131.177.47:/var/www/fastapi_freelance/sql_FREELANCE/" "/Users/ryze.ai/Desktop/CLAUDE/FREELANCE/"
+scp -r "root@104.131.177.47:/var/www/fastapi_freelance/api_docs/" "/Users/ryze.ai/Desktop/CLAUDE/FREELANCE/"
+
+https://freelance.wtf/api/auth/google/callback
+
+cd /var/www/freelance_frontend
+npm run build
+
+systemctl restart fastapi_freelance
+systemctl restart nginx
+
+
+FRONTEND DEPLOYMENT ON UBUNTU:
+
+cd /var/www/freelance_frontend
+ls -la build
+sudo rm -rf /var/www/freelance.wtf/*
+sudo cp -r build/* /var/www/freelance.wtf/
+
+Script 1 - Start Server
+
+Server:
+
+Step 1:
+
+ssh root@104.131.177.47
+
+Step 2:
+
+cd /var/www/fastapi_freelance
+
+Step 3:
+
+source venv/bin/activate
+
+Script 2 Start Database
+
+Database:
+
+Step 1:
+
+ssh root@104.131.177.47
+
+Step 2:
+
+cd /var/www
+
+Step 3:
+
+PGPASSWORD=Guitar0123 psql -U postgres -d freelance -h localhost

@@ -36,6 +36,7 @@ class VideoType(str, Enum):
     solution_demo = "solution_demo"
     progress_update = "progress_update"
     pitch_contest = "pitch_contest"
+    tutorials = "tutorials"
 
 
 class RequestPriority(str, Enum):
@@ -158,24 +159,24 @@ class RoleSelection(BaseModel):
     user_type: str
 
     class Config:
-        from_attributes = True
-        json_json_schema_extra = {"example": {"email": "user@example.com", "user_type": "client"}}
+        orm_mode = True
+        schema_extra = {"example": {"email": "user@example.com", "user_type": "client"}}
 
 
 class OAuthCallbackRequest(BaseModel):
     code: str
 
     class Config:
-        from_attributes = True
-        json_schema_extra = {"example": {"code": "4/P7q7W91a-oMsCeLvIaQm6bTrgtp7"}}
+        orm_mode = True
+        schema_extra = {"example": {"code": "4/P7q7W91a-oMsCeLvIaQm6bTrgtp7"}}
 
 
 class UserTypeUpdate(BaseModel):
     user_type: str
 
     class Config:
-        from_attributes = True
-        json_schema_extra = {"example": {"user_type": "client"}}  # or "developer"
+        orm_mode = True
+        schema_extra = {"example": {"user_type": "client"}}  # or "developer"
 
 
 # In schemas.py
@@ -472,7 +473,7 @@ class PlaylistResponse(BaseModel):
     video_count: Optional[int] = 0  # Make sure this field exists
 
     class Config:
-        from_attributes = True  # Use this for Pydantic v1
+        orm_mode = True  # Use this for Pydantic v1
         # For Pydantic v2, use: model_config = ConfigDict(from_attributes=True)
 
 
@@ -530,7 +531,7 @@ class VideoUpdate(BaseModel):
     request_id: Optional[int] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 # Add this for playlist updates
@@ -1239,7 +1240,7 @@ class ExternalSupportTicketBase(BaseModel):
     conversation_history: Optional[List[ConversationMessage]] = None
 
     class Config:
-        json_json_schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "issue": "I can't access my analytics dashboard",
@@ -1289,7 +1290,7 @@ class ExternalMessageCreate(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
     class Config:
-        json_schema_extra = {
+        schema_extra = {
             "example": {
                 "content": "This is a message from Analytics Hub",
                 "sender_platform": "analytics-hub",
@@ -1306,9 +1307,9 @@ class TicketMessageCreate(BaseModel):
     message_id: Optional[str] = None
 
     class Config:
-        json_schema_extra = {
+        schema_extra = {
             "example": {
-                "content": "This is a response from freelance.wtf support",
+                "content": "This is a response from RYZE.ai support",
                 "sender_type": "support",
                 "message_id": "123",
             }
@@ -1335,7 +1336,7 @@ class ParticipantResponse(ParticipantBase):
     is_current_user: bool = False
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class MessageBase(BaseModel):
@@ -1357,7 +1358,7 @@ class MessageResponse(MessageBase):
     attachments: Optional[List[dict]] = None
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class AttachmentResponse(BaseModel):
@@ -1370,7 +1371,7 @@ class AttachmentResponse(BaseModel):
     created_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class SessionStatus(BaseModel):
@@ -1409,4 +1410,5 @@ class SessionResponse(BaseModel):
     participants: List[ParticipantResponse]
 
     class Config:
-        from_attributes = True
+        orm_mode = True
+
