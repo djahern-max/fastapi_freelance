@@ -1411,4 +1411,3 @@ class SessionResponse(BaseModel):
 
     class Config:
         orm_mode = True
-

@@ -64,6 +64,7 @@ Step 1:
 
 ssh root@104.131.177.47
 
+
 Step 2:
 
 cd /var/www/fastapi_freelance
