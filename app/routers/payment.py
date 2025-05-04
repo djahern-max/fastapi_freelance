@@ -13,7 +13,6 @@ import traceback
 from ..config import settings
 import jwt
 
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -78,16 +77,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-            metadata = session.get("metadata", {})
-            session_type = metadata.get("type")
-
-            # Handle subscriptions
+            
+            # Handle subscriptions only
             if session.get("subscription"):
                 await handle_subscription_completion(session, db)
-
-            # Handle donations
-            elif session_type == "donation":
-                await handle_donation_completion(session, db)
 
         return {"status": "success"}
     except stripe.error.SignatureVerificationError as e:
@@ -137,46 +130,6 @@ async def handle_subscription_completion(session: dict, db: Session):
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Database error processing subscription: {str(e)}")
-        raise HTTPException(status_code=500, detail="Database error")
-
-
-async def handle_donation_completion(session: dict, db: Session):
-    try:
-        user_id = int(session["metadata"]["user_id"])
-        session_id = session["id"]
-        amount = session["amount_total"]
-
-        # Update donation status
-        donation = (
-            db.query(models.Donation)
-            .filter(models.Donation.stripe_session_id == session_id)
-            .first()
-        )
-
-        if donation:
-            donation.status = "completed"
-            donation.completed_at = datetime.now(timezone("UTC"))
-            donation.amount = amount  # Update with actual amount paid
-            db.commit()
-            logger.info(
-                f"Successfully processed donation completion for user {user_id}"
-            )
-        else:
-            # Create donation record if it doesn't exist
-            new_donation = models.Donation(
-                user_id=user_id,
-                amount=amount,
-                stripe_session_id=session_id,
-                status="completed",
-                completed_at=datetime.now(timezone("UTC")),
-            )
-            db.add(new_donation)
-            db.commit()
-            logger.info(f"Created new donation record for user {user_id}")
-
-    except SQLAlchemyError as e:
-        db.rollback()
-        logger.error(f"Database error processing donation: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error")
 
 
@@ -235,17 +188,14 @@ async def create_payment_intent(
     try:
         # Validate amount
         if amount <= 0:
-
             raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
         # Verify customer exists in Stripe
         try:
             customer = stripe.Customer.retrieve(current_user.stripe_customer_id)
             if customer.get("deleted"):
-
                 raise HTTPException(status_code=400, detail="Invalid customer account")
         except stripe.error.InvalidRequestError:
-
             raise HTTPException(status_code=400, detail="Invalid customer account")
 
         # Create PaymentIntent with detailed metadata
@@ -277,7 +227,6 @@ async def create_payment_intent(
 
         except stripe.error.CardError as e:
             # Card was declined
-
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -289,7 +238,6 @@ async def create_payment_intent(
 
         except stripe.error.InvalidRequestError as e:
             # Invalid parameters were supplied to Stripe's API
-
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -300,7 +248,6 @@ async def create_payment_intent(
 
         except stripe.error.AuthenticationError as e:
             # Authentication with Stripe's API failed
-
             raise HTTPException(
                 status_code=500,
                 detail={
@@ -311,7 +258,6 @@ async def create_payment_intent(
 
         except stripe.error.APIConnectionError as e:
             # Network communication with Stripe failed
-
             raise HTTPException(
                 status_code=503,
                 detail={
@@ -322,7 +268,6 @@ async def create_payment_intent(
 
         except stripe.error.StripeError as e:
             # Generic error
-
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -336,7 +281,6 @@ async def create_payment_intent(
 
     except Exception as e:
         # Catch any other unexpected errors
-
         raise HTTPException(
             status_code=500,
             detail={"error": "server_error", "message": "An unexpected error occurred"},
@@ -489,7 +433,6 @@ async def purchase_product(
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-
         raise HTTPException(status_code=500, detail="Failed to create checkout session")
 
 
@@ -524,163 +467,3 @@ async def check_showcase_subscription(
         raise HTTPException(status_code=402, detail="Active subscription required")
 
     return {"status": "active", "current_period_end": subscription_end}
-
-
-@router.post("/tip")
-async def create_tip_payment(
-    amount: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    try:
-        # Ensure customer exists in Stripe
-        if not current_user.stripe_customer_id:
-            customer = stripe.Customer.create(
-                email=current_user.email, metadata={"user_id": str(current_user.id)}
-            )
-            current_user.stripe_customer_id = customer.id
-            db.commit()
-
-        # Create PaymentIntent for tip
-        intent = stripe.PaymentIntent.create(
-            amount=amount,
-            currency="usd",
-            customer=current_user.stripe_customer_id,
-            metadata={
-                "type": "tip",
-                "user_id": str(current_user.id),
-                "email": current_user.email,
-            },
-            description=f"Tip from {current_user.email}",
-            statement_descriptor_suffix="TIP",
-        )
-
-        return {"clientSecret": intent.client_secret, "amount": amount}
-
-    except stripe.error.StripeError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/create-donation-session")
-async def create_donation_session(
-    request: Request,
-    db: Session = Depends(get_db),
-    token: str = Header(None, alias="Authorization"),
-):
-    try:
-        body = await request.json()
-        amount = body.get("amount")
-        currency = body.get("currency", "usd")
-        is_anonymous = body.get("isAnonymous", False)  # Get the anonymous flag
-
-        if not amount or amount <= 0:
-            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-
-        # Try to get user_id from token if it exists and donation is not anonymous
-        user_id = None
-        if (
-            token and token.startswith("Bearer ") and not is_anonymous
-        ):  # Only set user_id if not anonymous
-            try:
-                token = token.split(" ")[1]
-                payload = jwt.decode(
-                    token, settings.secret_key, algorithms=[settings.algorithm]
-                )
-                user_id = payload.get("user_id")
-            except:
-                # If token is invalid, just proceed with anonymous donation
-                pass
-
-        # Create Stripe Checkout Session
-        metadata = {
-            "type": "donation",
-            "is_anonymous": str(is_anonymous),  # Add anonymous status to metadata
-        }
-        if user_id:
-            metadata["user_id"] = str(user_id)
-
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": currency,
-                        "unit_amount": amount,
-                        "product_data": {
-                            "name": "Donation to RYZE.ai",
-                            "description": "Thank you for supporting RYZE.ai!",
-                        },
-                    },
-                    "quantity": 1,
-                }
-            ],
-            mode="payment",
-            success_url=f"{settings.frontend_url}/donation/success",
-            cancel_url=f"{settings.frontend_url}/donation/cancel",
-            metadata=metadata,
-            submit_type="donate",
-        )
-
-        try:
-            # Create donation record with user_id if available and not anonymous
-            donation = models.Donation(
-                user_id=(
-                    user_id if not is_anonymous else None
-                ),  # Force None if anonymous
-                amount=amount,
-                stripe_session_id=session.id,
-                status="pending",
-            )
-            db.add(donation)
-            db.commit()
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Database error creating donation: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail="Error creating donation record"
-            )
-
-        return {"url": session.url}
-
-    except stripe.error.StripeError as e:
-        logger.error(f"Stripe error in donation: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(
-            f"Unexpected error in donation: {str(e)}\n{traceback.format_exc()}"
-        )
-        raise HTTPException(status_code=500, detail="An unexpected error occurred")
-
-
-@router.get("/donations")
-async def get_donations(db: Session = Depends(get_db)):
-    donations = (
-        db.query(models.Donation).order_by(models.Donation.created_at.desc()).all()
-    )
-
-    # For each donation with a user_id, include the user information
-    results = []
-    for donation in donations:
-        donation_data = {
-            "id": donation.id,
-            "amount": donation.amount,
-            "status": donation.status,
-            "created_at": donation.created_at,
-            "completed_at": donation.completed_at,
-            "user": None,
-        }
-
-        if donation.user_id:
-            user = (
-                db.query(models.User).filter(models.User.id == donation.user_id).first()
-            )
-            if user:
-                donation_data["user"] = {
-                    "id": user.id,
-                    "email": user.email,
-                    # Add other user fields you want to include
-                }
-
-        results.append(donation_data)
-
-    return results
