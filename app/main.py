@@ -84,8 +84,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    title="Freelance.wtf API",
-    description="API for freelance.wtf platform",
+    title="danejahern API",
+    description="API for danejahern platform",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",

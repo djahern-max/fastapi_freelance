@@ -182,7 +182,7 @@ async def generate_share_link(
     db.commit()
 
     base_url = (
-        "https://www.freelance.wtf"
+        "https://www.danejahern.com"
         if os.getenv("ENV") == "production"
         else "http://localhost:3000"
     )
