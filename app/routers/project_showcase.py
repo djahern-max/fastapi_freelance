@@ -944,13 +944,24 @@ async def unlink_video_from_showcase(
             status_code=403, detail="Not authorized to update this showcase"
         )
     
-    # Check if video exists in showcase
-    video = next((v for v in showcase.videos if v.id == video_id), None)
-    if not video:
+    # Check if the video-showcase relationship exists
+    result = db.execute(
+        models.showcase_videos.select().where(
+            models.showcase_videos.c.showcase_id == showcase_id,
+            models.showcase_videos.c.video_id == video_id
+        )
+    ).first()
+    
+    if not result:
         raise HTTPException(status_code=404, detail="Video not found in showcase")
     
-    # Remove video from showcase
-    showcase.videos.remove(video)
+    # Remove from showcase_videos table
+    db.execute(
+        models.showcase_videos.delete().where(
+            models.showcase_videos.c.showcase_id == showcase_id,
+            models.showcase_videos.c.video_id == video_id
+        )
+    )
     
     # Remove content link
     db.query(models.ShowcaseContentLink).filter(
@@ -959,8 +970,7 @@ async def unlink_video_from_showcase(
         models.ShowcaseContentLink.content_id == video_id
     ).delete()
     
-    # Save changes
+    # Commit changes
     db.commit()
-    db.refresh(showcase)
     
     return {"message": "Video unlinked successfully"}
